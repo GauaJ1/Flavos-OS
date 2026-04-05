@@ -21,16 +21,11 @@ if [[ ! -f "$OVMF_CODE" ]]; then
     exit 1
 fi
 
-# OVMF exige pflash para variáveis NVRAM
+# Preparar o arquivo de variáveis NVRAM vazio da BIOS (OVMF)
+SYSTEM_VARS="${OVMF_CODE/CODE/VARS}"
 OVMF_VARS="${PROJECT_ROOT}/${BUILD_DIR}/OVMF_VARS_4M.fd"
-if [[ ! -f "$OVMF_VARS" ]]; then
-    SYSTEM_VARS="${OVMF_CODE/CODE/VARS}"
-    if [[ -f "$SYSTEM_VARS" ]]; then
-        cp "$SYSTEM_VARS" "$OVMF_VARS"
-    else
-        truncate -s 4M "$OVMF_VARS"
-    fi
-fi
+# Se não existe ou se não for um arquivo, recria.
+# Removemos o "if ! -f" e forçamos a criação SE houver flags de laboratório para não poluir PCI paths.
 
 echo "=== Flavos OS — Iniciando VM ==="
 echo "Imagem:   $IMAGE"
@@ -96,6 +91,27 @@ case "$DISPLAY_MODE" in
         echo "Display:   GUI (GTK) com usb-tablet"
         ;;
 esac
+
+# ----------------- FIX DO PXE (LAB MODE) -----------------
+# O QEMU armazena o caminho PCIe do último boot na OVMF_VARS.
+# Quando alteramos Rede ou Disco, a topologia muda, a BIOS não acha a partição EFI original e cai no PXE.
+# Para evitar isso e garantir flexibilidade, resetamos a NVRAM se o usuário pedir topologia exótica.
+IS_LAB=false
+if [[ "$DISK_BUS" != "virtio" ]] || [[ "$NET_MODEL" != "virtio" ]] || [[ -n "$DUMMY_DISK" ]] || [[ ! -f "$OVMF_VARS" ]]; then
+    IS_LAB=true
+    if [[ -f "$SYSTEM_VARS" ]]; then
+        cp "$SYSTEM_VARS" "$OVMF_VARS"
+    else
+        truncate -s 4M "$OVMF_VARS"
+    fi
+fi
+
+if [[ "$IS_LAB" == "true" ]]; then
+    echo "NVRAM:     Efêmera (Resetada para forçar Autodiscovery EFI)"
+else
+    echo "NVRAM:     Persistente ($OVMF_VARS)"
+fi
+# ---------------------------------------------------------
 
 MACHINE_FLAG="-machine pc" # Default i440fx
 # Configurar Storage (Disk Bus)
