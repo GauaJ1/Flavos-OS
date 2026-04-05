@@ -21,6 +21,17 @@ if [[ ! -f "$OVMF_CODE" ]]; then
     exit 1
 fi
 
+# OVMF exige pflash para variáveis NVRAM
+OVMF_VARS="${PROJECT_ROOT}/${BUILD_DIR}/OVMF_VARS_4M.fd"
+if [[ ! -f "$OVMF_VARS" ]]; then
+    SYSTEM_VARS="${OVMF_CODE/CODE/VARS}"
+    if [[ -f "$SYSTEM_VARS" ]]; then
+        cp "$SYSTEM_VARS" "$OVMF_VARS"
+    else
+        truncate -s 4M "$OVMF_VARS"
+    fi
+fi
+
 echo "=== Flavos OS — Iniciando VM ==="
 echo "Imagem:   $IMAGE"
 echo "RAM:      ${QEMU_RAM}MB"
@@ -66,6 +77,7 @@ qemu-system-x86_64 \
     -m "$QEMU_RAM" \
     -smp "$QEMU_CPUS" \
     -drive file="$IMAGE",format=raw,if=virtio \
-    -bios "$OVMF_CODE" \
+    -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+    -drive if=pflash,format=raw,file="$OVMF_VARS" \
     -net nic,model=virtio -net user \
     $DISPLAY_FLAGS

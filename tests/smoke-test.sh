@@ -39,7 +39,11 @@ echo "Imagem:"
 if [[ -f "$IMAGE" ]]; then
     check "Imagem existe" "ok"
     SIZE=$(stat -c%s "$IMAGE")
-    check "Tamanho > 0" "$( [[ "$SIZE" -gt 0 ]] && echo ok || echo fail )"
+if [[ "$SIZE" -gt 0 ]]; then
+    check "Tamanho > 0" "ok"
+else
+    check "Tamanho > 0" "fail"
+fi
 else
     check "Imagem existe" "fail"
 fi
