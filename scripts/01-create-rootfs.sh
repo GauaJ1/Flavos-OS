@@ -156,11 +156,18 @@ fi
 echo "[6/6] Gerando initramfs..."
 # O initramfs precisa incluir módulos virtio para boot em QEMU
 cat > "${ROOTFS}/etc/initramfs-tools/modules" <<EOF
+# Virtio (QEMU/KVM)
 virtio
 virtio_pci
 virtio_blk
 virtio_net
 virtio_scsi
+
+# Storage físico (SATA, NVMe, USB)
+ahci
+nvme
+xhci_hcd
+usb_storage
 EOF
 
 chroot "$ROOTFS" update-initramfs -u -k all 2>/dev/null || \

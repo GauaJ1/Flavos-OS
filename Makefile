@@ -19,7 +19,7 @@ ROOTFS_DIR   := $(BUILD_DIR)/rootfs
 IMAGE        := $(BUILD_DIR)/flavos.img
 SCRIPTS      := $(PROJECT_ROOT)/scripts
 
-.PHONY: help deps rootfs image install test manifest boot all clean
+.PHONY: help deps rootfs image install test manifest boot write-disk all clean
 
 help:
 	@echo ""
@@ -34,6 +34,7 @@ help:
 	@echo "    make manifest  Gera metadados .json do build final"
 	@echo "    make boot      Inicia VM via QEMU"
 	@echo "    make boot-gui  Inicia VM via QEMU (modo gráfico)"
+	@echo "    make write-disk DISK=/dev/sdX  Grava imagem em disco real (CUIDADO)"
 	@echo "    make all       Pipeline completo (requer sudo)"
 	@echo "    make clean     Remove artefatos de build"
 	@echo ""
@@ -61,6 +62,15 @@ boot:
 
 boot-gui:
 	@bash $(SCRIPTS)/04-boot-vm.sh --gui
+
+write-disk:
+	@if [ -z "$(DISK)" ]; then \
+		echo ""; \
+		echo "ERRO: Especifique o disco alvo: make write-disk DISK=/dev/sdX"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@sudo bash $(SCRIPTS)/05-write-to-disk.sh --disk $(DISK)
 
 all: rootfs image install test manifest
 	@echo ""

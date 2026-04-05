@@ -47,8 +47,10 @@ make boot-gui   # modo gráfico
 | `make image` | Cria imagem .img particionada (sudo) |
 | `make install` | Instala sistema na imagem (sudo) |
 | `make test` | Smoke test offline |
+| `make manifest` | Gera manifesto `build/manifest.json` |
 | `make boot` | Inicia VM (serial) |
 | `make boot-gui` | Inicia VM (gráfico) |
+| `make write-disk DISK=/dev/sdX` | Grava em disco físico (interativo, seguro) |
 | `make all` | Pipeline completo (sudo) |
 | `make clean` | Remove build/ |
 
@@ -76,6 +78,8 @@ FlavosOS/
 ## Documentação
 
 - [Arquitetura](docs/architecture.md)
+- [Instalação em Hardware Real](docs/HARDWARE_INSTALL.md)
+- [Recuperação de Falhas](docs/RECOVERY.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Changelog](docs/CHANGELOG.md)
 
