@@ -23,15 +23,19 @@ if [[ -d "$ROOTFS" && -f "${ROOTFS}/bin/bash" ]]; then
 fi
 
 # --- Parsear lista de pacotes ---
-PACKAGES=""
+PACKAGES_APT=""
+# O debootstrap engasga com X11/DBus por tentar rodar postinst num vácuo de namespaces.
+# Forçamos apenas o core-vital nele:
+PACKAGES_DEB="systemd,systemd-sysv,dbus,bash,coreutils,sudo,apt,udev,iproute2"
+
 while IFS= read -r line; do
     line="${line%%#*}"        # remove comentários
     line="${line// /}"        # remove espaços
     [[ -z "$line" ]] && continue
-    if [[ -z "$PACKAGES" ]]; then
-        PACKAGES="$line"
+    if [[ -z "$PACKAGES_APT" ]]; then
+        PACKAGES_APT="$line"
     else
-        PACKAGES="${PACKAGES},$line"
+        PACKAGES_APT="${PACKAGES_APT} $line"
     fi
 done < "$PACKAGES_FILE"
 
@@ -43,12 +47,12 @@ echo "Target:   $ROOTFS"
 echo ""
 
 # --- Debootstrap ---
-echo "[1/6] Executando debootstrap..."
+echo "[1/6] Executando debootstrap minimalista..."
 mkdir -p "$ROOTFS"
 debootstrap \
     --variant=minbase \
     --arch="$ARCH" \
-    --include="$PACKAGES" \
+    --include="$PACKAGES_DEB" \
     "$DEBIAN_SUITE" \
     "$ROOTFS" \
     "$DEBIAN_MIRROR"
@@ -71,6 +75,11 @@ cleanup_mounts() {
     umount -lf "${ROOTFS}/dev"   2>/dev/null || true
 }
 trap cleanup_mounts EXIT
+
+# --- Instalar pacotes da pipeline ---
+echo "[2.5/6] Instalando pacotes pesados no ambiente formatado..."
+chroot "$ROOTFS" apt-get update
+chroot "$ROOTFS" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PACKAGES_APT
 
 # --- Configuração básica dentro do chroot ---
 echo "[3/6] Configurando sistema base..."
