@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Flavos OS — Net Check Tool
+
+echo "=== Flavos OS Network Diagnostics ==="
+echo ""
+echo "[1] Interfaces (ip a)"
+ip a | grep -v "127.0.0.1"
+echo ""
+echo "[2] Rotas (ip route)"
+ip route
+echo ""
+echo "[3] Resolucao DNS (resolvectl)"
+if command -v resolvectl &> /dev/null; then
+    resolvectl status | grep -E 'Servers|Protocols'
+else
+    echo "resolvectl nao disponivel."
+fi
+echo ""
+echo "[4] Status do Systemd Networkd"
+if command -v networkctl &> /dev/null; then
+    networkctl status --no-pager | grep -E 'State|Address|Gateway|DNS'
+fi
+echo ""
+echo "[5] Ping Externo (debian.org)"
+ping -c 3 debian.org >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "  -> Internet: OK!"
+else
+    echo "  -> Internet: FALHA!"
+fi
+echo "====================================="

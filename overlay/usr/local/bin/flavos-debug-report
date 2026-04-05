@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Flavos OS — Debug Report Tool
+
+echo "=== Flavos OS Debug Report ==="
+echo ""
+echo "[1] Falhas Criticas no Kernel/Init System (Boot Atual)"
+journalctl -p err -b --no-pager
+echo ""
+
+echo "[2] Servicos do Systemd Falhos"
+FAIL_COUNT=$(systemctl --failed --no-legend | wc -l)
+if [ "$FAIL_COUNT" -eq 0 ]; then
+    echo "  -> Todos os servicos estao limpos."
+else
+    systemctl --failed --no-pager
+fi
+echo ""
+
+echo "[3] Espaco em Disco Local (df -h)"
+df -h | grep -E '^/dev/|^Filesystem'
+echo ""
+
+echo "[4] Top 10 Pontos de Montagem (mount)"
+mount | head -10
+echo ""
+
+echo "[5] Memoria e Sobrecarga"
+free -h
+uptime
+echo "=============================="

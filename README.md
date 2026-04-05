@@ -89,5 +89,6 @@ FlavosOS/
 > **Atenção (Segurança):** A senha `123` para o usuário root e sysadmin está injetada programaticamente apenas para finalidades de **DevLocal**. Esta imagem **não está pronta** para deployments de nuvem pública, possuindo credenciais voláteis conhecidas. Em etapas futuras implementaremos extração segura de Cloud-Init.
 
 ## Observabilidade
-- Para diagnosticar uso de CPU, portas de rede falhas e serviços danificados rode o nosso wrapper interno: `flavos-diag`
+- Para diagnosticar uso de CPU, disco e serviços danificados: `flavos-debug-report`
+- Para diagnosticar status e portas lógicas de interface externa: `flavos-net-check`
 - Leia o [RECOVERY_GUIDE](docs/RECOVERY.md) para emergências de Boot.

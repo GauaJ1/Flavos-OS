@@ -4,7 +4,8 @@
 Quando você estiver logado (ou travado visualmente em console), a auditoria oficial foca nos logs do **Journald**, que estão com persistência salva na partição ext4 com teto de 50MB.
 
 ### Inspeção Via Terminal (Se houver acesso local ou SSH)
-- `flavos-diag`: Seu comando Mestre. Resume num script conciso o status de Rede, Serviços quebrados e alocação de Memória RAM.
+- `flavos-debug-report`: Seu comando Mestre. Resume num script conciso o status de uso de RAM/Disco e Serviços falhos por Kernel.
+- `flavos-net-check`: Diagnósticos fáticos testando gateway, DNS, link e ICMP pra internet com visualização de Interfaces.
 - `journalctl -p 3 -xb`: Lista todos os eventos de criticidade Alta (`ERROR`, `CRIT`, `EMERG`) ocorridos no *Boot Atual*.
 - `journalctl -b -1`: Lê de trás pra frente tudo que estourou no *Boot Anterior* (essencial se o sistema crashou as cegas e rebootou do nada).
 
