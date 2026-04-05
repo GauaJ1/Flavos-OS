@@ -155,6 +155,24 @@ if [[ -d "$OVERLAY" ]]; then
     echo "  Overlay aplicado de ${OVERLAY}"
 fi
 
+# --- Re-sincronizar dotfiles do skel para o home do usuário ---
+# O useradd -m (etapa 3) copiou /etc/skel ANTES do overlay injetar os dotfiles.
+# Agora que o overlay já atualizou /etc/skel com .bash_profile, .xinitrc, etc.,
+# precisamos copiar explicitamente para /home/$SYS_USER.
+echo "  Sincronizando dotfiles do skel para /home/${SYS_USER}..."
+if [[ -d "${ROOTFS}/etc/skel" ]]; then
+    cp -a "${ROOTFS}/etc/skel/."* "${ROOTFS}/home/${SYS_USER}/" 2>/dev/null || true
+    # Copiar diretórios ocultos com subdiretórios (.config/openbox/...)
+    for item in "${ROOTFS}/etc/skel/".*; do
+        bname=$(basename "$item")
+        [[ "$bname" == "." || "$bname" == ".." ]] && continue
+        cp -a "$item" "${ROOTFS}/home/${SYS_USER}/"
+    done
+    # Garantir ownership correto
+    chroot "$ROOTFS" chown -R "${SYS_USER}:${SYS_USER}" "/home/${SYS_USER}"
+    echo "  Dotfiles sincronizados e ownership corrigido."
+fi
+
 echo "[6/6] Gerando initramfs..."
 # O initramfs precisa incluir módulos virtio para boot em QEMU
 cat > "${ROOTFS}/etc/initramfs-tools/modules" <<EOF
