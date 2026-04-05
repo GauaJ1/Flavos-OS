@@ -1,95 +1,221 @@
-#!/bin/bash
-# Flavos OS — System OSD (On-Screen Display)
-# Lightweight wrapper around notify-send for system-level feedback.
-# Uses dunst's replace-id feature for smooth OSD updates.
+#!/usr/bin/env python3
+# Flavos OS — Shell OSD (On-Screen Display)
+# Componente visual PRÓPRIO da shell. NÃO usa dunst/notificações.
+# Renderiza overlay GTK efêmero para feedback de ações do sistema.
 #
-# Usage:
-#   flavos-osd volume          — show current volume level
-#   flavos-osd volume-up       — increase volume 5% and show
-#   flavos-osd volume-down     — decrease volume 5% and show
-#   flavos-osd volume-mute     — toggle mute and show
-#   flavos-osd brightness      — show current brightness (placeholder)
-#   flavos-osd notify "Title" "Body"  — generic system notification
+# Arquitetura:
+#   A shell é dona do OSD. Notificações (dunst) são para eventos
+#   de apps/sistema em segundo plano. OSD é feedback imediato de
+#   ações do usuário em componentes da própria shell.
+#
+# Uso:
+#   flavos-osd volume          — mostra nível atual
+#   flavos-osd volume-up       — sobe 5% e mostra
+#   flavos-osd volume-down     — desce 5% e mostra
+#   flavos-osd volume-mute     — toggle mute e mostra
+#   flavos-osd brightness      — placeholder
 
-set -euo pipefail
+import gi
+import sys
+import subprocess
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk, GLib
 
-OSD_ID=91234  # Fixed ID for OSD replacement (dunst replaces by hint)
-
-_notify() {
-    local urgency="${1:-low}"
-    local title="$2"
-    local body="${3:-}"
-    local replace="${4:-$OSD_ID}"
-
-    notify-send \
-        --app-name="flavos-osd" \
-        --urgency="$urgency" \
-        --hint="int:value:${5:-0}" \
-        --hint="string:x-dunst-stack-tag:osd" \
-        --hint="string:category:osd" \
-        "$title" "$body"
+CSS = b"""
+* {
+    -GtkWidget-focus-padding: 0;
+    -GtkWidget-focus-line-width: 0;
+    outline-style: none;
 }
 
-_get_volume() {
-    amixer sget Master 2>/dev/null | grep -oP '\[\d+%\]' | head -1 | tr -d '[]%'
+window, .background {
+    background-color: rgba(13, 16, 23, 0.92);
+    border: 1px solid #272D3D;
+    border-radius: 12px;
 }
 
-_is_muted() {
-    amixer sget Master 2>/dev/null | grep -q '\[off\]'
+label {
+    color: #E8ECF4;
+    font-family: Inter, sans-serif;
+    background-color: transparent;
 }
 
-cmd_volume() {
-    local vol
-    vol=$(_get_volume)
-    if [ -z "$vol" ]; then
-        _notify "low" "Volume" "Dispositivo de áudio não detectado"
-        return
-    fi
-    if _is_muted; then
-        _notify "low" "Volume" "Mudo" "$OSD_ID" "$vol"
-    else
-        _notify "low" "Volume" "${vol}%" "$OSD_ID" "$vol"
-    fi
+label.osd-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8891A5;
+    letter-spacing: 1px;
 }
 
-cmd_volume_up() {
-    amixer -q sset Master 5%+ unmute 2>/dev/null || true
-    cmd_volume
+label.osd-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #E8ECF4;
 }
 
-cmd_volume_down() {
-    amixer -q sset Master 5%- unmute 2>/dev/null || true
-    cmd_volume
+label.osd-muted {
+    font-size: 28px;
+    font-weight: 700;
+    color: #505872;
 }
 
-cmd_volume_mute() {
-    amixer -q sset Master toggle 2>/dev/null || true
-    cmd_volume
+progressbar {
+    min-height: 6px;
 }
 
-cmd_brightness() {
-    _notify "low" "Brilho" "Controle de brilho indisponível nesta versão"
+progressbar trough {
+    background-color: #1C2030;
+    border-radius: 3px;
+    min-height: 6px;
 }
 
-cmd_notify() {
-    local title="${1:-Flavos OS}"
-    local body="${2:-}"
-    notify-send \
-        --app-name="flavos-osd" \
-        --urgency="normal" \
-        "$title" "$body"
+progressbar progress {
+    background-color: #4B8BF5;
+    border-radius: 3px;
+    min-height: 6px;
 }
+"""
 
-# --- Main dispatch ---
-case "${1:-help}" in
-    volume)       cmd_volume ;;
-    volume-up)    cmd_volume_up ;;
-    volume-down)  cmd_volume_down ;;
-    volume-mute)  cmd_volume_mute ;;
-    brightness)   cmd_brightness ;;
-    notify)       cmd_notify "${2:-}" "${3:-}" ;;
-    *)
-        echo "Flavos OSD — uso: flavos-osd {volume|volume-up|volume-down|volume-mute|brightness|notify}"
-        exit 1
-        ;;
-esac
+OSD_TIMEOUT_MS = 1500  # 1.5s — motion.fast, efêmero
+
+
+def get_volume():
+    """Retorna (nível 0-100, is_muted)"""
+    try:
+        out = subprocess.check_output(
+            ["amixer", "sget", "Master"], text=True, stderr=subprocess.DEVNULL
+        )
+        import re
+        vol_match = re.search(r'\[(\d+)%\]', out)
+        muted = '[off]' in out
+        vol = int(vol_match.group(1)) if vol_match else 0
+        return vol, muted
+    except Exception:
+        return -1, False
+
+
+def set_volume(delta=0, toggle_mute=False):
+    """Altera volume via amixer."""
+    try:
+        if toggle_mute:
+            subprocess.run(["amixer", "-q", "sset", "Master", "toggle"],
+                           stderr=subprocess.DEVNULL)
+        elif delta > 0:
+            subprocess.run(["amixer", "-q", "sset", "Master", f"{abs(delta)}%+", "unmute"],
+                           stderr=subprocess.DEVNULL)
+        elif delta < 0:
+            subprocess.run(["amixer", "-q", "sset", "Master", f"{abs(delta)}%-", "unmute"],
+                           stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+
+class ShellOSD(Gtk.Window):
+    """Janela efêmera da shell para feedback imediato."""
+
+    def __init__(self, title_text, value_text, fraction=0.0, is_muted=False, is_unavailable=False):
+        super().__init__(type=Gtk.WindowType.POPUP)
+        self.set_decorated(False)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_keep_above(True)
+        self.set_accept_focus(False)
+        self.set_can_focus(False)
+        self.set_default_size(220, 100)
+
+        # Posição: centro inferior, acima do painel
+        screen = Gdk.Screen.get_default()
+        sw = screen.get_width()
+        sh = screen.get_height()
+        self.move((sw - 220) // 2, sh - 42 - 120)
+
+        # CSS
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_USER
+        )
+
+        # Layout
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        vbox.set_margin_top(16)
+        vbox.set_margin_bottom(16)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
+        self.add(vbox)
+
+        # Título (ex: "VOLUME")
+        lbl_title = Gtk.Label(label=title_text.upper(), xalign=0)
+        lbl_title.get_style_context().add_class("osd-title")
+        vbox.pack_start(lbl_title, False, False, 0)
+
+        # Valor (ex: "75%" ou "Mudo")
+        lbl_value = Gtk.Label(label=value_text, xalign=0)
+        if is_muted or is_unavailable:
+            lbl_value.get_style_context().add_class("osd-muted")
+        else:
+            lbl_value.get_style_context().add_class("osd-value")
+        vbox.pack_start(lbl_value, False, False, 0)
+
+        # Barra de progresso (se aplicável)
+        if not is_unavailable and fraction >= 0:
+            bar = Gtk.ProgressBar()
+            bar.set_fraction(max(0.0, min(1.0, fraction)))
+            bar.set_margin_top(4)
+            vbox.pack_start(bar, False, False, 0)
+
+        # Auto-destruição
+        GLib.timeout_add(OSD_TIMEOUT_MS, self._dismiss)
+
+    def _dismiss(self):
+        self.destroy()
+        Gtk.main_quit()
+        return False
+
+
+def show_volume_osd():
+    vol, muted = get_volume()
+    if vol < 0:
+        osd = ShellOSD("Volume", "Indisponível", is_unavailable=True)
+    elif muted:
+        osd = ShellOSD("Volume", "Mudo", fraction=vol / 100.0, is_muted=True)
+    else:
+        osd = ShellOSD("Volume", f"{vol}%", fraction=vol / 100.0)
+    osd.show_all()
+    Gtk.main()
+
+
+def show_brightness_osd():
+    osd = ShellOSD("Brilho", "Indisponível", is_unavailable=True)
+    osd.show_all()
+    Gtk.main()
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Flavos Shell OSD — uso: flavos-osd {volume|volume-up|volume-down|volume-mute|brightness}")
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+
+    if cmd == "volume":
+        show_volume_osd()
+    elif cmd == "volume-up":
+        set_volume(delta=5)
+        show_volume_osd()
+    elif cmd == "volume-down":
+        set_volume(delta=-5)
+        show_volume_osd()
+    elif cmd == "volume-mute":
+        set_volume(toggle_mute=True)
+        show_volume_osd()
+    elif cmd == "brightness":
+        show_brightness_osd()
+    else:
+        print(f"Comando desconhecido: {cmd}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

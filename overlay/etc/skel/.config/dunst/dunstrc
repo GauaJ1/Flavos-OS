@@ -87,13 +87,6 @@
     timeout = 0
     highlight = "#F87171"
 
-# --- OSD Category ---
-# flavos-osd sends notifications with category "osd"
-# These are ephemeral, center-ish, and shorter lived
-[osd]
-    rule_match_by = category
-    appname = "flavos-osd"
-    timeout = 2
-    history_ignore = yes
-    set_stack_tag = osd
-    format = "<b>%s</b>\n%b"
+# Nota arquitetural:
+# OSD (volume, brilho) é componente da shell (flavos-osd), não passa por aqui.
+# dunst é exclusivo para notificações de apps e eventos de segundo plano.
