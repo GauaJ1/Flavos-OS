@@ -7,6 +7,7 @@ linux-image-amd64
 # Boot
 systemd-boot
 initramfs-tools
+efibootmgr
 
 # Init e serviços
 systemd
