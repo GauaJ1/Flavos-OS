@@ -1,0 +1,9 @@
+NAME="Flavos OS"
+ID=flavos
+ID_LIKE=debian
+VERSION_ID="0.1.0"
+VERSION="0.1.0 (Ignition)"
+VERSION_CODENAME=ignition
+PRETTY_NAME="Flavos OS 0.1.0 (Ignition)"
+HOME_URL="https://github.com/flavos"
+BUG_REPORT_URL="https://github.com/flavos/issues"

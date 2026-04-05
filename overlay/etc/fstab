@@ -1,0 +1,5 @@
+# /etc/fstab — Flavos OS
+# <filesystem>  <mountpoint>  <type>  <options>        <dump>  <pass>
+# NOTA: PARTUUID valores são substituídos em tempo de build pelo script 03.
+PARTUUID=__PARTUUID_ROOT__  /          ext4   defaults,errors=remount-ro  0  1
+PARTUUID=__PARTUUID_ESP__   /boot/efi  vfat   umask=0077                  0  1

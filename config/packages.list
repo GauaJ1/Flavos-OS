@@ -1,0 +1,41 @@
+# Flavos OS — Pacotes a instalar no rootfs (via apt no chroot)
+# Um pacote por linha. Linhas começando com # são ignoradas.
+
+# Kernel
+linux-image-amd64
+
+# Boot
+systemd-boot
+initramfs-tools
+
+# Init e serviços
+systemd
+dbus
+
+# Userspace mínimo
+bash
+coreutils
+util-linux
+less
+nano
+procps
+kmod
+
+# Rede
+iproute2
+iputils-ping
+systemd-resolved
+
+# Filesystem
+e2fsprogs
+dosfstools
+
+# Locale
+locales
+
+# Extras úteis para debug
+grep
+sed
+gawk
+findutils
+mount
