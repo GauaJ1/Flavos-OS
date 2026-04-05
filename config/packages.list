@@ -48,3 +48,7 @@ sed
 gawk
 findutils
 mount
+
+# Input e Mouse no Console (Etapa 7E)
+gpm
+evtest

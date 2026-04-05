@@ -54,6 +54,7 @@ fi
 
 # Modo de display
 DISPLAY_MODE="${1:---serial}"
+INPUT_FLAGS=""  # populado apenas no modo --gui
 case "$DISPLAY_MODE" in
     --serial)
         DISPLAY_FLAGS="-nographic -serial mon:stdio"
@@ -61,7 +62,9 @@ case "$DISPLAY_MODE" in
         ;;
     --gui)
         DISPLAY_FLAGS="-display gtk -serial stdio"
-        echo "Display: GUI (GTK)"
+        # usb-tablet usa coordenadas absolutas: elimina drift de cursor entre host e VM
+        INPUT_FLAGS="-device usb-ehci,id=ehci -device usb-tablet,bus=ehci.0"
+        echo "Display: GUI (GTK) com usb-tablet (sem drift de cursor)"
         ;;
     *)
         echo "Uso: $0 [--serial|--gui]"
@@ -80,4 +83,5 @@ qemu-system-x86_64 \
     -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
     -drive if=pflash,format=raw,file="$OVMF_VARS" \
     -net nic,model=virtio -net user \
+    $INPUT_FLAGS \
     $DISPLAY_FLAGS

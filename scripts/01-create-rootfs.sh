@@ -143,6 +143,8 @@ EOF
 chroot "$ROOTFS" systemctl enable systemd-networkd 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable systemd-resolved 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable ssh 2>/dev/null || true
+# Mouse no console (Etapa 7E)
+chroot "$ROOTFS" systemctl enable gpm 2>/dev/null || true
 
 # DNS resolve via systemd-resolved
 chroot "$ROOTFS" ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf 2>/dev/null || true
