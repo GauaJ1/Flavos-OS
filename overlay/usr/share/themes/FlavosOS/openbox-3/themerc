@@ -1,0 +1,83 @@
+# Flavos OS — Openbox Window Theme
+# Tema escuro minimalista alinhado com a identidade visual do sistema.
+
+# Window Title
+window.active.title.bg: flat solid
+window.active.title.bg.color: #1a1d27
+window.active.label.text.color: #e4e6eb
+window.active.label.text.font: shadow=n
+window.inactive.title.bg: flat solid
+window.inactive.title.bg.color: #151720
+window.inactive.label.text.color: #8b8fa3
+
+# Window Handle (bottom bar of window)
+window.active.handle.bg: flat solid
+window.active.handle.bg.color: #1a1d27
+window.inactive.handle.bg: flat solid
+window.inactive.handle.bg.color: #151720
+window.handle.width: 0
+
+# Window Grip
+window.active.grip.bg: flat solid
+window.active.grip.bg.color: #1a1d27
+window.inactive.grip.bg: flat solid
+window.inactive.grip.bg.color: #151720
+
+# Window Border
+window.active.border.color: #2d3040
+window.inactive.border.color: #1a1d27
+border.width: 1
+padding.width: 4
+padding.height: 4
+
+# Window Buttons
+window.active.button.unpressed.bg: flat solid
+window.active.button.unpressed.bg.color: #1a1d27
+window.active.button.unpressed.image.color: #8b8fa3
+
+window.active.button.hover.bg: flat solid
+window.active.button.hover.bg.color: #252836
+window.active.button.hover.image.color: #5b8def
+
+window.active.button.pressed.bg: flat solid
+window.active.button.pressed.bg.color: #5b8def
+window.active.button.pressed.image.color: #ffffff
+
+window.active.button.disabled.bg: flat solid
+window.active.button.disabled.bg.color: #1a1d27
+window.active.button.disabled.image.color: #2d3040
+
+window.inactive.button.unpressed.bg: flat solid
+window.inactive.button.unpressed.bg.color: #151720
+window.inactive.button.unpressed.image.color: #2d3040
+
+window.inactive.button.hover.bg: flat solid
+window.inactive.button.hover.bg.color: #252836
+window.inactive.button.hover.image.color: #8b8fa3
+
+# Menu
+menu.title.bg: flat solid
+menu.title.bg.color: #1a1d27
+menu.title.text.color: #e4e6eb
+menu.title.text.font: shadow=n
+
+menu.items.bg: flat solid
+menu.items.bg.color: #1a1d27
+menu.items.text.color: #e4e6eb
+menu.items.disabled.text.color: #8b8fa3
+
+menu.items.active.bg: flat solid
+menu.items.active.bg.color: #5b8def
+menu.items.active.text.color: #ffffff
+
+menu.separator.color: #2d3040
+menu.separator.width: 1
+menu.separator.padding.width: 6
+menu.separator.padding.height: 4
+
+# OSD (On-Screen Display)
+osd.bg: flat solid
+osd.bg.color: #1a1d27
+osd.label.text.color: #e4e6eb
+osd.border.color: #2d3040
+osd.border.width: 1

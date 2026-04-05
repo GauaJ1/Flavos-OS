@@ -1,0 +1,42 @@
+# Flavos OS — jgmenu configuration
+# Tema escuro com a paleta visual do sistema.
+
+stay_alive          = 1
+tint2_look          = 0
+position_mode       = ipc
+terminal_exec       = lxterminal
+terminal_args       = -e
+
+menu_width          = 220
+menu_padding_top    = 8
+menu_padding_right  = 8
+menu_padding_bottom = 8
+menu_padding_left   = 8
+menu_radius         = 4
+menu_border         = 1
+menu_halign         = left
+menu_valign         = bottom
+menu_margin_x       = 0
+menu_margin_y       = 32
+
+item_height         = 28
+item_padding_x      = 8
+item_radius         = 4
+item_border         = 0
+
+sep_height          = 1
+
+font                = Inter 10
+icon_size           = 18
+icon_theme          = hicolor
+
+color_menu_bg       = #1a1d27 95
+color_menu_border   = #2d3040 80
+color_norm_bg       = #1a1d27 0
+color_norm_fg       = #e4e6eb 100
+color_sel_bg        = #5b8def 90
+color_sel_fg        = #ffffff 100
+color_sel_border    = #5b8def 0
+color_sep_fg        = #2d3040 60
+
+csv_cmd             = cat ~/.config/jgmenu/prepend.csv

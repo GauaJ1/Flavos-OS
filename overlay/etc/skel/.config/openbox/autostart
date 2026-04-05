@@ -1,6 +1,13 @@
 # ~/.config/openbox/autostart
-# Lançado pela openbox-session. Aqui amarramos docks, painéis, e wallpapers.
-# Como estamos na Fase 9A (Fundação Barebones), lançaremos apenas um terminal
-# para comprovar que o display renderiza algo e tem usabilidade limpa.
+# Flavos OS — Shell Visual (Etapa 9B)
+# Lançado pelo openbox-session. Inicializa os componentes visuais.
 
-kitty &
+# 1. Wallpaper
+feh --bg-fill /usr/share/flavos/wallpaper.jpeg &
+
+# 2. Painel (tint2)
+tint2 &
+
+# 3. Terminal inicial
+sleep 0.5
+lxterminal &

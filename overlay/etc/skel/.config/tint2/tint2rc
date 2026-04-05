@@ -1,0 +1,86 @@
+# Flavos OS — Painel tint2
+# Barra inferior com identidade visual do sistema.
+
+# --- Panel ---
+panel_items = LTSC
+panel_size = 100% 32
+panel_position = bottom center horizontal
+panel_background_id = 1
+panel_margin = 0 0
+panel_padding = 4 0 4
+panel_dock = 0
+panel_layer = top
+wm_menu = 0
+panel_window_name = flavos-panel
+
+# --- Backgrounds ---
+# ID 1: Panel background
+rounded = 0
+border_width = 0
+border_sides = T
+background_color = #1a1d27 95
+border_color = #2d3040 60
+background_color_hover = #1a1d27 95
+border_color_hover = #2d3040 60
+
+# ID 2: Active task
+rounded = 4
+border_width = 0
+background_color = #252836 100
+border_color = #5b8def 80
+
+# ID 3: Launcher icon hover
+rounded = 4
+border_width = 0
+background_color = #252836 80
+border_color = #5b8def 50
+
+# --- Launcher ---
+launcher_padding = 4 4 4
+launcher_background_id = 0
+launcher_icon_background_id = 0
+launcher_icon_size = 20
+launcher_icon_asb = 100 0 0
+launcher_icon_theme = hicolor
+launcher_tooltip = 1
+
+launcher_item_app = /usr/share/applications/flavos-menu.desktop
+launcher_item_app = /usr/share/applications/flavos-terminal.desktop
+
+# --- Taskbar ---
+taskbar_mode = single_desktop
+taskbar_padding = 4 2 4
+taskbar_background_id = 0
+taskbar_active_background_id = 0
+taskbar_hide_if_empty = 0
+taskbar_name = 0
+
+task_text = 1
+task_icon = 1
+task_centered = 0
+task_maximum_size = 180 32
+task_padding = 4 2 4
+task_font = Inter 9
+task_font_color = #e4e6eb 100
+task_icon_asb = 100 0 0
+task_background_id = 0
+task_active_background_id = 2
+task_urgent_background_id = 2
+
+# --- System Tray ---
+systray_padding = 4 2 4
+systray_background_id = 0
+systray_icon_size = 18
+systray_icon_asb = 100 0 0
+
+# --- Clock ---
+time1_format = %H:%M
+time1_font = Inter Bold 10
+time1_timezone =
+time2_format = %d/%m
+time2_font = Inter 8
+clock_font_color = #e4e6eb 90
+clock_padding = 8 0
+clock_background_id = 0
+clock_lclick_command = 
+clock_rclick_command = 
