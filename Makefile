@@ -57,11 +57,20 @@ test:
 manifest:
 	@bash $(SCRIPTS)/99-generate-manifest.sh
 
+# Opções de Validação em VM (Etapa 8A1)
+DISK_BUS ?= virtio
+NET_MODEL ?= virtio
+DUMMY_DISK ?=
+VM_ARGS = --disk-bus $(DISK_BUS) --net-model $(NET_MODEL)
+ifneq ($(DUMMY_DISK),)
+	VM_ARGS += --attach-dummy $(DUMMY_DISK)
+endif
+
 boot:
-	@bash $(SCRIPTS)/04-boot-vm.sh --serial
+	@bash $(SCRIPTS)/04-boot-vm.sh --serial $(VM_ARGS)
 
 boot-gui:
-	@bash $(SCRIPTS)/04-boot-vm.sh --gui
+	@bash $(SCRIPTS)/04-boot-vm.sh --gui $(VM_ARGS)
 
 write-disk:
 	@if [ -z "$(DISK)" ]; then \
