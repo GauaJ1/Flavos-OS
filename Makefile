@@ -19,7 +19,7 @@ ROOTFS_DIR   := $(BUILD_DIR)/rootfs
 IMAGE        := $(BUILD_DIR)/flavos.img
 SCRIPTS      := $(PROJECT_ROOT)/scripts
 
-.PHONY: help deps rootfs image install test boot all clean
+.PHONY: help deps rootfs image install test manifest boot all clean
 
 help:
 	@echo ""
@@ -31,6 +31,7 @@ help:
 	@echo "    make image     Cria imagem de disco (requer sudo)"
 	@echo "    make install   Instala sistema na imagem (requer sudo)"
 	@echo "    make test      Executa smoke test offline"
+	@echo "    make manifest  Gera metadados .json do build final"
 	@echo "    make boot      Inicia VM via QEMU"
 	@echo "    make boot-gui  Inicia VM via QEMU (modo gráfico)"
 	@echo "    make all       Pipeline completo (requer sudo)"
@@ -52,13 +53,16 @@ install:
 test:
 	@bash $(PROJECT_ROOT)/tests/smoke-test.sh
 
+manifest:
+	@bash $(SCRIPTS)/99-generate-manifest.sh
+
 boot:
 	@bash $(SCRIPTS)/04-boot-vm.sh --serial
 
 boot-gui:
 	@bash $(SCRIPTS)/04-boot-vm.sh --gui
 
-all: rootfs image install test
+all: rootfs image install test manifest
 	@echo ""
 	@echo "=== Build completo. Execute 'make boot' para iniciar a VM. ==="
 

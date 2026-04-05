@@ -95,6 +95,14 @@ echo ""
 echo "Rede:"
 check "systemd-networkd config" "$( [[ -f "${ROOTFS}/etc/systemd/network/20-wired.network" ]] && echo ok || echo fail )"
 
+# --- Teste 7: V1 Userspace & Segurança (Etapas 6 e 7) ---
+echo ""
+echo "V1 Userspace e Policies:"
+check "Usuário Diário Configurado" "$( grep -q "${SYS_USER}" "${ROOTFS}/etc/passwd" 2>/dev/null && echo ok || echo fail )"
+check "OpenSSH Hardened (Root Ban)" "$( grep -q "PermitRootLogin no" "${ROOTFS}/etc/ssh/sshd_config.d/90-flavos.conf" 2>/dev/null && echo ok || echo fail )"
+check "Ferramenta Diagnóstica (flavos-diag)" "$( [[ -x "${ROOTFS}/usr/local/bin/flavos-diag" ]] && echo ok || echo fail )"
+check "JournalD Configurado (50MB lim)" "$( grep -q "SystemMaxUse=50M" "${ROOTFS}/etc/systemd/journald.conf.d/90-flavos.conf" 2>/dev/null && echo ok || echo fail )"
+
 # --- Resultado ---
 echo ""
 echo "=== Resultado ==="
