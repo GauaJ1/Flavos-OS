@@ -1,0 +1,6 @@
+# ~/.config/openbox/autostart
+# Lançado pela openbox-session. Aqui amarramos docks, painéis, e wallpapers.
+# Como estamos na Fase 9A (Fundação Barebones), lançaremos apenas um terminal
+# para comprovar que o display renderiza algo e tem usabilidade limpa.
+
+kitty &

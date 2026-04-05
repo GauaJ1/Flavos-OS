@@ -50,6 +50,20 @@ gawk
 findutils
 mount
 
-# Input e Mouse no Console (Etapa 7E)
+# Suporte a hardware legad e QA (Etapa 7)
 gpm
 evtest
+efibootmgr
+
+# Fundação Gráfica Mínima (Etapa 9A)
+xserver-xorg-core
+xserver-xorg-video-all
+xserver-xorg-input-all
+xinit
+openbox
+kitty
+fonts-inter
+fonts-roboto
+
+# Observação: Removemos dependências de desktop complexo (Sem LightDM/GDM)
+# Autologin gerencia a sessão para garantir startup leve, seguindo Skill
