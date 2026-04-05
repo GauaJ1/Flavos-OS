@@ -70,3 +70,8 @@ jgmenu
 feh
 fonts-inter
 fonts-roboto
+
+# Flavos Settings (Etapa 9C)
+python3
+python3-gi
+gir1.2-gtk-3.0
