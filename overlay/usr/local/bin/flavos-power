@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+# Flavos OS — Power Menu v3
+# Standalone OSD. Uses logind for power actions.
+# Design System v3 tokens.
+
+import gi
+import os
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk
+
+CSS = b"""
+/* === Flavos OS Power Menu — CSS v3 === */
+
+* {
+    -GtkWidget-focus-padding: 0;
+    -GtkWidget-focus-line-width: 0;
+    outline-style: none;
+    outline-width: 0;
+    transition: background-color 100ms ease-in-out,
+                color 100ms ease-in-out;
+}
+
+window, .background {
+    background-color: #0D1017;
+    color: #E8ECF4;
+    border: 1px solid #272D3D;
+    border-radius: 12px;
+}
+
+label {
+    color: #E8ECF4;
+    font-family: Inter, sans-serif;
+    background-color: transparent;
+}
+
+label.heading {
+    font-size: 14px;
+    font-weight: 700;
+    color: #8891A5;
+    margin-bottom: 8px;
+}
+
+button {
+    background-image: none;
+    background-color: #1C2030;
+    color: #E8ECF4;
+    border-radius: 8px;
+    border: 1px solid #272D3D;
+    font-family: Inter, sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 14px;
+    margin-bottom: 6px;
+    box-shadow: none;
+    text-shadow: none;
+    -gtk-icon-shadow: none;
+}
+button label {
+    color: #E8ECF4;
+    background-color: transparent;
+}
+button:hover {
+    background-image: none;
+    background-color: #232838;
+}
+button:hover label {
+    color: #E8ECF4;
+}
+button:active {
+    background-image: none;
+    background-color: #4B8BF5;
+    color: #FFFFFF;
+}
+button:active label {
+    color: #FFFFFF;
+}
+
+button.danger {
+    border-color: #3A2020;
+}
+button.danger label {
+    color: #F87171;
+}
+button.danger:hover {
+    background-image: none;
+    background-color: #F87171;
+    border-color: #F87171;
+}
+button.danger:hover label {
+    color: #FFFFFF;
+}
+
+button.cancel {
+    background-color: transparent;
+    border-color: transparent;
+    color: #8891A5;
+}
+button.cancel label {
+    color: #8891A5;
+}
+button.cancel:hover {
+    background-image: none;
+    background-color: #1C2030;
+}
+button.cancel:hover label {
+    color: #E8ECF4;
+}
+
+separator {
+    background-color: #272D3D;
+    min-height: 1px;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+"""
+
+
+class PowerMenu(Gtk.Window):
+    def __init__(self):
+        super().__init__(title="Menu de Energia")
+        self.set_decorated(False)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_default_size(320, 300)
+        self.set_resizable(False)
+        self.set_keep_above(True)
+
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_USER
+        )
+
+        self.connect("key-press-event", self._on_key)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        vbox.set_margin_top(24)
+        vbox.set_margin_bottom(20)
+        vbox.set_margin_start(24)
+        vbox.set_margin_end(24)
+        self.add(vbox)
+
+        heading = Gtk.Label(label="ENERGIA", xalign=0)
+        heading.get_style_context().add_class("heading")
+        vbox.pack_start(heading, False, False, 0)
+
+        btn_power = Gtk.Button(label="Desligar")
+        btn_power.get_style_context().add_class("danger")
+        btn_power.connect("clicked", lambda x: os.system("systemctl poweroff"))
+
+        btn_reboot = Gtk.Button(label="Reiniciar")
+        btn_reboot.connect("clicked", lambda x: os.system("systemctl reboot"))
+
+        btn_suspend = Gtk.Button(label="Suspender")
+        btn_suspend.connect("clicked", lambda x: os.system("systemctl suspend"))
+
+        btn_logout = Gtk.Button(label="Encerrar Sessão")
+        btn_logout.connect("clicked",
+            lambda x: os.system("loginctl terminate-session $XDG_SESSION_ID || openbox --exit"))
+
+        vbox.pack_start(btn_power, False, False, 0)
+        vbox.pack_start(btn_reboot, False, False, 0)
+        vbox.pack_start(btn_suspend, False, False, 0)
+        vbox.pack_start(btn_logout, False, False, 0)
+
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        vbox.pack_start(sep, False, False, 0)
+
+        btn_cancel = Gtk.Button(label="Cancelar")
+        btn_cancel.get_style_context().add_class("cancel")
+        btn_cancel.connect("clicked", lambda x: self.destroy())
+        vbox.pack_start(btn_cancel, False, False, 0)
+
+    def _on_key(self, widget, event):
+        if event.keyval == Gdk.KEY_Escape:
+            self.destroy()
+            return True
+        return False
+
+
+if __name__ == "__main__":
+    win = PowerMenu()
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()

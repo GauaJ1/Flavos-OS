@@ -1,83 +1,87 @@
-# Flavos OS — Openbox Window Theme
-# Tema escuro minimalista alinhado com a identidade visual do sistema.
+# Flavos OS — Openbox Window Theme v3
+# Tokens: canvas=#0D1017 surface=#151921 elevated=#1C2030
+#          overlay=#232838 accent=#4B8BF5 border=#272D3D
+#          fg.primary=#E8ECF4 fg.secondary=#8891A5 fg.muted=#505872
 
-# Window Title
+# --- Active Window ---
 window.active.title.bg: flat solid
-window.active.title.bg.color: #1E212B
-window.active.label.text.color: #EDEDED
+window.active.title.bg.color: #1C2030
+window.active.label.text.color: #E8ECF4
 window.active.label.text.font: shadow=n
-window.inactive.title.bg: flat solid
-window.inactive.title.bg.color: #12141A
-window.inactive.label.text.color: #9CA3AF
 
-# Window Handle (bottom bar of window)
+# --- Inactive Window ---
+window.inactive.title.bg: flat solid
+window.inactive.title.bg.color: #0D1017
+window.inactive.label.text.color: #8891A5
+
+# --- Handle / Grip ---
 window.active.handle.bg: flat solid
-window.active.handle.bg.color: #1E212B
+window.active.handle.bg.color: #1C2030
 window.inactive.handle.bg: flat solid
-window.inactive.handle.bg.color: #12141A
+window.inactive.handle.bg.color: #0D1017
 window.handle.width: 0
 
-# Window Grip
 window.active.grip.bg: flat solid
-window.active.grip.bg.color: #1E212B
+window.active.grip.bg.color: #1C2030
 window.inactive.grip.bg: flat solid
-window.inactive.grip.bg.color: #12141A
+window.inactive.grip.bg.color: #0D1017
 
-# Window Border
-window.active.border.color: #3A3F50
-window.inactive.border.color: #1E212B
+# --- Borders ---
+window.active.border.color: #272D3D
+window.inactive.border.color: #151921
 border.width: 1
-padding.width: 6
+padding.width: 10
 padding.height: 8
 
-# Window Buttons
+# --- Active Buttons ---
 window.active.button.unpressed.bg: flat solid
-window.active.button.unpressed.bg.color: #161922
-window.active.button.unpressed.image.color: #858a9d
+window.active.button.unpressed.bg.color: #1C2030
+window.active.button.unpressed.image.color: #8891A5
 
 window.active.button.hover.bg: flat solid
-window.active.button.hover.bg.color: #212431
-window.active.button.hover.image.color: #4f86f7
+window.active.button.hover.bg.color: #232838
+window.active.button.hover.image.color: #E8ECF4
 
 window.active.button.pressed.bg: flat solid
-window.active.button.pressed.bg.color: #4f86f7
+window.active.button.pressed.bg.color: #4B8BF5
 window.active.button.pressed.image.color: #ffffff
 
 window.active.button.disabled.bg: flat solid
-window.active.button.disabled.bg.color: #161922
-window.active.button.disabled.image.color: #2b2f40
+window.active.button.disabled.bg.color: #1C2030
+window.active.button.disabled.image.color: #505872
 
+# --- Inactive Buttons ---
 window.inactive.button.unpressed.bg: flat solid
-window.inactive.button.unpressed.bg.color: #12141c
-window.inactive.button.unpressed.image.color: #2b2f40
+window.inactive.button.unpressed.bg.color: #0D1017
+window.inactive.button.unpressed.image.color: #505872
 
 window.inactive.button.hover.bg: flat solid
-window.inactive.button.hover.bg.color: #212431
-window.inactive.button.hover.image.color: #858a9d
+window.inactive.button.hover.bg.color: #151921
+window.inactive.button.hover.image.color: #8891A5
 
-# Menu
+# --- WM Menu (right-click) ---
 menu.title.bg: flat solid
-menu.title.bg.color: #161922
-menu.title.text.color: #eaecf0
+menu.title.bg.color: #151921
+menu.title.text.color: #E8ECF4
 menu.title.text.font: shadow=n
 
 menu.items.bg: flat solid
-menu.items.bg.color: #161922
-menu.items.text.color: #eaecf0
-menu.items.disabled.text.color: #858a9d
+menu.items.bg.color: #151921
+menu.items.text.color: #8891A5
+menu.items.disabled.text.color: #505872
 
 menu.items.active.bg: flat solid
-menu.items.active.bg.color: #4f86f7
-menu.items.active.text.color: #ffffff
+menu.items.active.bg.color: #232838
+menu.items.active.text.color: #E8ECF4
 
-menu.separator.color: #2b2f40
+menu.separator.color: #272D3D
 menu.separator.width: 1
-menu.separator.padding.width: 6
-menu.separator.padding.height: 4
+menu.separator.padding.width: 8
+menu.separator.padding.height: 6
 
-# OSD (On-Screen Display)
+# --- OSD ---
 osd.bg: flat solid
-osd.bg.color: #161922
-osd.label.text.color: #eaecf0
-osd.border.color: #2b2f40
+osd.bg.color: #151921
+osd.label.text.color: #E8ECF4
+osd.border.color: #272D3D
 osd.border.width: 1

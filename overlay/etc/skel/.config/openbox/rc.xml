@@ -64,6 +64,20 @@
     <keybind key="A-F11">
       <action name="ToggleFullscreen"/>
     </keybind>
+    <!-- Volume (Etapa 10B) -->
+    <keybind key="XF86AudioRaiseVolume">
+      <action name="Execute"><command>/usr/local/bin/flavos-osd volume-up</command></action>
+    </keybind>
+    <keybind key="XF86AudioLowerVolume">
+      <action name="Execute"><command>/usr/local/bin/flavos-osd volume-down</command></action>
+    </keybind>
+    <keybind key="XF86AudioMute">
+      <action name="Execute"><command>/usr/local/bin/flavos-osd volume-mute</command></action>
+    </keybind>
+    <!-- Power Menu (Etapa 10B) -->
+    <keybind key="C-A-Delete">
+      <action name="Execute"><command>/usr/local/bin/flavos-power</command></action>
+    </keybind>
   </keyboard>
   <mouse>
     <context name="Desktop">

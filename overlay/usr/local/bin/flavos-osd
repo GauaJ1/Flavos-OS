@@ -1,0 +1,95 @@
+#!/bin/bash
+# Flavos OS — System OSD (On-Screen Display)
+# Lightweight wrapper around notify-send for system-level feedback.
+# Uses dunst's replace-id feature for smooth OSD updates.
+#
+# Usage:
+#   flavos-osd volume          — show current volume level
+#   flavos-osd volume-up       — increase volume 5% and show
+#   flavos-osd volume-down     — decrease volume 5% and show
+#   flavos-osd volume-mute     — toggle mute and show
+#   flavos-osd brightness      — show current brightness (placeholder)
+#   flavos-osd notify "Title" "Body"  — generic system notification
+
+set -euo pipefail
+
+OSD_ID=91234  # Fixed ID for OSD replacement (dunst replaces by hint)
+
+_notify() {
+    local urgency="${1:-low}"
+    local title="$2"
+    local body="${3:-}"
+    local replace="${4:-$OSD_ID}"
+
+    notify-send \
+        --app-name="flavos-osd" \
+        --urgency="$urgency" \
+        --hint="int:value:${5:-0}" \
+        --hint="string:x-dunst-stack-tag:osd" \
+        --hint="string:category:osd" \
+        "$title" "$body"
+}
+
+_get_volume() {
+    amixer sget Master 2>/dev/null | grep -oP '\[\d+%\]' | head -1 | tr -d '[]%'
+}
+
+_is_muted() {
+    amixer sget Master 2>/dev/null | grep -q '\[off\]'
+}
+
+cmd_volume() {
+    local vol
+    vol=$(_get_volume)
+    if [ -z "$vol" ]; then
+        _notify "low" "Volume" "Dispositivo de áudio não detectado"
+        return
+    fi
+    if _is_muted; then
+        _notify "low" "Volume" "Mudo" "$OSD_ID" "$vol"
+    else
+        _notify "low" "Volume" "${vol}%" "$OSD_ID" "$vol"
+    fi
+}
+
+cmd_volume_up() {
+    amixer -q sset Master 5%+ unmute 2>/dev/null || true
+    cmd_volume
+}
+
+cmd_volume_down() {
+    amixer -q sset Master 5%- unmute 2>/dev/null || true
+    cmd_volume
+}
+
+cmd_volume_mute() {
+    amixer -q sset Master toggle 2>/dev/null || true
+    cmd_volume
+}
+
+cmd_brightness() {
+    _notify "low" "Brilho" "Controle de brilho indisponível nesta versão"
+}
+
+cmd_notify() {
+    local title="${1:-Flavos OS}"
+    local body="${2:-}"
+    notify-send \
+        --app-name="flavos-osd" \
+        --urgency="normal" \
+        "$title" "$body"
+}
+
+# --- Main dispatch ---
+case "${1:-help}" in
+    volume)       cmd_volume ;;
+    volume-up)    cmd_volume_up ;;
+    volume-down)  cmd_volume_down ;;
+    volume-mute)  cmd_volume_mute ;;
+    brightness)   cmd_brightness ;;
+    notify)       cmd_notify "${2:-}" "${3:-}" ;;
+    *)
+        echo "Flavos OSD — uso: flavos-osd {volume|volume-up|volume-down|volume-mute|brightness|notify}"
+        exit 1
+        ;;
+esac

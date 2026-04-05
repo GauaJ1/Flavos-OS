@@ -11,6 +11,12 @@ picom -b
 # 3. Painel (tint2)
 tint2 &
 
-# 4. Terminal inicial
-sleep 0.5
-lxterminal &
+# 4. Servidor de Notificações (dunst)
+dunst &
+
+# 5. Agente de Autorização
+lxpolkit &
+
+# 5. Terminal inicial desativado na Etapa 9E (onboarding limpo)
+# sleep 0.5
+# lxterminal &

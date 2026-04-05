@@ -1,3 +1,0 @@
-# Permite que usuarios sudoers (como o usuário flavos) efetuem reboot e poweroff 
-# instantâneo sem prompt de senha em sessões não-Logind (startx).
-%sudo ALL=(ALL) NOPASSWD: /bin/systemctl poweroff, /bin/systemctl reboot, /bin/systemctl restart systemd-networkd

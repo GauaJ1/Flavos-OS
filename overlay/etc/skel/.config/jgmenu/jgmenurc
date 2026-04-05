@@ -1,5 +1,6 @@
-# Flavos OS — jgmenu configuration
-# Tema escuro com a paleta visual do sistema.
+# Flavos OS — Shell Menu (Jgmenu) v3
+# Tokens: surface=#151921 elevated=#1C2030 overlay=#232838
+#          border=#272D3D fg.primary=#E8ECF4 fg.secondary=#8891A5
 
 stay_alive          = 1
 tint2_look          = 0
@@ -7,34 +8,35 @@ position_mode       = ipc
 terminal_exec       = lxterminal
 terminal_args       = -e
 
-menu_width          = 220
-menu_padding_top    = 8
-menu_padding_right  = 8
-menu_padding_bottom = 8
-menu_padding_left   = 8
-menu_radius         = 8
+menu_width          = 280
+menu_padding_top    = 14
+menu_padding_right  = 14
+menu_padding_bottom = 14
+menu_padding_left   = 14
+menu_radius         = 12
 menu_border         = 1
 menu_halign         = left
 menu_valign         = bottom
 menu_margin_x       = 0
-menu_margin_y       = 32
+menu_margin_y       = 42
 
-item_height         = 28
-item_padding_x      = 8
-item_radius         = 8
+item_height         = 36
+item_padding_x      = 14
+item_radius         = 6
 item_border         = 0
 
 sep_height          = 1
 
-font                = Inter 10
-icon_size           = 18
+font                = Inter Medium 10
+icon_size           = 20
 icon_theme          = hicolor
 
-color_menu_bg       = #161922 95
-color_menu_border   = #2b2f40 80
-color_norm_bg       = #161922 0
-color_norm_fg       = #eaecf0 100
-color_sel_bg        = #4f86f7 90
-color_sel_fg        = #ffffff 100
-color_sel_border    = #4f86f7 0
-color_sep_fg        = #2b2f40 60
+# Paleta v3
+color_menu_bg       = #151921 96
+color_menu_border   = #272D3D 100
+color_norm_bg       = #151921 0
+color_norm_fg       = #8891A5 100
+color_sel_bg        = #232838 100
+color_sel_fg        = #E8ECF4 100
+color_sel_border    = #272D3D 0
+color_sep_fg        = #272D3D 100
