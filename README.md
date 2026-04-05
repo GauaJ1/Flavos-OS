@@ -1,10 +1,10 @@
-# Flavos OS
+# Flavos OS — 0.1.0-rc1 (Ignition)
 
-Sistema operacional Linux criado do zero, focado em boot confiável, build reproduzível e arquitetura limpa.
+Sistema operacional bootável mínimo, construído com foco em **idempotência**, **segurança**, e **simplicidade**.
 
 ## Status
 
-**V0.1.0 (Ignition)** — Em iteração ativa. O sistema atingiu a **Etapa 7B**: Imagem RAW é bootável (KVM UEFI) com Userspace focado, Rede auto-provisionada pelo Systemd e arquitetura de Logs em disco para Recovery.
+**V0.1.0-rc1 (Ignition)** — Console V1 Consolidada. Sistema maduro, seguro e inteiramente bootável localmente e em infraestrutura lab (QEMU). Empacotado formalmente para Release Candidate 1 aguardando submissão bare-metal real.
 
 ## Stack
 
@@ -78,6 +78,7 @@ FlavosOS/
 ## Documentação
 
 - [Arquitetura](docs/architecture.md)
+- [Release Notes do RC1 e Informes Gerais](docs/RELEASE_NOTES_0.1.0-rc1.md)
 - [Instalação em Hardware Real](docs/HARDWARE_INSTALL.md)
 - [Laboratório de Homologação em VM](docs/VM_LAB_VALIDATION.md)
 - [Matriz de Homologação em Bare-metal](docs/VALIDATION_MATRIX.md)
