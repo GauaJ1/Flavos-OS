@@ -62,7 +62,6 @@ xserver-xorg-input-all
 xinit
 openbox
 x11-xserver-utils
-adwaita-icon-theme
 
 # Shell Visual (Etapa 9B)
 # Apps Nativos Essenciais (Etapa 10C)
@@ -81,6 +80,7 @@ feh
 picom
 fonts-inter
 fonts-roboto
+papirus-icon-theme
 
 # Flavos Settings (Etapa 9C)
 python3
