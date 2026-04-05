@@ -1,36 +1,20 @@
 #!/usr/bin/env python3
 # Flavos OS — Settings App v3
-# Design System v3 tokens, full CSS override, scrollable pages.
+# Design System v3 tokens. CSS simplificado (GTK3-compatible).
 
 import gi
-import os
 import subprocess
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib
+from gi.repository import Gtk, Gdk
 
+# CSS limpo e compatível com GTK3 — sem propriedades inválidas
 CSS_DATA = b"""
-/* === Flavos OS Settings — CSS v3 === */
-/* canvas=#0D1017 surface=#151921 elevated=#1C2030
-   overlay=#232838 accent=#4B8BF5 border=#272D3D
-   fg.primary=#E8ECF4 fg.secondary=#8891A5 fg.muted=#505872 */
-
-/* --- Reset & Base --- */
-* {
-    -GtkWidget-focus-padding: 0;
-    -GtkWidget-focus-line-width: 0;
-    outline-style: none;
-    outline-width: 0;
-    transition: background-color 150ms ease-in-out,
-                color 150ms ease-in-out,
-                border-color 150ms ease-in-out;
-}
-
-window, .background {
+window {
     background-color: #0D1017;
-    color: #E8ECF4;
 }
-
-/* --- Sidebar --- */
+.background {
+    background-color: #0D1017;
+}
 stacksidebar {
     background-color: #151921;
     border-right: 1px solid #272D3D;
@@ -40,45 +24,38 @@ stacksidebar list {
 }
 stacksidebar row {
     padding: 12px 16px;
-    color: #8891A5;
     background-color: transparent;
-    border-left: 3px solid transparent;
+}
+stacksidebar row label {
+    color: #8891A5;
 }
 stacksidebar row:hover {
     background-color: #1C2030;
+}
+stacksidebar row:hover label {
     color: #E8ECF4;
 }
 stacksidebar row:selected {
     background-color: #1C2030;
-    color: #E8ECF4;
     border-left: 3px solid #4B8BF5;
 }
-stacksidebar row label {
-    color: inherit;
-    background-color: transparent;
+stacksidebar row:selected label {
+    color: #E8ECF4;
 }
-
-/* --- Global Labels --- */
 label {
     color: #E8ECF4;
-    font-family: Inter, sans-serif;
-    background-color: transparent;
 }
-label.title {
+.title {
     font-size: 20px;
     font-weight: 700;
     color: #E8ECF4;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
-label.subtitle {
-    font-size: 13px;
-    font-weight: 600;
+.subtitle {
+    font-size: 12px;
     color: #8891A5;
-    margin-top: 12px;
-    margin-bottom: 6px;
+    margin-top: 8px;
 }
-
-/* --- Cards --- */
 .card {
     background-color: #1C2030;
     border: 1px solid #272D3D;
@@ -86,29 +63,21 @@ label.subtitle {
     padding: 16px;
     margin-bottom: 12px;
 }
-
-/* --- Buttons (THE FIX: full specificity override) --- */
 button {
     background-image: none;
     background-color: #1C2030;
     color: #E8ECF4;
     border: 1px solid #272D3D;
     border-radius: 6px;
-    padding: 8px 16px;
-    font-family: Inter, sans-serif;
-    font-weight: 600;
+    padding: 9px 18px;
     box-shadow: none;
-    text-shadow: none;
-    -gtk-icon-shadow: none;
 }
 button label {
     color: #E8ECF4;
-    background-color: transparent;
 }
 button:hover {
     background-image: none;
     background-color: #232838;
-    color: #E8ECF4;
 }
 button:hover label {
     color: #E8ECF4;
@@ -116,7 +85,6 @@ button:hover label {
 button:active {
     background-image: none;
     background-color: #4B8BF5;
-    color: #FFFFFF;
 }
 button:active label {
     color: #FFFFFF;
@@ -124,78 +92,44 @@ button:active label {
 button:disabled {
     background-image: none;
     background-color: #151921;
-    color: #505872;
     border-color: #1C2030;
 }
 button:disabled label {
     color: #505872;
 }
-
-button.destructive {
-    color: #F87171;
-    border-color: #3A2020;
-}
-button.destructive label {
-    color: #F87171;
-}
-button.destructive:hover {
-    background-color: #F87171;
-    color: #FFFFFF;
-    border-color: #F87171;
-}
-button.destructive:hover label {
-    color: #FFFFFF;
-}
-
-/* --- Entries --- */
 entry {
     background-image: none;
     background-color: #0D1017;
     color: #E8ECF4;
     border: 1px solid #272D3D;
-    padding: 8px 12px;
     border-radius: 6px;
-    caret-color: #4B8BF5;
-}
-entry:focus {
-    border-color: #4B8BF5;
+    padding: 8px 12px;
 }
 entry:disabled {
     color: #505872;
     background-color: #151921;
-    border-color: #1C2030;
 }
-
-/* --- Separator --- */
 separator {
     background-color: #272D3D;
-    min-height: 1px;
-}
-
-/* --- Scrollbar --- */
-scrollbar {
-    background-color: transparent;
 }
 scrollbar slider {
     background-color: #272D3D;
     border-radius: 4px;
     min-width: 6px;
+    min-height: 6px;
 }
 scrollbar slider:hover {
-    background-color: #3A4260;
-}
-
-/* --- Stack transition --- */
-stack {
-    background-color: #0D1017;
+    background-color: #505872;
 }
 """
 
+
 def shell_run(cmd):
     try:
-        return subprocess.check_output(cmd, shell=True, text=True).strip()
+        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL).strip()
     except Exception:
         return "Desconhecido"
+
 
 class FlavosSettings(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
@@ -253,7 +187,6 @@ class FlavosSettings(Gtk.ApplicationWindow):
         return scroll, content
 
     def _info_card(self, content, info_pairs):
-        """Reusable card with key-value rows."""
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         card.get_style_context().add_class("card")
 
@@ -273,125 +206,95 @@ class FlavosSettings(Gtk.ApplicationWindow):
 
     def build_about_page(self):
         page, content = self.create_page_layout("Sobre o Sistema")
-
         kernel = shell_run("uname -r")
-        version = shell_run("cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2")
+        version = shell_run("grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d'\"' -f2")
         ram = shell_run("free -h | awk '/^Mem:/ {print $2}'")
         uptime = shell_run("uptime -p")
-
         self._info_card(content, [
-            ("Sistema:", version if version != "Desconhecido" else "Flavos OS 0.1.0-rc1"),
+            ("Sistema:", version or "Flavos OS 0.1.0-rc1"),
             ("Kernel:", kernel),
-            ("Memória RAM:", ram),
+            ("Memória:", ram),
             ("Uptime:", uptime),
         ])
-
         self.stack.add_titled(page, "about", "Sobre")
 
     def build_network_page(self):
         page, content = self.create_page_layout("Rede")
-
-        ip_addr = shell_run(
-            "ip -o -4 addr list | awk '!/^[0-9]*: ?lo|link\\/ether/ {print $4}' | cut -d/ -f1 | head -n 1"
-        )
-        route = shell_run("ip route | grep default | awk '{print $3}'")
-
+        ip_addr = shell_run("ip -o -4 addr show | awk '!/lo/{print $4}' | cut -d/ -f1 | head -1")
+        route = shell_run("ip route show default | awk '{print $3}' | head -1")
         self._info_card(content, [
-            ("IPv4:", ip_addr if ip_addr else "Desconectado"),
-            ("Gateway:", route if route else "N/A"),
+            ("IPv4:", ip_addr or "Desconectado"),
+            ("Gateway:", route or "N/A"),
         ])
-
         btn = Gtk.Button(label="Reiniciar Rede")
-        btn.connect("clicked", lambda x: shell_run("sudo systemctl restart systemd-networkd || true"))
+        btn.connect("clicked", lambda _: subprocess.Popen(
+            ["sudo", "systemctl", "restart", "systemd-networkd"]))
         content.pack_start(btn, False, False, 16)
-
         lbl = Gtk.Label(label="Requer credenciais de administrador.", xalign=0)
         lbl.get_style_context().add_class("subtitle")
         content.pack_start(lbl, False, False, 0)
-
         self.stack.add_titled(page, "network", "Rede")
 
     def build_user_page(self):
         page, content = self.create_page_layout("Conta de Usuário")
-
         user = shell_run("whoami")
         groups = shell_run("groups")
-
         self._info_card(content, [
             ("Usuário:", user),
             ("Grupos:", groups),
         ])
-
         btn = Gtk.Button(label="Alterar Senha")
         btn.set_sensitive(False)
         content.pack_start(btn, False, False, 16)
-
-        lbl = Gtk.Label(label="Funcionalidade disponível em versão futura.", xalign=0)
+        lbl = Gtk.Label(label="Disponível em versão futura.", xalign=0)
         lbl.get_style_context().add_class("subtitle")
         content.pack_start(lbl, False, False, 0)
-
         self.stack.add_titled(page, "user", "Usuário")
 
     def build_hostname_page(self):
         page, content = self.create_page_layout("Identidade da Máquina")
-
         hostname = shell_run("cat /etc/hostname")
-
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         card.get_style_context().add_class("card")
-
         lbl = Gtk.Label(label="<b>Hostname:</b>", use_markup=True, xalign=0)
         entry = Gtk.Entry()
         entry.set_text(hostname)
         entry.set_sensitive(False)
-
         btn = Gtk.Button(label="Aplicar")
         btn.set_sensitive(False)
-
         card.pack_start(lbl, False, False, 0)
         card.pack_start(entry, False, False, 4)
         card.pack_start(btn, False, False, 4)
-
         content.pack_start(card, False, False, 0)
-
-        lbl_note = Gtk.Label(label="Edição disponível em versão futura.", xalign=0)
+        lbl_note = Gtk.Label(label="Disponível em versão futura.", xalign=0)
         lbl_note.get_style_context().add_class("subtitle")
         content.pack_start(lbl_note, False, False, 8)
-
         self.stack.add_titled(page, "hostname", "Hostname")
 
     def build_datetime_page(self):
         page, content = self.create_page_layout("Data e Hora")
-
-        now = shell_run("date")
-        tz = shell_run("timedatectl | grep 'Time zone' | awk '{print $3}'")
-
+        now = shell_run("date '+%d/%m/%Y %H:%M:%S'")
+        tz = shell_run("timedatectl 2>/dev/null | awk '/Time zone:/{print $3}'")
         self._info_card(content, [
-            ("Hora:", now),
-            ("Fuso:", tz if tz else "N/A"),
+            ("Data e Hora:", now),
+            ("Fuso Horário:", tz or "N/A"),
         ])
-
         btn = Gtk.Button(label="Sincronizar com NTP")
         btn.set_sensitive(False)
         content.pack_start(btn, False, False, 16)
-
-        lbl = Gtk.Label(label="Funcionalidade disponível em versão futura.", xalign=0)
+        lbl = Gtk.Label(label="Disponível em versão futura.", xalign=0)
         lbl.get_style_context().add_class("subtitle")
         content.pack_start(lbl, False, False, 0)
-
         self.stack.add_titled(page, "datetime", "Data e Hora")
 
     def build_power_page(self):
         page, content = self.create_page_layout("Energia e Sessão")
-
         lbl = Gtk.Label(label="Gerenciado pela shell do sistema:", xalign=0)
         lbl.get_style_context().add_class("subtitle")
         content.pack_start(lbl, False, False, 0)
-
         btn = Gtk.Button(label="Abrir Menu de Energia")
-        btn.connect("clicked", lambda x: subprocess.Popen(["/usr/local/bin/flavos-power"]))
+        btn.connect("clicked", lambda _: subprocess.Popen(["/usr/local/bin/flavos-power"]))
         content.pack_start(btn, False, False, 12)
-
         self.stack.add_titled(page, "power", "Energia")
 
 

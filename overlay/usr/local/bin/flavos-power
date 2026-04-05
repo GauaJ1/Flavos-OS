@@ -1,45 +1,34 @@
 #!/usr/bin/env python3
-# Flavos OS — Power Menu v3
-# Standalone OSD. Uses logind for power actions.
-# Design System v3 tokens.
+# Flavos OS — Power Menu v3 (corrigido)
+# Usa subprocess.Popen para ações de sistema (não bloqueia o loop GTK).
 
 import gi
-import os
+import subprocess
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
 CSS = b"""
-/* === Flavos OS Power Menu — CSS v3 === */
-
 * {
-    -GtkWidget-focus-padding: 0;
-    -GtkWidget-focus-line-width: 0;
     outline-style: none;
     outline-width: 0;
-    transition: background-color 100ms ease-in-out,
-                color 100ms ease-in-out;
 }
-
-window, .background {
+window {
     background-color: #0D1017;
-    color: #E8ECF4;
     border: 1px solid #272D3D;
     border-radius: 12px;
 }
-
 label {
     color: #E8ECF4;
     font-family: Inter, sans-serif;
     background-color: transparent;
 }
-
 label.heading {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 700;
     color: #8891A5;
+    letter-spacing: 1px;
     margin-bottom: 8px;
 }
-
 button {
     background-image: none;
     background-color: #1C2030;
@@ -48,12 +37,11 @@ button {
     border: 1px solid #272D3D;
     font-family: Inter, sans-serif;
     font-weight: 600;
-    font-size: 14px;
-    padding: 14px;
-    margin-bottom: 6px;
+    font-size: 13px;
+    padding: 12px 16px;
+    margin-bottom: 4px;
     box-shadow: none;
     text-shadow: none;
-    -gtk-icon-shadow: none;
 }
 button label {
     color: #E8ECF4;
@@ -69,14 +57,9 @@ button:hover label {
 button:active {
     background-image: none;
     background-color: #4B8BF5;
-    color: #FFFFFF;
 }
 button:active label {
     color: #FFFFFF;
-}
-
-button.danger {
-    border-color: #3A2020;
 }
 button.danger label {
     color: #F87171;
@@ -89,11 +72,10 @@ button.danger:hover {
 button.danger:hover label {
     color: #FFFFFF;
 }
-
 button.cancel {
+    background-image: none;
     background-color: transparent;
     border-color: transparent;
-    color: #8891A5;
 }
 button.cancel label {
     color: #8891A5;
@@ -101,26 +83,29 @@ button.cancel label {
 button.cancel:hover {
     background-image: none;
     background-color: #1C2030;
+    border-color: #272D3D;
 }
 button.cancel:hover label {
     color: #E8ECF4;
 }
-
 separator {
     background-color: #272D3D;
     min-height: 1px;
-    margin-top: 6px;
-    margin-bottom: 6px;
+    margin-top: 4px;
+    margin-bottom: 4px;
 }
 """
 
+def run_async(cmd):
+    """Executa comando assíncrono sem bloquear o loop GTK."""
+    subprocess.Popen(cmd, shell=True)
 
 class PowerMenu(Gtk.Window):
     def __init__(self):
         super().__init__(title="Menu de Energia")
         self.set_decorated(False)
         self.set_position(Gtk.WindowPosition.CENTER)
-        self.set_default_size(320, 300)
+        self.set_default_size(300, -1)
         self.set_resizable(False)
         self.set_keep_above(True)
 
@@ -132,43 +117,39 @@ class PowerMenu(Gtk.Window):
         )
 
         self.connect("key-press-event", self._on_key)
+        self.connect("focus-out-event", lambda w, e: self.destroy())
 
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        vbox.set_margin_top(24)
-        vbox.set_margin_bottom(20)
-        vbox.set_margin_start(24)
-        vbox.set_margin_end(24)
+        vbox.set_margin_top(20)
+        vbox.set_margin_bottom(16)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
         self.add(vbox)
 
         heading = Gtk.Label(label="ENERGIA", xalign=0)
         heading.get_style_context().add_class("heading")
         vbox.pack_start(heading, False, False, 0)
 
-        btn_power = Gtk.Button(label="Desligar")
-        btn_power.get_style_context().add_class("danger")
-        btn_power.connect("clicked", lambda x: os.system("systemctl poweroff"))
+        actions = [
+            ("Desligar",         "danger",  "systemctl poweroff"),
+            ("Reiniciar",        None,      "systemctl reboot"),
+            ("Suspender",        None,      "systemctl suspend"),
+            ("Encerrar Sessão",  None,      "loginctl terminate-session \"${XDG_SESSION_ID:-}\" 2>/dev/null || openbox --exit"),
+        ]
 
-        btn_reboot = Gtk.Button(label="Reiniciar")
-        btn_reboot.connect("clicked", lambda x: os.system("systemctl reboot"))
-
-        btn_suspend = Gtk.Button(label="Suspender")
-        btn_suspend.connect("clicked", lambda x: os.system("systemctl suspend"))
-
-        btn_logout = Gtk.Button(label="Encerrar Sessão")
-        btn_logout.connect("clicked",
-            lambda x: os.system("loginctl terminate-session $XDG_SESSION_ID || openbox --exit"))
-
-        vbox.pack_start(btn_power, False, False, 0)
-        vbox.pack_start(btn_reboot, False, False, 0)
-        vbox.pack_start(btn_suspend, False, False, 0)
-        vbox.pack_start(btn_logout, False, False, 0)
+        for label, css_class, cmd in actions:
+            btn = Gtk.Button(label=label)
+            if css_class:
+                btn.get_style_context().add_class(css_class)
+            btn.connect("clicked", lambda _w, c=cmd: [run_async(c), self.destroy()])
+            vbox.pack_start(btn, False, False, 0)
 
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         vbox.pack_start(sep, False, False, 0)
 
         btn_cancel = Gtk.Button(label="Cancelar")
         btn_cancel.get_style_context().add_class("cancel")
-        btn_cancel.connect("clicked", lambda x: self.destroy())
+        btn_cancel.connect("clicked", lambda _: self.destroy())
         vbox.pack_start(btn_cancel, False, False, 0)
 
     def _on_key(self, widget, event):

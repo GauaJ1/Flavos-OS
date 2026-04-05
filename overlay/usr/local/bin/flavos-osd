@@ -1,135 +1,111 @@
 #!/usr/bin/env python3
-# Flavos OS — Shell OSD (On-Screen Display)
-# Componente visual PRÓPRIO da shell. NÃO usa dunst/notificações.
-# Renderiza overlay GTK efêmero para feedback de ações do sistema.
-#
-# Arquitetura:
-#   A shell é dona do OSD. Notificações (dunst) são para eventos
-#   de apps/sistema em segundo plano. OSD é feedback imediato de
-#   ações do usuário em componentes da própria shell.
-#
-# Uso:
-#   flavos-osd volume          — mostra nível atual
-#   flavos-osd volume-up       — sobe 5% e mostra
-#   flavos-osd volume-down     — desce 5% e mostra
-#   flavos-osd volume-mute     — toggle mute e mostra
-#   flavos-osd brightness      — placeholder
+# Flavos OS — Shell OSD v3 (corrigido)
+# Componente visual PRÓPRIO da shell, sem dunst.
+# Janela GTK efêmera, posicionada acima do painel.
 
 import gi
 import sys
 import subprocess
+import re
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 
 CSS = b"""
-* {
-    -GtkWidget-focus-padding: 0;
-    -GtkWidget-focus-line-width: 0;
-    outline-style: none;
-}
-
-window, .background {
-    background-color: rgba(13, 16, 23, 0.92);
+window {
+    background-color: #0D1017;
     border: 1px solid #272D3D;
     border-radius: 12px;
 }
-
 label {
     color: #E8ECF4;
-    font-family: Inter, sans-serif;
     background-color: transparent;
 }
-
-label.osd-title {
-    font-size: 11px;
-    font-weight: 600;
+.osd-title {
+    font-size: 10px;
+    font-weight: 700;
     color: #8891A5;
-    letter-spacing: 1px;
 }
-
-label.osd-value {
-    font-size: 28px;
+.osd-value {
+    font-size: 26px;
     font-weight: 700;
     color: #E8ECF4;
 }
-
-label.osd-muted {
-    font-size: 28px;
+.osd-muted {
+    font-size: 26px;
     font-weight: 700;
     color: #505872;
 }
-
-progressbar {
-    min-height: 6px;
-}
-
 progressbar trough {
     background-color: #1C2030;
     border-radius: 3px;
-    min-height: 6px;
+    min-height: 5px;
 }
-
 progressbar progress {
     background-color: #4B8BF5;
     border-radius: 3px;
-    min-height: 6px;
+    min-height: 5px;
 }
 """
 
-OSD_TIMEOUT_MS = 1500  # 1.5s — motion.fast, efêmero
+OSD_TIMEOUT_MS = 1800
 
 
 def get_volume():
-    """Retorna (nível 0-100, is_muted)"""
+    """Retorna (nível 0-100, is_muted). Retorna (-1, False) se sem áudio."""
     try:
         out = subprocess.check_output(
-            ["amixer", "sget", "Master"], text=True, stderr=subprocess.DEVNULL
+            ["amixer", "sget", "Master"],
+            text=True, stderr=subprocess.DEVNULL, timeout=2
         )
-        import re
         vol_match = re.search(r'\[(\d+)%\]', out)
+        if not vol_match:
+            return -1, False
         muted = '[off]' in out
-        vol = int(vol_match.group(1)) if vol_match else 0
-        return vol, muted
-    except Exception:
+        return int(vol_match.group(1)), muted
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
         return -1, False
 
 
 def set_volume(delta=0, toggle_mute=False):
-    """Altera volume via amixer."""
     try:
         if toggle_mute:
-            subprocess.run(["amixer", "-q", "sset", "Master", "toggle"],
-                           stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["amixer", "-q", "sset", "Master", "toggle"],
+                stderr=subprocess.DEVNULL, timeout=2
+            )
         elif delta > 0:
-            subprocess.run(["amixer", "-q", "sset", "Master", f"{abs(delta)}%+", "unmute"],
-                           stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["amixer", "-q", "sset", "Master", f"{abs(delta)}%+", "unmute"],
+                stderr=subprocess.DEVNULL, timeout=2
+            )
         elif delta < 0:
-            subprocess.run(["amixer", "-q", "sset", "Master", f"{abs(delta)}%-", "unmute"],
-                           stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["amixer", "-q", "sset", "Master", f"{abs(delta)}%-", "unmute"],
+                stderr=subprocess.DEVNULL, timeout=2
+            )
     except Exception:
         pass
 
 
 class ShellOSD(Gtk.Window):
-    """Janela efêmera da shell para feedback imediato."""
-
-    def __init__(self, title_text, value_text, fraction=0.0, is_muted=False, is_unavailable=False):
+    def __init__(self, title_text, value_text, fraction=-1.0, is_muted=False, is_unavailable=False):
         super().__init__(type=Gtk.WindowType.POPUP)
         self.set_decorated(False)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
         self.set_keep_above(True)
         self.set_accept_focus(False)
-        self.set_can_focus(False)
-        self.set_default_size(220, 100)
+        self.set_resizable(False)
 
-        # Posição: centro inferior, acima do painel
+        width = 220
+
         screen = Gdk.Screen.get_default()
         sw = screen.get_width()
         sh = screen.get_height()
-        self.move((sw - 220) // 2, sh - 42 - 120)
+        # Centralizado horizontalmente, 100px acima do painel (42px)
+        self.move((sw - width) // 2, sh - 42 - 100 - 20)
+        self.set_default_size(width, 1)
 
-        # CSS
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(
@@ -137,7 +113,6 @@ class ShellOSD(Gtk.Window):
             Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
-        # Layout
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         vbox.set_margin_top(16)
         vbox.set_margin_bottom(16)
@@ -145,27 +120,22 @@ class ShellOSD(Gtk.Window):
         vbox.set_margin_end(20)
         self.add(vbox)
 
-        # Título (ex: "VOLUME")
         lbl_title = Gtk.Label(label=title_text.upper(), xalign=0)
         lbl_title.get_style_context().add_class("osd-title")
         vbox.pack_start(lbl_title, False, False, 0)
 
-        # Valor (ex: "75%" ou "Mudo")
         lbl_value = Gtk.Label(label=value_text, xalign=0)
-        if is_muted or is_unavailable:
+        if is_muted:
             lbl_value.get_style_context().add_class("osd-muted")
         else:
             lbl_value.get_style_context().add_class("osd-value")
         vbox.pack_start(lbl_value, False, False, 0)
 
-        # Barra de progresso (se aplicável)
-        if not is_unavailable and fraction >= 0:
+        if fraction >= 0:
             bar = Gtk.ProgressBar()
             bar.set_fraction(max(0.0, min(1.0, fraction)))
-            bar.set_margin_top(4)
-            vbox.pack_start(bar, False, False, 0)
+            vbox.pack_start(bar, False, False, 2)
 
-        # Auto-destruição
         GLib.timeout_add(OSD_TIMEOUT_MS, self._dismiss)
 
     def _dismiss(self):
@@ -177,7 +147,7 @@ class ShellOSD(Gtk.Window):
 def show_volume_osd():
     vol, muted = get_volume()
     if vol < 0:
-        osd = ShellOSD("Volume", "Indisponível", is_unavailable=True)
+        osd = ShellOSD("Volume", "—", is_unavailable=True)
     elif muted:
         osd = ShellOSD("Volume", "Mudo", fraction=vol / 100.0, is_muted=True)
     else:
@@ -186,19 +156,12 @@ def show_volume_osd():
     Gtk.main()
 
 
-def show_brightness_osd():
-    osd = ShellOSD("Brilho", "Indisponível", is_unavailable=True)
-    osd.show_all()
-    Gtk.main()
-
-
 def main():
     if len(sys.argv) < 2:
-        print("Flavos Shell OSD — uso: flavos-osd {volume|volume-up|volume-down|volume-mute|brightness}")
+        print("Uso: flavos-osd {volume|volume-up|volume-down|volume-mute|brightness}")
         sys.exit(1)
 
     cmd = sys.argv[1]
-
     if cmd == "volume":
         show_volume_osd()
     elif cmd == "volume-up":
@@ -211,7 +174,9 @@ def main():
         set_volume(toggle_mute=True)
         show_volume_osd()
     elif cmd == "brightness":
-        show_brightness_osd()
+        osd = ShellOSD("Brilho", "—", is_unavailable=True)
+        osd.show_all()
+        Gtk.main()
     else:
         print(f"Comando desconhecido: {cmd}")
         sys.exit(1)

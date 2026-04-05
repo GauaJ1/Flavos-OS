@@ -1,10 +1,36 @@
-# Flavos OS — Shell Panel (Tint2) v3
-# Tokens: canvas=#0D1017 surface=#151921 elevated=#1C2030
-#          overlay=#232838 accent=#4B8BF5 border=#272D3D
+# Flavos OS — Shell Panel (Tint2) v3.1
+# Corrigido: panel_background_id, data completa, ícones de status
+# Tokens: surface=#151921 elevated=#1C2030 overlay=#232838
+#          accent=#4B8BF5 border=#272D3D
 #          fg.primary=#E8ECF4 fg.secondary=#8891A5
 
-# --- Panel ---
-panel_items = LTSC
+# === BACKGROUNDS ===
+# IMPORTANTE: o tint2 numera backgrounds na ordem de aparecimento.
+# #1 = painel base, #2 = task ativa, #3 = task hover
+
+# Background #1 — Painel base (surface, sólido)
+rounded = 0
+border_width = 1
+border_sides = T
+background_color = #151921 100
+border_color = #272D3D 100
+background_color_hover = #151921 100
+border_color_hover = #272D3D 100
+
+# Background #2 — Task ativa (elevated)
+rounded = 6
+border_width = 0
+background_color = #1C2030 100
+border_color = #4B8BF5 0
+
+# Background #3 — Task hover (overlay)
+rounded = 6
+border_width = 0
+background_color = #232838 80
+border_color = #4B8BF5 0
+
+# === PAINEL ===
+panel_items = LTSCE
 panel_size = 100% 42
 panel_position = bottom center horizontal
 panel_background_id = 1
@@ -15,28 +41,7 @@ panel_layer = top
 wm_menu = 0
 panel_window_name = flavos-panel
 
-# Background 1: Panel base (surface)
-rounded = 0
-border_width = 1
-border_sides = T
-background_color = #151921 96
-border_color = #272D3D 100
-background_color_hover = #151921 96
-border_color_hover = #272D3D 100
-
-# Background 2: Active task (elevated)
-rounded = 6
-border_width = 0
-background_color = #1C2030 100
-border_color = #4B8BF5 0
-
-# Background 3: Inactive task hover (overlay)
-rounded = 6
-border_width = 0
-background_color = #232838 80
-border_color = #4B8BF5 0
-
-# --- Launcher ---
+# === LAUNCHER ===
 launcher_padding = 6 6 6
 launcher_background_id = 0
 launcher_icon_background_id = 0
@@ -47,7 +52,7 @@ launcher_tooltip = 1
 launcher_item_app = /usr/share/applications/flavos-menu.desktop
 launcher_item_app = /usr/share/applications/flavos-terminal.desktop
 
-# --- Taskbar ---
+# === TASKBAR ===
 taskbar_mode = single_desktop
 taskbar_padding = 6 4 6
 taskbar_background_id = 0
@@ -68,20 +73,52 @@ task_background_id = 0
 task_active_background_id = 2
 task_urgent_background_id = 2
 
-# --- Systray ---
+# === SYSTRAY ===
 systray_padding = 8 4 8
 systray_background_id = 0
 systray_icon_size = 18
 systray_icon_asb = 100 0 0
 
-# --- Clock ---
+# === CLOCK ===
+# Linha 1: hora (HH:MM)
+# Linha 2: data completa (dd/mm/aaaa)
 time1_format = %H:%M
-time1_font = Inter SemiBold 10
-time1_timezone =
-time2_format = %d/%m
+time1_font = Inter SemiBold 11
+time2_format = %d/%m/%Y
 time2_font = Inter 9
-clock_font_color = #E8ECF4 90
+clock_font_color = #E8ECF4 95
 clock_padding = 12 0
 clock_background_id = 0
 clock_lclick_command =
 clock_rclick_command =
+
+# === EXECUTORS (ícones de status da shell) ===
+# E1 — Volume
+executor1_cmd = echo $(amixer sget Master 2>/dev/null | grep -oP '\[(\d+)%\]' | head -1 | tr -d '[]%' | awk '{if ($1 == "") print "—"; else if ($1 == "0") print "🔇"; else if ($1+0 < 40) print "🔈 "$1"%"; else if ($1+0 < 75) print "🔉 "$1"%"; else print "🔊 "$1"%"}')
+executor1_interval = 5
+executor1_font = Inter 9
+executor1_font_color = #8891A5 100
+executor1_padding = 8 0
+executor1_background_id = 0
+executor1_tooltip = Volume — clique para abrir OSD
+executor1_lclick_cmd = /usr/local/bin/flavos-osd volume-up
+executor1_rclick_cmd = /usr/local/bin/flavos-osd volume-mute
+
+# E2 — Rede
+executor2_cmd = ip_addr=$(ip -o -4 addr show 2>/dev/null | awk '!/lo/{print $4}' | cut -d/ -f1 | head -1); [ -n "$ip_addr" ] && echo "⬥ $ip_addr" || echo "⬥ desconect."
+executor2_interval = 10
+executor2_font = Inter 9
+executor2_font_color = #8891A5 100
+executor2_padding = 8 0
+executor2_background_id = 0
+executor2_tooltip = Estado da rede
+
+# E3 — Notificações (placeholder — mostra ícone fixo, dunst é o daemon)
+executor3_cmd = echo "◐"
+executor3_interval = 60
+executor3_font = Inter 10
+executor3_font_color = #8891A5 100
+executor3_padding = 8 0
+executor3_background_id = 0
+executor3_tooltip = Notificações
+executor3_lclick_cmd = dunstctl action 2>/dev/null || true
