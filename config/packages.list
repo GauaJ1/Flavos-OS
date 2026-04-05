@@ -13,13 +13,21 @@ systemd
 systemd-sysv
 dbus
 
-# Userspace mínimo
+# Utilitários base
 bash
 coreutils
-util-linux
-less
 nano
+less
+curl
+htop
+iproute2
+iputils-ping
+kmod
 procps
+
+# Serviços essenciais
+openssh-server
+sudo
 kmod
 
 # Rede

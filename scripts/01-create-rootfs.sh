@@ -99,6 +99,14 @@ chroot "$ROOTFS" ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
 # Root password
 chroot "$ROOTFS" bash -c "echo 'root:${ROOT_PASSWORD}' | chpasswd"
 
+# Usuário principal não-root
+echo "Criando usuário regular: ${SYS_USER}..."
+chroot "$ROOTFS" bash -c "
+    useradd -m -s /bin/bash '${SYS_USER}' || true
+    echo '${SYS_USER}:${SYS_PASSWORD}' | chpasswd
+    usermod -aG sudo,video,audio,plugdev '${SYS_USER}' 2>/dev/null || true
+"
+
 # Permitir login root no TTY
 chroot "$ROOTFS" bash -c "
     mkdir -p /etc/securetty
@@ -117,9 +125,10 @@ Type=ether
 DHCP=yes
 EOF
 
-# Habilitar serviços de rede
+# Habilitar serviços de rede e SSH
 chroot "$ROOTFS" systemctl enable systemd-networkd 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable systemd-resolved 2>/dev/null || true
+chroot "$ROOTFS" systemctl enable ssh 2>/dev/null || true
 
 # DNS resolve via systemd-resolved
 chroot "$ROOTFS" ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf 2>/dev/null || true

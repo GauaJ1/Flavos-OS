@@ -5,11 +5,11 @@
 | Etapa | Nome | Entrega | Status |
 |---|---|---|---|
 | 1 | Arquitetura e Fundações | Decisões técnicas documentadas | ✅ Completa |
-| 2 | Workspace e Build Scripts | Repositório estruturado, Makefile, scripts prontos | ⬜ Próxima |
-| 3 | Root Filesystem Mínimo | rootfs funcional em build/rootfs/ | ⬜ |
-| 4 | Boot Chain | Imagem .img com ESP + root + bootloader | ⬜ |
-| 5 | Primeiro Boot em VM | Boot até login prompt no QEMU | ⬜ |
-| 6 | Userspace e Serviços | Rede, SSH, usuário não-root | ⬜ |
+| 2 | Workspace e Build Scripts | Repositório estruturado, Makefile, scripts prontos | ✅ Completa |
+| 3 | Root Filesystem Mínimo | rootfs funcional em build/rootfs/ | ✅ Completa |
+| 4 | Boot Chain | Imagem .img com ESP + root + bootloader | ✅ Completa |
+| 5 | Primeiro Boot em VM | Boot até login prompt no QEMU | ✅ Completa |
+| 6 | Userspace e Serviços | Rede, SSH, usuário não-root | ⬜ Próxima |
 | 7 | Branding Inicial | os-release, issue, motd, hostname | ⬜ |
 | 8 | Imagem Reproduzível | Pipeline completo make all funcional | ⬜ |
 | 9 | Update/Recovery/Logging | Estratégia de atualização e fallback | ⬜ |
@@ -27,7 +27,7 @@
 - Estrutura de repositório definida
 - Riscos mapeados
 
-### Etapa 2 — Workspace e Build Scripts
+### Etapa 2 — Workspace e Build Scripts ✅
 - Criar estrutura de diretórios
 - Escrever Makefile
 - Escrever config/flavos.conf
@@ -39,7 +39,7 @@
 - Inicializar git
 - Validar: `make deps` passa
 
-### Etapa 3 — Root Filesystem Mínimo
+### Etapa 3 — Root Filesystem Mínimo ✅
 - Executar debootstrap dentro de scripts/01-create-rootfs.sh
 - Configurar chroot (locale, timezone, root password, hostname)
 - Instalar pacotes essenciais via apt dentro do chroot
@@ -47,7 +47,7 @@
 - Gerar initramfs dentro do chroot
 - Validar: chroot funcional com bash
 
-### Etapa 4 — Boot Chain
+### Etapa 4 — Boot Chain ✅
 - Criar imagem .img com scripts/02-create-image.sh
 - Particionar GPT (ESP + root)
 - Formatar partições (FAT32 + ext4)
@@ -57,7 +57,7 @@
 - Copiar kernel + initramfs
 - Validar: imagem montável e inspecionável
 
-### Etapa 5 — Primeiro Boot em VM
+### Etapa 5 — Primeiro Boot em VM ✅
 - Executar scripts/04-boot-vm.sh
 - Verificar cadeia de boot completa
 - Login como root
