@@ -10,29 +10,29 @@ from gi.repository import Gtk, Gdk, GLib
 
 CSS_DATA = b"""
 window {
-    background-color: #0f1117;
+    background-color: #0e1015;
 }
 stacksidebar {
-    background-color: #1a1d27;
-    border-right: 1px solid #2d3040;
+    background-color: #161922;
+    border-right: 1px solid #2b2f40;
 }
 stacksidebar list {
-    background-color: #1a1d27;
+    background-color: #161922;
 }
 stacksidebar row {
     padding: 10px;
-    color: #e4e6eb;
+    color: #eaecf0;
 }
 stacksidebar row:selected {
-    background-color: #252836;
-    color: #5b8def;
-    border-left: 3px solid #5b8def;
+    background-color: #212431;
+    color: #4f86f7;
+    border-left: 3px solid #4f86f7;
 }
 stacksidebar row:hover {
-    background-color: #252836;
+    background-color: #212431;
 }
 label {
-    color: #e4e6eb;
+    color: #eaecf0;
     font-family: Inter, sans-serif;
 }
 label.title {
@@ -44,28 +44,28 @@ label.title {
 label.subtitle {
     font-size: 16px;
     font-weight: bold;
-    color: #5b8def;
+    color: #4f86f7;
     margin-top: 16px;
     margin-bottom: 8px;
 }
 .card {
-    background-color: #1a1d27;
-    border: 1px solid #2d3040;
+    background-color: #161922;
+    border: 1px solid #2b2f40;
     border-radius: 4px;
     padding: 16px;
     margin-bottom: 16px;
 }
 button, button label {
-    background-color: #252836;
-    color: #e4e6eb;
-    border: 1px solid #2d3040;
+    background-color: #212431;
+    color: #eaecf0;
+    border: 1px solid #2b2f40;
     border-radius: 4px;
     padding: 2px 8px;
     font-weight: bold;
 }
 button:hover, button:hover label {
-    background-color: #2d3040;
-    color: #5b8def;
+    background-color: #2b2f40;
+    color: #4f86f7;
 }
 button.destructive, button.destructive label {
     color: #f87171;
@@ -75,14 +75,14 @@ button.destructive:hover, button.destructive:hover label {
     color: #ffffff;
 }
 entry {
-    background-color: #0f1117;
-    color: #e4e6eb;
-    border: 1px solid #2d3040;
+    background-color: #0e1015;
+    color: #eaecf0;
+    border: 1px solid #2b2f40;
     padding: 8px;
     border-radius: 4px;
 }
 entry:disabled {
-    color: #8b8fa3;
+    color: #858a9d;
 }
 """
 

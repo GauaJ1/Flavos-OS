@@ -18,22 +18,22 @@ panel_window_name = flavos-panel
 rounded = 0
 border_width = 0
 border_sides = T
-background_color = #1a1d27 95
-border_color = #2d3040 60
-background_color_hover = #1a1d27 95
-border_color_hover = #2d3040 60
+background_color = #161922 95
+border_color = #2b2f40 80
+background_color_hover = #161922 95
+border_color_hover = #2b2f40 80
 
 # ID 2: Active task
 rounded = 4
 border_width = 0
-background_color = #252836 100
-border_color = #5b8def 80
+background_color = #212431 100
+border_color = #4f86f7 80
 
 # ID 3: Launcher icon hover
 rounded = 4
 border_width = 0
-background_color = #252836 80
-border_color = #5b8def 50
+background_color = #212431 80
+border_color = #4f86f7 50
 
 # --- Launcher ---
 launcher_padding = 4 4 4
@@ -61,7 +61,7 @@ task_centered = 0
 task_maximum_size = 180 32
 task_padding = 4 2 4
 task_font = Inter 9
-task_font_color = #e4e6eb 100
+task_font_color = #eaecf0 100
 task_icon_asb = 100 0 0
 task_background_id = 0
 task_active_background_id = 2
@@ -79,7 +79,7 @@ time1_font = Inter Bold 10
 time1_timezone =
 time2_format = %d/%m
 time2_font = Inter 8
-clock_font_color = #e4e6eb 90
+clock_font_color = #eaecf0 90
 clock_padding = 8 0
 clock_background_id = 0
 clock_lclick_command = 

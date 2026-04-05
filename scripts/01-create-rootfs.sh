@@ -162,6 +162,13 @@ echo "[5/6] Aplicando overlay..."
 if [[ -d "$OVERLAY" ]]; then
     cp -a "${OVERLAY}/"* "${ROOTFS}/" 2>/dev/null || true
     echo "  Overlay aplicado de ${OVERLAY}"
+
+    # FIX CRÍTICO: Reafirmar permissões do Sudoers injetadas pelo Overlay
+    # Sudo ignora arquivos não-root e não-0440.
+    if [[ -d "${ROOTFS}/etc/sudoers.d" ]]; then
+        chroot "$ROOTFS" chown -R root:root /etc/sudoers.d
+        chroot "$ROOTFS" chmod 0440 /etc/sudoers.d/flavos-power 2>/dev/null || true
+    fi
 fi
 
 # --- Re-sincronizar dotfiles do skel para o home do usuário ---

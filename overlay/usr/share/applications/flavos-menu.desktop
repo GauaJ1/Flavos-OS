@@ -2,7 +2,7 @@
 Name=Flavos Menu
 Comment=Open the Flavos OS Menu
 Exec=jgmenu_run
-Icon=start-here
+Icon=/usr/share/flavos/logo.svg
 Terminal=false
 Type=Application
 Categories=System;

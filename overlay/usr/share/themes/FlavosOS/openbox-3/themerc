@@ -3,81 +3,81 @@
 
 # Window Title
 window.active.title.bg: flat solid
-window.active.title.bg.color: #1a1d27
-window.active.label.text.color: #e4e6eb
+window.active.title.bg.color: #161922
+window.active.label.text.color: #eaecf0
 window.active.label.text.font: shadow=n
 window.inactive.title.bg: flat solid
-window.inactive.title.bg.color: #151720
-window.inactive.label.text.color: #8b8fa3
+window.inactive.title.bg.color: #12141c
+window.inactive.label.text.color: #858a9d
 
 # Window Handle (bottom bar of window)
 window.active.handle.bg: flat solid
-window.active.handle.bg.color: #1a1d27
+window.active.handle.bg.color: #161922
 window.inactive.handle.bg: flat solid
-window.inactive.handle.bg.color: #151720
+window.inactive.handle.bg.color: #12141c
 window.handle.width: 0
 
 # Window Grip
 window.active.grip.bg: flat solid
-window.active.grip.bg.color: #1a1d27
+window.active.grip.bg.color: #161922
 window.inactive.grip.bg: flat solid
-window.inactive.grip.bg.color: #151720
+window.inactive.grip.bg.color: #12141c
 
 # Window Border
-window.active.border.color: #2d3040
-window.inactive.border.color: #1a1d27
+window.active.border.color: #2b2f40
+window.inactive.border.color: #161922
 border.width: 1
 padding.width: 4
 padding.height: 4
 
 # Window Buttons
 window.active.button.unpressed.bg: flat solid
-window.active.button.unpressed.bg.color: #1a1d27
-window.active.button.unpressed.image.color: #8b8fa3
+window.active.button.unpressed.bg.color: #161922
+window.active.button.unpressed.image.color: #858a9d
 
 window.active.button.hover.bg: flat solid
-window.active.button.hover.bg.color: #252836
-window.active.button.hover.image.color: #5b8def
+window.active.button.hover.bg.color: #212431
+window.active.button.hover.image.color: #4f86f7
 
 window.active.button.pressed.bg: flat solid
-window.active.button.pressed.bg.color: #5b8def
+window.active.button.pressed.bg.color: #4f86f7
 window.active.button.pressed.image.color: #ffffff
 
 window.active.button.disabled.bg: flat solid
-window.active.button.disabled.bg.color: #1a1d27
-window.active.button.disabled.image.color: #2d3040
+window.active.button.disabled.bg.color: #161922
+window.active.button.disabled.image.color: #2b2f40
 
 window.inactive.button.unpressed.bg: flat solid
-window.inactive.button.unpressed.bg.color: #151720
-window.inactive.button.unpressed.image.color: #2d3040
+window.inactive.button.unpressed.bg.color: #12141c
+window.inactive.button.unpressed.image.color: #2b2f40
 
 window.inactive.button.hover.bg: flat solid
-window.inactive.button.hover.bg.color: #252836
-window.inactive.button.hover.image.color: #8b8fa3
+window.inactive.button.hover.bg.color: #212431
+window.inactive.button.hover.image.color: #858a9d
 
 # Menu
 menu.title.bg: flat solid
-menu.title.bg.color: #1a1d27
-menu.title.text.color: #e4e6eb
+menu.title.bg.color: #161922
+menu.title.text.color: #eaecf0
 menu.title.text.font: shadow=n
 
 menu.items.bg: flat solid
-menu.items.bg.color: #1a1d27
-menu.items.text.color: #e4e6eb
-menu.items.disabled.text.color: #8b8fa3
+menu.items.bg.color: #161922
+menu.items.text.color: #eaecf0
+menu.items.disabled.text.color: #858a9d
 
 menu.items.active.bg: flat solid
-menu.items.active.bg.color: #5b8def
+menu.items.active.bg.color: #4f86f7
 menu.items.active.text.color: #ffffff
 
-menu.separator.color: #2d3040
+menu.separator.color: #2b2f40
 menu.separator.width: 1
 menu.separator.padding.width: 6
 menu.separator.padding.height: 4
 
 # OSD (On-Screen Display)
 osd.bg: flat solid
-osd.bg.color: #1a1d27
-osd.label.text.color: #e4e6eb
-osd.border.color: #2d3040
+osd.bg.color: #161922
+osd.label.text.color: #eaecf0
+osd.border.color: #2b2f40
 osd.border.width: 1
