@@ -55,22 +55,22 @@ label.subtitle {
     padding: 16px;
     margin-bottom: 16px;
 }
-button {
+button, button label {
     background-color: #252836;
     color: #e4e6eb;
     border: 1px solid #2d3040;
     border-radius: 4px;
-    padding: 8px 16px;
+    padding: 2px 8px;
     font-weight: bold;
 }
-button:hover {
+button:hover, button:hover label {
     background-color: #2d3040;
     color: #5b8def;
 }
-button.destructive {
+button.destructive, button.destructive label {
     color: #f87171;
 }
-button.destructive:hover {
+button.destructive:hover, button.destructive:hover label {
     background-color: #f87171;
     color: #ffffff;
 }
@@ -310,11 +310,11 @@ class FlavosSettings(Gtk.ApplicationWindow):
         content.pack_start(lbl_warn, False, False, 0)
         
         btn_reboot = Gtk.Button(label="Reiniciar Máquina")
-        btn_reboot.connect("clicked", lambda x: shell_run("systemctl reboot"))
+        btn_reboot.connect("clicked", lambda x: shell_run("sudo systemctl reboot"))
         
         btn_poweroff = Gtk.Button(label="Desligar")
         btn_poweroff.get_style_context().add_class("destructive")
-        btn_poweroff.connect("clicked", lambda x: shell_run("systemctl poweroff"))
+        btn_poweroff.connect("clicked", lambda x: shell_run("sudo systemctl poweroff"))
         
         btn_logout = Gtk.Button(label="Encerrar Sessão Visual")
         btn_logout.connect("clicked", lambda x: shell_run("openbox --exit"))
