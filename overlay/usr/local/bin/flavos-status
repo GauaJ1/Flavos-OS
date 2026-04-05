@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+# Flavos OS — Shell Status Bar (systray indicator)
+# Micro-daemon que vive na system tray do tint2.
+# Mostra: volume + rede em texto simples via tooltip/menu.
+
+import gi
+import subprocess
+import re
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GLib
+
+def get_volume():
+    try:
+        out = subprocess.check_output(
+            ["amixer", "sget", "Master"],
+            text=True, stderr=subprocess.DEVNULL, timeout=2
+        )
+        match = re.search(r'\[(\d+)%\]', out)
+        vol = int(match.group(1)) if match else -1
+        muted = '[off]' in out
+        return vol, muted
+    except Exception:
+        return -1, False
+
+
+def get_ip():
+    try:
+        out = subprocess.check_output(
+            ["ip", "-o", "-4", "addr", "show"],
+            text=True, stderr=subprocess.DEVNULL, timeout=2
+        )
+        for line in out.splitlines():
+            if 'lo' not in line:
+                parts = line.split()
+                if len(parts) >= 4:
+                    return parts[3].split('/')[0]
+        return None
+    except Exception:
+        return None
+
+
+def build_tooltip():
+    vol, muted = get_volume()
+    ip = get_ip()
+
+    lines = []
+    if vol >= 0:
+        if muted:
+            lines.append(f"Volume: Mudo")
+        else:
+            lines.append(f"Volume: {vol}%")
+    else:
+        lines.append("Volume: —")
+
+    lines.append(f"Rede: {ip or 'desconectado'}")
+    return "\n".join(lines)
+
+
+def build_label():
+    vol, muted = get_volume()
+    ip = get_ip()
+
+    vol_str = "🔇" if muted else (f"🔊 {vol}%" if vol >= 0 else "—")
+    net_str = "⬥" if ip else "✕"
+    return f"{vol_str}  {net_str}"
+
+
+class StatusIcon:
+    def __init__(self):
+        self.icon = Gtk.StatusIcon()
+        self.icon.set_visible(True)
+        self.icon.connect("popup-menu", self.on_menu)
+        self.icon.connect("activate", self.on_activate)
+        self.update()
+        GLib.timeout_add_seconds(5, self.update)
+
+    def update(self):
+        self.icon.set_title(build_label())
+        self.icon.set_tooltip_text(build_tooltip())
+        # Usar ícone de áudio padrão
+        try:
+            vol, muted = get_volume()
+            if vol < 0:
+                self.icon.set_icon_name("audio-card-symbolic")
+            elif muted:
+                self.icon.set_icon_name("audio-volume-muted-symbolic")
+            elif vol < 33:
+                self.icon.set_icon_name("audio-volume-low-symbolic")
+            elif vol < 66:
+                self.icon.set_icon_name("audio-volume-medium-symbolic")
+            else:
+                self.icon.set_icon_name("audio-volume-high-symbolic")
+        except Exception:
+            self.icon.set_icon_name("audio-card")
+        return True  # continua o timeout
+
+    def on_activate(self, _):
+        subprocess.Popen(["/usr/local/bin/flavos-osd", "volume"])
+
+    def on_menu(self, icon, button, time):
+        menu = Gtk.Menu()
+
+        vol, muted = get_volume()
+        ip = get_ip()
+
+        # --- Volume items ---
+        item_vol = Gtk.MenuItem(label=f"Volume: {'Mudo' if muted else (str(vol) + '%' if vol >= 0 else '—')}")
+        item_vol.set_sensitive(False)
+        menu.append(item_vol)
+
+        item_vol_up = Gtk.MenuItem(label="Volume +5%")
+        item_vol_up.connect("activate", lambda _: subprocess.Popen(
+            ["/usr/local/bin/flavos-osd", "volume-up"]))
+        menu.append(item_vol_up)
+
+        item_vol_down = Gtk.MenuItem(label="Volume -5%")
+        item_vol_down.connect("activate", lambda _: subprocess.Popen(
+            ["/usr/local/bin/flavos-osd", "volume-down"]))
+        menu.append(item_vol_down)
+
+        item_mute = Gtk.MenuItem(label="Ativar/Desativar Mudo")
+        item_mute.connect("activate", lambda _: subprocess.Popen(
+            ["/usr/local/bin/flavos-osd", "volume-mute"]))
+        menu.append(item_mute)
+
+        menu.append(Gtk.SeparatorMenuItem())
+
+        # --- Rede ---
+        item_net = Gtk.MenuItem(label=f"IPv4: {ip or 'desconectado'}")
+        item_net.set_sensitive(False)
+        menu.append(item_net)
+
+        menu.append(Gtk.SeparatorMenuItem())
+
+        # --- Notificações ---
+        item_notif = Gtk.MenuItem(label="Limpar notificações")
+        item_notif.connect("activate", lambda _: subprocess.Popen(
+            ["dunstctl", "close-all"], stderr=subprocess.DEVNULL))
+        menu.append(item_notif)
+
+        menu.show_all()
+        menu.popup(None, None, None, None, button, time)
+
+
+if __name__ == "__main__":
+    StatusIcon()
+    Gtk.main()

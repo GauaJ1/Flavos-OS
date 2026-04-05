@@ -17,6 +17,9 @@ dunst &
 # 5. Agente de Autorização
 lxpolkit &
 
-# 5. Terminal inicial desativado na Etapa 9E (onboarding limpo)
+# 6. Indicadores de Status (volume, rede) na systray
+sleep 1 && /usr/local/bin/flavos-status &
+
+# Terminal inicial desativado na Etapa 9E (onboarding limpo)
 # sleep 0.5
 # lxterminal &
