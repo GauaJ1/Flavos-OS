@@ -97,6 +97,7 @@ case "$DISPLAY_MODE" in
         ;;
 esac
 
+MACHINE_FLAG="-machine pc" # Default i440fx
 # Configurar Storage (Disk Bus)
 case "$DISK_BUS" in
     virtio)
@@ -108,8 +109,9 @@ case "$DISK_BUS" in
         echo "Storage:   IDE (Legacy)"
         ;;
     ahci)
+        MACHINE_FLAG="-machine q35" # Forçar chipset moderno com AHCI nativo
         DRIVE_FLAG="-drive id=disk0,file=$IMAGE,format=raw,if=none -device ahci,id=ahci -device ide-hd,drive=disk0,bus=ahci.0"
-        echo "Storage:   SATA (AHCI)"
+        echo "Storage:   SATA (AHCI em Chipset Q35)"
         ;;
     nvme)
         DRIVE_FLAG="-drive id=nvme0,file=$IMAGE,format=raw,if=none -device nvme,serial=1234,drive=nvme0"
@@ -140,9 +142,11 @@ echo ""
 
 # shellcheck disable=SC2086
 qemu-system-x86_64 \
+    $MACHINE_FLAG \
     $KVM_FLAG \
     -m "$QEMU_RAM" \
     -smp "$QEMU_CPUS" \
+    -boot menu=on \
     $DRIVE_FLAG \
     $DUMMY_FLAG \
     -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
