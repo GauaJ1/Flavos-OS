@@ -34,8 +34,7 @@ padding.width: 10
 padding.height: 8
 
 # --- Active Buttons ---
-window.active.button.unpressed.bg: flat solid
-window.active.button.unpressed.bg.color: #1C2030
+window.active.button.unpressed.bg: parentrelative
 window.active.button.unpressed.image.color: #8891A5
 
 window.active.button.hover.bg: flat solid
@@ -46,13 +45,11 @@ window.active.button.pressed.bg: flat solid
 window.active.button.pressed.bg.color: #4B8BF5
 window.active.button.pressed.image.color: #ffffff
 
-window.active.button.disabled.bg: flat solid
-window.active.button.disabled.bg.color: #1C2030
+window.active.button.disabled.bg: parentrelative
 window.active.button.disabled.image.color: #505872
 
 # --- Inactive Buttons ---
-window.inactive.button.unpressed.bg: flat solid
-window.inactive.button.unpressed.bg.color: #0D1017
+window.inactive.button.unpressed.bg: parentrelative
 window.inactive.button.unpressed.image.color: #505872
 
 window.inactive.button.hover.bg: flat solid
