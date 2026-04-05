@@ -79,6 +79,8 @@ FlavosOS/
 
 - [Arquitetura](docs/architecture.md)
 - [Instalação em Hardware Real](docs/HARDWARE_INSTALL.md)
+- [Matriz de Homologação em Bare-metal](docs/VALIDATION_MATRIX.md)
+- [Template de Validação](docs/TEST_REPORT_TEMPLATE.md)
 - [Recuperação de Falhas](docs/RECOVERY.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Changelog](docs/CHANGELOG.md)
