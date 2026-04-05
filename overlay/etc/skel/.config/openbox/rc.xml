@@ -79,6 +79,24 @@
         <action name="ToggleMaximize"/>
       </mousebind>
     </context>
+    
+    <context name="Iconify">
+      <mousebind button="Left" action="Press">
+        <action name="Iconify"/>
+      </mousebind>
+    </context>
+
+    <context name="Maximize">
+      <mousebind button="Left" action="Press">
+        <action name="ToggleMaximize"/>
+      </mousebind>
+    </context>
+
+    <context name="Close">
+      <mousebind button="Left" action="Press">
+        <action name="Close"/>
+      </mousebind>
+    </context>
     <context name="Frame">
       <mousebind button="A-Left" action="Drag">
         <action name="Move"/>
