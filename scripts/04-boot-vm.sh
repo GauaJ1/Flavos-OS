@@ -86,9 +86,9 @@ case "$DISPLAY_MODE" in
         echo "Display:   serial (texto)"
         ;;
     --gui)
-        DISPLAY_FLAGS="-display gtk -serial stdio -vga std"
-        INPUT_FLAGS="-device usb-ehci,id=ehci -device usb-tablet,bus=ehci.0 -device VGA,xres=1024,yres=768"
-        echo "Display:   GUI (GTK) 1024x768 com usb-tablet"
+        DISPLAY_FLAGS="-display gtk -serial stdio"
+        INPUT_FLAGS="-device usb-ehci,id=ehci -device usb-tablet,bus=ehci.0"
+        echo "Display:   GUI (GTK) com usb-tablet"
         ;;
 esac
 
@@ -168,5 +168,6 @@ qemu-system-x86_64 \
     -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
     -drive if=pflash,format=raw,file="$OVMF_VARS" \
     $NET_FLAG \
+    -vga std \
     $INPUT_FLAGS \
     $DISPLAY_FLAGS
