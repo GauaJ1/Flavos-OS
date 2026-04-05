@@ -1,0 +1,13 @@
+[Default Applications]
+inode/directory=flavos-files.desktop
+text/plain=flavos-text.desktop
+text/markdown=flavos-text.desktop
+text/html=flavos-text.desktop
+text/x-shellscript=flavos-text.desktop
+application/json=flavos-text.desktop
+image/jpeg=flavos-image.desktop
+image/png=flavos-image.desktop
+image/gif=flavos-image.desktop
+image/bmp=flavos-image.desktop
+image/svg+xml=flavos-image.desktop
+image/webp=flavos-image.desktop

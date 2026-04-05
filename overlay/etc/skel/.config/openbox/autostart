@@ -22,4 +22,4 @@ sleep 1 && /usr/local/bin/flavos-status &
 
 # Terminal inicial desativado na Etapa 9E (onboarding limpo)
 # sleep 0.5
-# lxterminal &
+# kitty &

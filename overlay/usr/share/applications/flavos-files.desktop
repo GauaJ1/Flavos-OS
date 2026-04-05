@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Arquivos
+Comment=Navegue pelos seus arquivos e pastas
+Exec=pcmanfm %U
+Icon=system-file-manager
+Terminal=false
+Type=Application
+StartupNotify=true
+MimeType=inode/directory;
+Categories=Utility;Core;System;FileTools;FileManager;

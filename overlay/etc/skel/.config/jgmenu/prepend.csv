@@ -1,6 +1,6 @@
-Terminal,lxterminal,utilities-terminal
+Terminal,kitty,utilities-terminal
 Configurações,flavos-settings,preferences-system
-Informações do Sistema,flavos-debug-report | lxterminal -e less,help-about
+Informações do Sistema,flavos-debug-report | kitty -e less,help-about
 ^sep()
 Reiniciar,systemctl reboot,system-reboot
 Desligar,systemctl poweroff,system-shutdown

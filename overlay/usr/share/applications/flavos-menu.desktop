@@ -1,8 +1,9 @@
 [Desktop Entry]
-Name=Flavos Menu
-Comment=Open the Flavos OS Menu
+Name=Menu de Aplicativos
+Comment=Launcher do Flavos OS
 Exec=jgmenu_run
-Icon=/usr/share/flavos/logo.svg
+Icon=start-here
 Terminal=false
 Type=Application
 Categories=System;
+NoDisplay=true

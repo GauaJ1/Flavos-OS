@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Editor de Texto
+Comment=Leia e edite arquivos de texto simples
+Exec=mousepad %U
+Icon=text-editor
+Terminal=false
+Type=Application
+StartupNotify=true
+MimeType=text/plain;
+Categories=Utility;TextEditor;

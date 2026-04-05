@@ -46,7 +46,7 @@
   <keyboard>
     <!-- Terminal -->
     <keybind key="C-A-t">
-      <action name="Execute"><command>lxterminal</command></action>
+      <action name="Execute"><command>kitty</command></action>
     </keybind>
     <!-- Menu Flavos -->
     <keybind key="Super_L">

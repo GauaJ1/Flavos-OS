@@ -1,8 +1,14 @@
 [Desktop Entry]
 Name=Terminal
-Comment=Open terminal
-Exec=lxterminal
+Comment=Emulador de terminal padrão do sistema
+Exec=kitty %F
 Icon=utilities-terminal
 Terminal=false
 Type=Application
-Categories=System;
+Categories=System;TerminalEmulator;
+StartupNotify=true
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=Nova Janela
+Exec=kitty

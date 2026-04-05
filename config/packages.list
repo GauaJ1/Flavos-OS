@@ -64,7 +64,14 @@ openbox
 x11-xserver-utils
 
 # Shell Visual (Etapa 9B)
-lxterminal
+# Apps Nativos Essenciais (Etapa 10C)
+kitty
+pcmanfm
+mousepad
+viewnior
+xdg-utils
+shared-mime-info
+
 tint2
 lxpolkit
 libpam-systemd
