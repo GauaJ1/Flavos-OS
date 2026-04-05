@@ -78,7 +78,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         *)
-            echo "Uso: $0 [--serial|--gui] [--disk-bus virtio|ahci|nvme] [--net-model virtio|e1000e|rtl8139] [--attach-dummy file.raw]"
+            echo "Uso: $0 [--serial|--gui] [--disk-bus virtio|ide|ahci|nvme] [--net-model virtio|e1000e|rtl8139] [--attach-dummy file.raw]"
             exit 1
             ;;
     esac
@@ -102,6 +102,10 @@ case "$DISK_BUS" in
     virtio)
         DRIVE_FLAG="-drive file=$IMAGE,format=raw,if=virtio"
         echo "Storage:   virtio-blk"
+        ;;
+    ide)
+        DRIVE_FLAG="-drive file=$IMAGE,format=raw,if=ide"
+        echo "Storage:   IDE (Legacy)"
         ;;
     ahci)
         DRIVE_FLAG="-drive id=disk0,file=$IMAGE,format=raw,if=none -device ahci,id=ahci -device ide-hd,drive=disk0,bus=ahci.0"

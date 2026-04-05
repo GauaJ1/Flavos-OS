@@ -13,7 +13,7 @@ Para validar a fundo no laboratório você precisará re-iniciar a Máquina inje
 
 ### Storage Stress (Disco Virtual)
 - **Cenário A (Padrão):** Bus `virtio` - Altamente otimizado, não reage como metal.
-- **Cenário B (SATA/AHCI):** `--disk-bus ahci` - Emula barramento e controladora IDE Legacy/SATA pesada. (Testará timeout do SystemD no Boot process).
+- **Cenário B (IDE/SATA):** `--disk-bus ide` ou `--disk-bus ahci` - Emula barramento e controladora IDE Legacy/SATA pesada. (Testará timeout do SystemD no Boot process).
 - **Cenário C (NVMe):** `--disk-bus nvme` - Passa por controladora PCI NVMe falsa. Descobrirá se o nosso FSTAB lida com os namespaces `/dev/nvme0n1p2` certinho via PARTUUID ou se crasha o kernel mount.
 
 ### Network Stress (Sobrecarga de Ethernet)
