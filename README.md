@@ -4,7 +4,7 @@ Sistema operacional Linux criado do zero, focado em boot confiável, build repro
 
 ## Status
 
-**V0.1.0 (Ignition)** — Em desenvolvimento. Infraestrutura de build pronta, aguardando geração do primeiro rootfs e boot.
+**V0.1.0 (Ignition)** — Em iteração ativa. O sistema atingiu a **Etapa 7B**: Imagem RAW é bootável (KVM UEFI) com Userspace focado, Rede auto-provisionada pelo Systemd e arquitetura de Logs em disco para Recovery.
 
 ## Stack
 
@@ -79,7 +79,15 @@ FlavosOS/
 - [Roadmap](docs/ROADMAP.md)
 - [Changelog](docs/CHANGELOG.md)
 
-## Login (V1 desenvolvimento)
+## Login Base (Ambiente de Desenvolvimento)
 
-- **Usuário:** root
-- **Senha:** flavos
+- **Usuário Diário:** `flavos`
+- **Senha Diária:** `123`
+- **Root e Sudo:** Login SSH restrito ao usuário diário (Root banido da rede). O Flavos eleva privilégios via `sudo` com a sua senha de console. O terminal físico local loga diretamente o user principal após o boot.
+
+> [!WARNING]
+> **Atenção (Segurança):** A senha `123` para o usuário root e sysadmin está injetada programaticamente apenas para finalidades de **DevLocal**. Esta imagem **não está pronta** para deployments de nuvem pública, possuindo credenciais voláteis conhecidas. Em etapas futuras implementaremos extração segura de Cloud-Init.
+
+## Observabilidade
+- Para diagnosticar uso de CPU, portas de rede falhas e serviços danificados rode o nosso wrapper interno: `flavos-diag`
+- Leia o [RECOVERY_GUIDE](docs/RECOVERY.md) para emergências de Boot.
