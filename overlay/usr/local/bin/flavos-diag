@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Flavos OS Diagnostic Tool
+
+echo "========================================="
+echo "      FLAVOS OS DIAGNOSTIC REPORT        "
+echo "========================================="
+echo ""
+
+echo "[1] UPTIME & KERNEL"
+uname -r
+uptime -p
+echo ""
+
+echo "[2] USO DE MEMORIA"
+free -h | grep "Mem:"
+echo ""
+
+echo "[3] SERVICOS COM FALHA (SYSTEMD)"
+FAIL_COUNT=$(systemctl --failed --no-legend | wc -l)
+if [ "$FAIL_COUNT" -eq 0 ]; then
+    echo "  -> Todos os servicos estao OK."
+else
+    systemctl --failed --no-pager
+fi
+echo ""
+
+echo "[4] REDE & CONECTIVIDADE"
+if command -v networkctl &> /dev/null; then
+    networkctl status --no-pager | grep -E 'State|Address|Gateway'
+else
+    ip a | grep "inet " | grep -v "127.0.0.1"
+fi
+echo ""
+ping -c 1 debian.org >/dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo "  -> Internet: ON (DNS funcionando)"
+else
+    echo "  -> Internet: OFF (Falha ao pingar debian.org)"
+fi
+echo ""
+
+echo "Para investigar kernel logs anteriores:"
+echo "  journalctl -b -1       (Boot anterior)"
+echo "  journalctl -p 3 -xb    (Erros da sessao atual)"
+echo "========================================="
