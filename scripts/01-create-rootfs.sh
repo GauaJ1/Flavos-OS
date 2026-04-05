@@ -118,7 +118,7 @@ echo "Criando usuário regular: ${SYS_USER}..."
 chroot "$ROOTFS" bash -c "
     useradd -m -s /bin/bash '${SYS_USER}' || true
     echo '${SYS_USER}:${SYS_PASSWORD}' | chpasswd
-    usermod -aG sudo,video,audio,plugdev '${SYS_USER}' 2>/dev/null || true
+    usermod -aG sudo,video,audio,input,tty,plugdev '${SYS_USER}' 2>/dev/null || true
 "
 
 # Permitir login root no TTY
