@@ -86,15 +86,29 @@ ff02::1     ip6-allnodes
 ff02::2     ip6-allrouters
 EOF
 
-# Locale
+# Locale e Keymap
 chroot "$ROOTFS" bash -c "
-    sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen 2>/dev/null || true
+    sed -i 's/^# *${SYS_LOCALE}/${SYS_LOCALE}/' /etc/locale.gen 2>/dev/null || true
     locale-gen 2>/dev/null || true
-    echo 'LANG=en_US.UTF-8' > /etc/default/locale
+    echo 'LANG=${SYS_LOCALE}' > /etc/default/locale
 "
 
+cat > "${ROOTFS}/etc/vconsole.conf" <<EOF
+KEYMAP=${SYS_KEYMAP}
+FONT=latarcyrheb-sun16
+EOF
+
+mkdir -p "${ROOTFS}/etc/default"
+cat > "${ROOTFS}/etc/default/keyboard" <<EOF
+XKBMODEL="pc105"
+XKBLAYOUT="br"
+XKBVARIANT=""
+XKBOPTIONS=""
+BACKSPACE="guess"
+EOF
+
 # Timezone
-chroot "$ROOTFS" ln -sf /usr/share/zoneinfo/America/Sao_Paulo /etc/localtime
+chroot "$ROOTFS" ln -sf /usr/share/zoneinfo/${SYS_TIMEZONE} /etc/localtime
 
 # Root password
 chroot "$ROOTFS" bash -c "echo 'root:${ROOT_PASSWORD}' | chpasswd"
