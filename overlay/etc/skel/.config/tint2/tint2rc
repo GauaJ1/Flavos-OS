@@ -55,7 +55,7 @@ launcher_icon_asb = 100 0 0
 launcher_icon_theme = Papirus-Dark
 launcher_tooltip = 1
 launcher_item_app = /usr/share/applications/flavos-menu.desktop
-launcher_item_app = /usr/share/applications/pcmanfm.desktop
+launcher_item_app = /usr/share/applications/flavos-files.desktop
 launcher_item_app = /usr/share/applications/flavos-terminal.desktop
 
 # ============================================================

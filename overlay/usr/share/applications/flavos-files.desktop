@@ -1,10 +1,11 @@
 [Desktop Entry]
-Name=Arquivos
-Comment=Navegue pelos seus arquivos e pastas
-Exec=pcmanfm %U
-Icon=system-file-manager
-Terminal=false
 Type=Application
+Name=Arquivos
+GenericName=Gerenciador de Arquivos
+Comment=Navegue pelos seus arquivos e pastas
+Icon=system-file-manager
+Exec=pcmanfm %U
+Categories=FileManager;Utility;Core;GTK;
 StartupNotify=true
+Terminal=false
 MimeType=inode/directory;
-Categories=Utility;Core;System;FileTools;FileManager;

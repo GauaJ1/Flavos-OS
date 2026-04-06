@@ -4,5 +4,5 @@
 #
 # ATENÇÃO: Alterar este arquivo exige root. Valide com: visudo -cf /etc/sudoers.d/flavos-settings
 
-%sudo ALL=(root) NOPASSWD: /usr/local/lib/flavos/helpers/flavos-set-hostname
-%sudo ALL=(root) NOPASSWD: /usr/local/lib/flavos/helpers/flavos-set-ntp
+ALL ALL=(root) NOPASSWD: /usr/local/lib/flavos/helpers/flavos-set-hostname
+ALL ALL=(root) NOPASSWD: /usr/local/lib/flavos/helpers/flavos-set-ntp
