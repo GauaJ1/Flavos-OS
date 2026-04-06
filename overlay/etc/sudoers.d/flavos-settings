@@ -1,0 +1,8 @@
+# Flavos OS — Regras de sudo para helpers de sistema do Flavos Settings
+# Permite que qualquer usuário do grupo sudo execute APENAS estes dois helpers
+# sem senha adicional. Escopo restrito: helpers com validação interna própria.
+#
+# ATENÇÃO: Alterar este arquivo exige root. Valide com: visudo -cf /etc/sudoers.d/flavos-settings
+
+%sudo ALL=(root) NOPASSWD: /usr/local/lib/flavos/helpers/flavos-set-hostname
+%sudo ALL=(root) NOPASSWD: /usr/local/lib/flavos/helpers/flavos-set-ntp

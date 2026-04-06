@@ -194,11 +194,13 @@ def _popen(argv):
     return subprocess.Popen(argv, stderr=subprocess.DEVNULL)
 
 
-def _pkexec(helper, *args):
-    """Executa helper privilegiado via pkexec. Retorna returncode."""
-    cmd = ["pkexec", helper] + list(args)
+def _sudo_run(helper, *args):
+    """Executa helper privilegiado via sudo (NOPASSWD configurado em sudoers.d).
+    Retorna returncode. pkexec não suporta scripts shell em Debian por política de seguraça.
+    """
+    cmd = ["sudo", helper] + list(args)
     try:
-        proc = subprocess.run(cmd, timeout=30)
+        proc = subprocess.run(cmd, timeout=30, capture_output=True)
         return proc.returncode
     except Exception:
         return -1
@@ -338,111 +340,168 @@ def _page_scroll():
     return scroll, vbox
 
 
-# CSS extra para dialogs — sobrepõe o tema branco padrão do GTK
-_CSS_DIALOG = b"""
-dialog {
-    background-color: #0D1017;
+# ---------------------------------------------------------------------------
+# FlavosDialog: Dialog modal customizado sem decoracoes do WM
+# Resolve o problema do Openbox desenhar titlebar bruta nos Gtk.MessageDialog
+# ---------------------------------------------------------------------------
+_CSS_FLAVOS_DIALOG = b"""
+.flavos-dialog-overlay {
+    background-color: alpha(#000000, 0.5);
 }
-dialog .dialog-vbox {
-    background-color: #0D1017;
-}
-dialog .dialog-action-area {
+.flavos-dialog-surface {
     background-color: #131825;
-    border-top: 1px solid #1E2538;
-    padding: 8px;
+    border: 1px solid #2A3450;
+    border-radius: 12px;
+    padding: 28px;
 }
-dialog label {
+.flavos-dialog-title {
+    font-size: 15px;
+    font-weight: 700;
     color: #E8ECF4;
-    font-size: 13px;
+    margin-bottom: 10px;
 }
-dialog button {
+.flavos-dialog-body {
+    font-size: 13px;
+    color: #8891A5;
+    margin-bottom: 24px;
+}
+.flavos-dialog-btn {
     background-image: none;
     background-color: #1C2436;
     color: #A8B0C8;
     border: 1px solid #2A3450;
     border-radius: 8px;
-    padding: 8px 18px;
+    padding: 9px 20px;
     box-shadow: none;
+    min-width: 80px;
 }
-dialog button label {
+.flavos-dialog-btn label {
     color: #A8B0C8;
 }
-dialog button:hover {
+.flavos-dialog-btn:hover {
     background-image: none;
     background-color: #232D47;
 }
-dialog button:hover label {
+.flavos-dialog-btn:hover label {
     color: #E8ECF4;
 }
-dialog button.suggested-action {
+.flavos-dialog-btn-primary {
+    background-image: none;
     background-color: #4B8BF5;
     border-color: #4B8BF5;
+    border-radius: 8px;
+    padding: 9px 20px;
+    box-shadow: none;
+    min-width: 80px;
 }
-dialog button.suggested-action label {
+.flavos-dialog-btn-primary label {
     color: #FFFFFF;
+    font-weight: 700;
 }
-dialog button.destructive-action {
-    background-color: #1C2436;
-    border-color: #F87171;
-}
-dialog button.destructive-action label {
-    color: #F87171;
-}
-filechooser .sidebar-row {
-    background-color: #111620;
-    color: #8891A5;
-}
-filechooser .sidebar-row:selected {
-    background-color: #4B8BF5;
-}
-filechooser list {
-    background-color: #0D1017;
-}
-filechooser list row {
-    color: #E8ECF4;
-}
-filechooser toolbar {
-    background-color: #131825;
-    border-bottom: 1px solid #1E2538;
+.flavos-dialog-btn-primary:hover {
+    background-image: none;
+    background-color: #3A7AE4;
 }
 """
 
 
-def _apply_dialog_css(dialog):
-    """Injeta CSS de tema escuro em qualquer Gtk.Dialog."""
-    p = Gtk.CssProvider()
-    p.load_from_data(_CSS_DIALOG)
-    dialog.get_style_context().add_provider(
-        p, Gtk.STYLE_PROVIDER_PRIORITY_USER
-    )
-    Gtk.StyleContext.add_provider_for_screen(
-        Gdk.Screen.get_default(), p, Gtk.STYLE_PROVIDER_PRIORITY_USER
-    )
+class FlavosDialog(Gtk.Window):
+    """Janela modal customizada sem decoracoes WM.
+    O Openbox nao toca nela: nao ha titlebar gerada pelo WM.
+    Suporta modo 'confirm' (Cancel + OK) e 'error' (OK).
+    Retorna True se o usuario clicou OK.
+    """
+    RESULT_OK = True
+    RESULT_CANCEL = False
+
+    def __init__(self, parent, title, message, mode="error"):
+        super().__init__(type=Gtk.WindowType.POPUP)
+        self.set_decorated(False)
+        self.set_modal(True)
+        self.set_transient_for(parent)
+        self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
+        self.set_resizable(False)
+        self.set_keep_above(True)
+        self._result = False
+
+        # Injetar CSS de dialog
+        p = Gtk.CssProvider()
+        p.load_from_data(_CSS_FLAVOS_DIALOG)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), p, Gtk.STYLE_PROVIDER_PRIORITY_USER
+        )
+
+        # Surface
+        surface = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        surface.get_style_context().add_class("flavos-dialog-surface")
+        surface.set_size_request(360, -1)
+        self.add(surface)
+
+        # Titulo
+        lbl_title = Gtk.Label(label=title, xalign=0)
+        lbl_title.get_style_context().add_class("flavos-dialog-title")
+        lbl_title.set_line_wrap(True)
+        lbl_title.set_max_width_chars(40)
+        surface.pack_start(lbl_title, False, False, 0)
+
+        # Mensagem
+        lbl_msg = Gtk.Label(label=message, xalign=0)
+        lbl_msg.get_style_context().add_class("flavos-dialog-body")
+        lbl_msg.set_line_wrap(True)
+        lbl_msg.set_max_width_chars(40)
+        surface.pack_start(lbl_msg, False, False, 0)
+
+        # Botoes
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_row.set_halign(Gtk.Align.END)
+        surface.pack_start(btn_row, False, False, 0)
+
+        if mode == "confirm":
+            btn_cancel = Gtk.Button(label="Cancelar")
+            btn_cancel.get_style_context().add_class("flavos-dialog-btn")
+            btn_cancel.connect("clicked", self._on_cancel)
+            btn_row.pack_start(btn_cancel, False, False, 0)
+
+        btn_ok = Gtk.Button(label="OK" if mode == "error" else "Confirmar")
+        btn_ok.get_style_context().add_class("flavos-dialog-btn-primary")
+        btn_ok.connect("clicked", self._on_ok)
+        btn_row.pack_start(btn_ok, False, False, 0)
+
+        self.connect("key-press-event", self._on_key)
+        self.show_all()
+
+    def _on_ok(self, _):
+        self._result = True
+        self.destroy()
+        Gtk.main_quit()
+
+    def _on_cancel(self, _):
+        self._result = False
+        self.destroy()
+        Gtk.main_quit()
+
+    def _on_key(self, widget, event):
+        if event.keyval == Gdk.KEY_Return:
+            self._on_ok(None)
+        elif event.keyval == Gdk.KEY_Escape:
+            self._on_cancel(None)
+        return False
+
+    def run(self):
+        Gtk.main()
+        return self._result
 
 
-def _show_error(parent, msg):
-    dlg = Gtk.MessageDialog(
-        transient_for=parent, modal=True,
-        message_type=Gtk.MessageType.ERROR,
-        buttons=Gtk.ButtonsType.OK,
-        text=msg
-    )
-    _apply_dialog_css(dlg)
-    dlg.run()
-    dlg.destroy()
+def _show_error(parent, title, msg=""):
+    """Mostra dialog de erro com FlavosDialog."""
+    d = FlavosDialog(parent, title, msg, mode="error")
+    d.run()
 
 
-def _show_confirm(parent, msg):
-    dlg = Gtk.MessageDialog(
-        transient_for=parent, modal=True,
-        message_type=Gtk.MessageType.WARNING,
-        buttons=Gtk.ButtonsType.OK_CANCEL,
-        text=msg
-    )
-    _apply_dialog_css(dlg)
-    resp = dlg.run()
-    dlg.destroy()
-    return resp == Gtk.ResponseType.OK
+def _show_confirm(parent, title, msg=""):
+    """Mostra dialog de confirmacao. Retorna True se o usuario confirmou."""
+    d = FlavosDialog(parent, title, msg, mode="confirm")
+    return d.run()
 
 
 # ---------------------------------------------------------------------------
@@ -629,23 +688,33 @@ class HostnamePage:
     def _apply_hostname(self, btn):
         new_host = self._entry.get_text().strip()
         if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$', new_host):
-            _show_error(self._win, "Hostname inválido.\nUse apenas letras, números e hífen. Não comece nem termine com hífen.")
+            _show_error(
+                self._win,
+                "Hostname inválido",
+                "Use apenas letras, números e hífen.\nNão comece nem termine com hífen."
+            )
             return
-        if not _show_confirm(self._win, f"Alterar o hostname para:\n\n  {new_host}\n\nEsta ação exige sua senha."):
+        if not _show_confirm(
+            self._win,
+            f"Alterar hostname para \u201c{new_host}\u201d?",
+            "Esta ação altera o nome da máquina na rede."
+        ):
             return
-        rc = _pkexec(HELPER_HOSTNAME, new_host)
+        rc = _sudo_run(HELPER_HOSTNAME, new_host)
         if rc == 0:
             self._entry.set_text("")
-            dlg = Gtk.MessageDialog(
-                transient_for=self._win, modal=True,
-                message_type=Gtk.MessageType.INFO,
-                buttons=Gtk.ButtonsType.OK,
-                text=f"Hostname alterado para: {new_host}\n\nReinicie para aplicar completamente."
+            _show_error(
+                self._win,
+                f"Hostname alterado para: {new_host}",
+                "Reinicie a sessão para aplicar completamente."
             )
-            dlg.run()
-            dlg.destroy()
         else:
-            _show_error(self._win, "Falha ao alterar hostname.\nVerifique permissões ou tente novamente.")
+            _show_error(
+                self._win,
+                "Falha ao alterar hostname",
+                "Verifique se o sudo está configurado corretamente.\n"
+                "Execute no terminal: sudo /usr/local/lib/flavos/helpers/flavos-set-hostname NOME"
+            )
 
 
 class DateTimePage:
@@ -691,11 +760,15 @@ class DateTimePage:
     def _toggle_ntp(self, btn, currently_active):
         action = "off" if currently_active else "on"
         verb = "desativar" if currently_active else "ativar"
-        if not _show_confirm(self._win, f"Deseja {verb} a sincronização NTP?\n\nEsta ação exige sua senha."):
+        if not _show_confirm(
+            self._win,
+            f"{'Desativar' if currently_active else 'Ativar'} sincronização NTP?",
+            f"Deseja {verb} a sincronização de horário via NTP."
+        ):
             return
-        rc = _pkexec(HELPER_NTP, action)
+        rc = _sudo_run(HELPER_NTP, action)
         if rc != 0:
-            _show_error(self._win, "Falha ao alterar NTP.\nVerifique permissões.")
+            _show_error(self._win, "Falha ao alterar NTP", "Verifique se o sudo está configurado.")
 
 
 class PowerPage:

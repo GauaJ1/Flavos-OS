@@ -87,6 +87,14 @@ if [[ -d "$HELPERS_DIR" ]]; then
     echo "  Helpers privilegiados: permissões aplicadas"
 fi
 
+# sudoers.d: deve ser root:root 0440, ou sudo ignora o arquivo completamente
+SUDOERS_FILE="${MNT_ROOT}/etc/sudoers.d/flavos-settings"
+if [[ -f "$SUDOERS_FILE" ]]; then
+    chown root:root "$SUDOERS_FILE"
+    chmod 0440 "$SUDOERS_FILE"
+    echo "  sudoers.d/flavos-settings: permissões 0440 aplicadas"
+fi
+
 # --- Substituir PARTUUIDs no fstab ---
 echo "[3/6] Configurando fstab com PARTUUIDs reais..."
 sed -i "s|__PARTUUID_ROOT__|${ROOT_PARTUUID}|g" "${MNT_ROOT}/etc/fstab"
