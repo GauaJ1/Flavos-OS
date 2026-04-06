@@ -97,11 +97,21 @@ class ShellOSD(Gtk.Window):
         self.set_accept_focus(False)
         self.set_resizable(False)
 
-        width = 220
+        self.set_app_paintable(True)
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual and screen.is_composited():
+            self.set_visual(visual)
 
-        screen = Gdk.Screen.get_default()
-        sw = screen.get_width()
-        sh = screen.get_height()
+        width = 220
+        # Fix deprecation limit and positioning
+        display = Gdk.Display.get_default()
+        monitor = display.get_primary_monitor()
+        if not monitor:
+            monitor = display.get_monitor(0)
+        geometry = monitor.get_geometry()
+        sw = geometry.width
+        sh = geometry.height
         # Centralizado horizontalmente, 100px acima do painel (42px)
         self.move((sw - width) // 2, sh - 42 - 100 - 20)
         self.set_default_size(width, 1)
