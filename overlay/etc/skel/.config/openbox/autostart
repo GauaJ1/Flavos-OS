@@ -17,9 +17,11 @@ dunst &
 # 5. Agente de Autorização
 lxpolkit &
 
-# 6. Indicadores de Status (volume, rede) na systray
-sleep 1 && /usr/local/bin/flavos-status &
+# 6. Serviços de Bandeja do Sistema (Systray Applets)
+nm-applet &
+volumeicon &
+xfce4-power-manager &
+xfce4-clipman &
 
 # Terminal inicial desativado na Etapa 9E (onboarding limpo)
-# sleep 0.5
 # kitty &

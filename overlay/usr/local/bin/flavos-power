@@ -108,6 +108,11 @@ class PowerMenu(Gtk.Window):
         self.set_default_size(300, -1)
         self.set_resizable(False)
         self.set_keep_above(True)
+        self.set_app_paintable(True)
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual and screen.is_composited():
+            self.set_visual(visual)
 
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(CSS)

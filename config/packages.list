@@ -87,7 +87,12 @@ python3
 python3-gi
 gir1.2-gtk-3.0
 
-# Serviços Visuais da Shell (Etapa 10B)
+# Serviços Visuais da Shell e Applets de Sistema (Etapa 10B/10C)
 dunst
 libnotify-bin
 alsa-utils
+network-manager
+network-manager-gnome
+volumeicon-alsa
+xfce4-power-manager
+xfce4-clipman

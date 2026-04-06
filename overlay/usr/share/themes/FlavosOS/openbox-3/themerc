@@ -27,11 +27,13 @@ window.inactive.grip.bg: flat solid
 window.inactive.grip.bg.color: #0D1017
 
 # --- Borders ---
+window.active.client.color: #151921
+window.inactive.client.color: #0D1017
 window.active.border.color: #272D3D
 window.inactive.border.color: #151921
 border.width: 1
-padding.width: 10
-padding.height: 8
+padding.width: 6
+padding.height: 5
 
 # --- Active Buttons ---
 window.active.button.unpressed.bg: flat solid

@@ -136,20 +136,10 @@ chroot "$ROOTFS" bash -c "
     # systemd já permite root login em tty por padrão
 "
 
-echo "[4/6] Configurando rede (systemd-networkd)..."
-# Configurar systemd-networkd para DHCP em todas as interfaces ethernet
-mkdir -p "${ROOTFS}/etc/systemd/network"
-cat > "${ROOTFS}/etc/systemd/network/20-wired.network" <<EOF
-[Match]
-Name=en*
-Type=ether
-
-[Network]
-DHCP=yes
-EOF
-
+echo "[4/6] Configurando rede (NetworkManager)..."
 # Habilitar serviços de rede e SSH
-chroot "$ROOTFS" systemctl enable systemd-networkd 2>/dev/null || true
+chroot "$ROOTFS" systemctl enable NetworkManager 2>/dev/null || true
+chroot "$ROOTFS" systemctl disable systemd-networkd 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable systemd-resolved 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable ssh 2>/dev/null || true
 # Mouse no console (Etapa 7E)
