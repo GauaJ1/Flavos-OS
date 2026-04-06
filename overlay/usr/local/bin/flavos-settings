@@ -338,6 +338,88 @@ def _page_scroll():
     return scroll, vbox
 
 
+# CSS extra para dialogs — sobrepõe o tema branco padrão do GTK
+_CSS_DIALOG = b"""
+dialog {
+    background-color: #0D1017;
+}
+dialog .dialog-vbox {
+    background-color: #0D1017;
+}
+dialog .dialog-action-area {
+    background-color: #131825;
+    border-top: 1px solid #1E2538;
+    padding: 8px;
+}
+dialog label {
+    color: #E8ECF4;
+    font-size: 13px;
+}
+dialog button {
+    background-image: none;
+    background-color: #1C2436;
+    color: #A8B0C8;
+    border: 1px solid #2A3450;
+    border-radius: 8px;
+    padding: 8px 18px;
+    box-shadow: none;
+}
+dialog button label {
+    color: #A8B0C8;
+}
+dialog button:hover {
+    background-image: none;
+    background-color: #232D47;
+}
+dialog button:hover label {
+    color: #E8ECF4;
+}
+dialog button.suggested-action {
+    background-color: #4B8BF5;
+    border-color: #4B8BF5;
+}
+dialog button.suggested-action label {
+    color: #FFFFFF;
+}
+dialog button.destructive-action {
+    background-color: #1C2436;
+    border-color: #F87171;
+}
+dialog button.destructive-action label {
+    color: #F87171;
+}
+filechooser .sidebar-row {
+    background-color: #111620;
+    color: #8891A5;
+}
+filechooser .sidebar-row:selected {
+    background-color: #4B8BF5;
+}
+filechooser list {
+    background-color: #0D1017;
+}
+filechooser list row {
+    color: #E8ECF4;
+}
+filechooser toolbar {
+    background-color: #131825;
+    border-bottom: 1px solid #1E2538;
+}
+"""
+
+
+def _apply_dialog_css(dialog):
+    """Injeta CSS de tema escuro em qualquer Gtk.Dialog."""
+    p = Gtk.CssProvider()
+    p.load_from_data(_CSS_DIALOG)
+    dialog.get_style_context().add_provider(
+        p, Gtk.STYLE_PROVIDER_PRIORITY_USER
+    )
+    Gtk.StyleContext.add_provider_for_screen(
+        Gdk.Screen.get_default(), p, Gtk.STYLE_PROVIDER_PRIORITY_USER
+    )
+
+
 def _show_error(parent, msg):
     dlg = Gtk.MessageDialog(
         transient_for=parent, modal=True,
@@ -345,6 +427,7 @@ def _show_error(parent, msg):
         buttons=Gtk.ButtonsType.OK,
         text=msg
     )
+    _apply_dialog_css(dlg)
     dlg.run()
     dlg.destroy()
 
@@ -356,6 +439,7 @@ def _show_confirm(parent, msg):
         buttons=Gtk.ButtonsType.OK_CANCEL,
         text=msg
     )
+    _apply_dialog_css(dlg)
     resp = dlg.run()
     dlg.destroy()
     return resp == Gtk.ResponseType.OK
@@ -427,7 +511,16 @@ class AppearancePage:
             action=Gtk.FileChooserAction.OPEN
         )
         dialog.add_button("Cancelar", Gtk.ResponseType.CANCEL)
-        dialog.add_button("Aplicar", Gtk.ResponseType.OK)
+        ok_btn = dialog.add_button("Aplicar", Gtk.ResponseType.OK)
+        ok_btn.get_style_context().add_class("suggested-action")
+        _apply_dialog_css(dialog)
+
+        # Pré-navegar para o wallpaper atual
+        current = read_appearance_info()["wallpaper"]
+        if os.path.isfile(current):
+            dialog.set_filename(current)
+        elif os.path.isdir(os.path.dirname(current)):
+            dialog.set_current_folder(os.path.dirname(current))
 
         ff = Gtk.FileFilter()
         ff.set_name("Imagens")

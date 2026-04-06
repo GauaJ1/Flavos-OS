@@ -114,9 +114,15 @@ def set_volume(delta=0, toggle_mute=False):
                 ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"+{abs(delta)}%"],
                 stderr=subprocess.DEVNULL, timeout=2, check=False
             )
-            # Re-garante unmute ao subir
             subprocess.run(
                 ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"],
+                stderr=subprocess.DEVNULL, timeout=2, check=False
+            )
+            # Clamp a 100% — pactl permite ir além disso
+            subprocess.run(
+                ["bash", "-c",
+                 "vol=$(pactl get-sink-volume @DEFAULT_SINK@ | grep -oP '\\d+(?=%)' | head -1);"
+                 "[ \"$vol\" -gt 100 ] && pactl set-sink-volume @DEFAULT_SINK@ 100%"],
                 stderr=subprocess.DEVNULL, timeout=2, check=False
             )
         elif delta < 0:
@@ -165,10 +171,8 @@ class ShellOSD(Gtk.Window):
         self.set_keep_above(True)
         self.set_accept_focus(False)
         self.set_resizable(False)
+        # WM_CLASS para regras do picom (set_wmclass deprecado; usa set_name)
         self.set_name("FlavosOSD")
-
-        # WM_CLASS para regras do picom
-        self.set_wmclass("flavos-osd", "FlavosOSD")
 
         # Aplicar CSS
         css_provider = Gtk.CssProvider()

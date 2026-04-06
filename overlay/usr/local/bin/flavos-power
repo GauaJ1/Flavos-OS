@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# Flavos OS — Power Menu v3 (corrigido)
-# Usa subprocess.Popen para ações de sistema (não bloqueia o loop GTK).
+# Flavos OS — Power Menu v4
+# Janela POPUP com fundo TRANSPARENTE (Picom gerencia cantos/sombra).
+# O CSS sólido fica apenas no box interno (.power-surface).
 
 import gi
 import subprocess
@@ -13,9 +14,16 @@ CSS = b"""
     outline-width: 0;
 }
 window {
+    background-color: transparent;
+}
+.power-surface {
     background-color: #0D1017;
     border: 1px solid #272D3D;
     border-radius: 12px;
+    padding-top: 20px;
+    padding-bottom: 16px;
+    padding-left: 20px;
+    padding-right: 20px;
 }
 label {
     color: #E8ECF4;
@@ -96,9 +104,11 @@ separator {
 }
 """
 
+
 def run_async(cmd):
     """Executa comando assíncrono sem bloquear o loop GTK."""
     subprocess.Popen(cmd, shell=True)
+
 
 class PowerMenu(Gtk.Window):
     def __init__(self):
@@ -108,6 +118,8 @@ class PowerMenu(Gtk.Window):
         self.set_default_size(300, -1)
         self.set_resizable(False)
         self.set_keep_above(True)
+
+        # RGBA permite transparência real sob o box (Picom aplica sombra/cantos)
         self.set_app_paintable(True)
         screen = self.get_screen()
         visual = screen.get_rgba_visual()
@@ -124,11 +136,9 @@ class PowerMenu(Gtk.Window):
         self.connect("key-press-event", self._on_key)
         self.connect("focus-out-event", lambda w, e: self.destroy())
 
+        # Surface interna — recebe o fundo sólido e bordas via .power-surface
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        vbox.set_margin_top(20)
-        vbox.set_margin_bottom(16)
-        vbox.set_margin_start(20)
-        vbox.set_margin_end(20)
+        vbox.get_style_context().add_class("power-surface")
         self.add(vbox)
 
         heading = Gtk.Label(label="ENERGIA", xalign=0)
@@ -136,10 +146,10 @@ class PowerMenu(Gtk.Window):
         vbox.pack_start(heading, False, False, 0)
 
         actions = [
-            ("Desligar",         "danger",  "systemctl poweroff"),
-            ("Reiniciar",        None,      "systemctl reboot"),
-            ("Suspender",        None,      "systemctl suspend"),
-            ("Encerrar Sessão",  None,      "loginctl terminate-session \"${XDG_SESSION_ID:-}\" 2>/dev/null || openbox --exit"),
+            ("Desligar",        "danger", "systemctl poweroff"),
+            ("Reiniciar",       None,     "systemctl reboot"),
+            ("Suspender",       None,     "systemctl suspend"),
+            ("Encerrar Sessão", None,     'loginctl terminate-session "${XDG_SESSION_ID:-}" 2>/dev/null || openbox --exit'),
         ]
 
         for label, css_class, cmd in actions:
