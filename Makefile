@@ -86,12 +86,14 @@ all: rootfs image install test manifest
 	@echo "=== Build completo. Execute 'make boot' para iniciar a VM. ==="
 
 clean:
+	@echo "Sincronizando IO antes da limpeza..."
+	@sync
 	@echo "Removendo artefatos de build..."
-	@if mountpoint -q "$(BUILD_DIR)/mnt_root" 2>/dev/null; then sudo umount -lf "$(BUILD_DIR)/mnt_root"; fi
-	@if mountpoint -q "$(BUILD_DIR)/mnt_esp" 2>/dev/null; then sudo umount -lf "$(BUILD_DIR)/mnt_esp"; fi
+	@if mountpoint -q "$(BUILD_DIR)/mnt_root" 2>/dev/null; then sudo umount "$(BUILD_DIR)/mnt_root" || sudo umount -l "$(BUILD_DIR)/mnt_root"; fi
+	@if mountpoint -q "$(BUILD_DIR)/mnt_esp" 2>/dev/null; then sudo umount "$(BUILD_DIR)/mnt_esp" || sudo umount -l "$(BUILD_DIR)/mnt_esp"; fi
 	@# Desmontar qualquer coisa dentro do rootfs (dev, proc, sys, run)
 	@for mp in $(ROOTFS_DIR)/run $(ROOTFS_DIR)/sys $(ROOTFS_DIR)/proc $(ROOTFS_DIR)/dev/pts $(ROOTFS_DIR)/dev; do \
-		if mountpoint -q "$$mp" 2>/dev/null; then sudo umount -lf "$$mp"; fi; \
+		if mountpoint -q "$$mp" 2>/dev/null; then sudo umount "$$mp" || sudo umount -l "$$mp"; fi; \
 	done
 	@# Desanexar loop devices associados à imagem
 	@for loop in $$(losetup -j "$(IMAGE)" 2>/dev/null | cut -d: -f1); do \

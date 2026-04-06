@@ -65,11 +65,12 @@ mkdir -p "$MNT_ROOT" "$MNT_ESP"
 mount "$PART2" "$MNT_ROOT"
 mount "$PART1" "$MNT_ESP"
 
-# Cleanup
 cleanup() {
+    echo "Sincronizando I/O..."
+    sync
     echo "Desmontando e limpando..."
-    umount -lf "$MNT_ESP"  2>/dev/null || true
-    umount -lf "$MNT_ROOT" 2>/dev/null || true
+    umount "$MNT_ESP"  2>/dev/null || umount -l "$MNT_ESP"  2>/dev/null || true
+    umount "$MNT_ROOT" 2>/dev/null || umount -l "$MNT_ROOT" 2>/dev/null || true
     losetup -d "$LOOP_DEV" 2>/dev/null || true
 }
 trap cleanup EXIT
