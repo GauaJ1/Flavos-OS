@@ -2,8 +2,8 @@
 # Flavos OS — Shell Visual (Etapa 9B)
 # Lançado pelo openbox-session. Inicializa os componentes visuais.
 
-# 1. Wallpaper
-feh --bg-fill /usr/share/flavos/wallpaper.jpeg &
+# 1. Gerenciador do Desktop e Wallpaper (PCManFM)
+pcmanfm --desktop &
 
 # 2. Compositor e Motion Design
 picom -b

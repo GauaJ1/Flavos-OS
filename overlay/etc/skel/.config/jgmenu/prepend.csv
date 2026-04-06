@@ -1,6 +1,6 @@
 Terminal,kitty,utilities-terminal
 Configurações,flavos-settings,preferences-system
-Informações do Sistema,flavos-debug-report | kitty -e less,help-about
+Informações do Sistema,kitty -e bash -c "flavos-debug-report | less",help-about
 ^sep()
 Reiniciar,systemctl reboot,system-reboot
 Desligar,systemctl poweroff,system-shutdown
