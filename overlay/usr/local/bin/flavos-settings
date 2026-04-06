@@ -1,141 +1,733 @@
 #!/usr/bin/env python3
-# Flavos OS — Settings App v3
-# Design System v3 tokens. CSS simplificado (GTK3-compatible).
+# Flavos OS — Settings v4 (Etapa 10D)
+# Arquitetura: cada seção é uma classe isolada (Page).
+# Backend: funções puras de leitura + helpers privilegiados para escrita.
+# Polkit elevação: apenas para flavos-set-hostname e flavos-set-ntp.
+# Rede: NetworkManager stack. Sem mistura com systemd-networkd.
 
 import gi
 import subprocess
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk
+import re
+import os
+import socket
 
-# CSS limpo e compatível com GTK3 — sem propriedades inválidas
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk, GLib
+
+# ---------------------------------------------------------------------------
+# Design System CSS
+# ---------------------------------------------------------------------------
 CSS_DATA = b"""
 window {
     background-color: #0D1017;
 }
-.background {
-    background-color: #0D1017;
-}
 stacksidebar {
-    background-color: #151921;
-    border-right: 1px solid #272D3D;
+    background-color: #111620;
+    border-right: 1px solid #1E2538;
+    min-width: 210px;
 }
 stacksidebar list {
-    background-color: #151921;
+    background-color: transparent;
+    padding: 8px 0;
 }
 stacksidebar row {
-    padding: 12px 16px;
+    padding: 11px 20px;
     background-color: transparent;
+    border: none;
+    outline: none;
 }
 stacksidebar row label {
-    color: #8891A5;
+    color: #5A6480;
+    font-size: 13px;
 }
 stacksidebar row:hover {
-    background-color: #1C2030;
+    background-color: #171D2E;
 }
 stacksidebar row:hover label {
-    color: #E8ECF4;
+    color: #A8B0C8;
 }
 stacksidebar row:selected {
-    background-color: #1C2030;
+    background-color: #1C2436;
     border-left: 3px solid #4B8BF5;
 }
 stacksidebar row:selected label {
     color: #E8ECF4;
+    font-weight: 700;
+}
+.section-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #E8ECF4;
+    margin-bottom: 4px;
+}
+.section-subtitle {
+    font-size: 12px;
+    color: #505872;
+    margin-bottom: 24px;
+}
+.card {
+    background-color: #131825;
+    border: 1px solid #1E2538;
+    border-radius: 10px;
+    padding: 0px;
+    margin-bottom: 12px;
+}
+.row-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid #1A2030;
+}
+.row-item:last-child {
+    border-bottom: none;
+}
+.row-label {
+    font-size: 13px;
+    color: #E8ECF4;
+}
+.row-value {
+    font-size: 12px;
+    color: #505872;
+}
+.badge-ok {
+    font-size: 11px;
+    color: #3EC97C;
+    font-weight: 700;
+}
+.badge-warn {
+    font-size: 11px;
+    color: #F5A623;
+    font-weight: 700;
+}
+.badge-placeholder {
+    font-size: 11px;
+    color: #3A4560;
 }
 label {
     color: #E8ECF4;
 }
-.title {
-    font-size: 20px;
-    font-weight: 700;
-    color: #E8ECF4;
-    margin-bottom: 16px;
-}
-.subtitle {
-    font-size: 12px;
-    color: #8891A5;
-    margin-top: 8px;
-}
-.card {
-    background-color: #1C2030;
-    border: 1px solid #272D3D;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
-}
 button {
     background-image: none;
-    background-color: #1C2030;
-    color: #E8ECF4;
-    border: 1px solid #272D3D;
-    border-radius: 6px;
-    padding: 9px 18px;
+    background-color: #1C2436;
+    color: #A8B0C8;
+    border: 1px solid #2A3450;
+    border-radius: 8px;
+    padding: 9px 20px;
     box-shadow: none;
 }
 button label {
-    color: #E8ECF4;
+    color: #A8B0C8;
 }
 button:hover {
     background-image: none;
-    background-color: #232838;
+    background-color: #232D47;
+    border-color: #3A5080;
 }
 button:hover label {
     color: #E8ECF4;
 }
-button:active {
+button:active, button.action {
     background-image: none;
     background-color: #4B8BF5;
+    border-color: #4B8BF5;
+    color: #FFFFFF;
 }
-button:active label {
+button.action label {
     color: #FFFFFF;
 }
 button:disabled {
     background-image: none;
-    background-color: #151921;
-    border-color: #1C2030;
-}
-button:disabled label {
-    color: #505872;
+    background-color: #111620;
+    border-color: #1A2030;
+    opacity: 0.5;
 }
 entry {
     background-image: none;
     background-color: #0D1017;
     color: #E8ECF4;
-    border: 1px solid #272D3D;
-    border-radius: 6px;
-    padding: 8px 12px;
+    border: 1px solid #2A3450;
+    border-radius: 8px;
+    padding: 9px 14px;
+    caret-color: #4B8BF5;
 }
-entry:disabled {
-    color: #505872;
-    background-color: #151921;
+entry:focus {
+    border-color: #4B8BF5;
 }
-separator {
-    background-color: #272D3D;
+switch {
+    min-width: 44px;
+    min-height: 24px;
+}
+switch:checked slider {
+    background-color: #4B8BF5;
 }
 scrollbar slider {
-    background-color: #272D3D;
+    background-color: #2A3450;
     border-radius: 4px;
-    min-width: 6px;
-    min-height: 6px;
+    min-width: 5px;
+    min-height: 5px;
 }
 scrollbar slider:hover {
-    background-color: #505872;
+    background-color: #3A5080;
+}
+separator {
+    background-color: #1A2030;
+    min-height: 1px;
 }
 """
 
 
-def shell_run(cmd):
+# ---------------------------------------------------------------------------
+# Backend: leitura de estado (sem privilégio)
+# ---------------------------------------------------------------------------
+def _shell(cmd, shell=False):
+    """Executa comando e retorna stdout. Nunca levanta exceção."""
     try:
-        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL).strip()
+        result = subprocess.check_output(
+            cmd, shell=shell, text=True,
+            stderr=subprocess.DEVNULL, timeout=4
+        )
+        return result.strip()
     except Exception:
-        return "Desconhecido"
+        return ""
+
+
+def _popen(argv):
+    """Lança processo em background. Retorna Popen."""
+    return subprocess.Popen(argv, stderr=subprocess.DEVNULL)
+
+
+def _pkexec(helper, *args):
+    """Executa helper privilegiado via pkexec. Retorna returncode."""
+    cmd = ["pkexec", helper] + list(args)
+    try:
+        proc = subprocess.run(cmd, timeout=30)
+        return proc.returncode
+    except Exception:
+        return -1
+
+
+HELPER_HOSTNAME = "/usr/local/lib/flavos/helpers/flavos-set-hostname"
+HELPER_NTP = "/usr/local/lib/flavos/helpers/flavos-set-ntp"
+
+
+def read_system_info():
+    return {
+        "os":     _shell(["bash", "-c", "grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d'\"' -f2"]) or "Flavos OS",
+        "kernel": _shell(["uname", "-r"]),
+        "arch":   _shell(["uname", "-m"]),
+        "ram":    _shell(["bash", "-c", "free -h | awk '/^Mem:/ {print $2 \" total, \" $3 \" usado\"}'"] ),
+        "cpu":    _shell(["bash", "-c", "grep -m1 'model name' /proc/cpuinfo | cut -d: -f2"]).strip() or "Desconhecido",
+        "uptime": _shell(["uptime", "-p"]),
+        "host":   _shell(["hostname"]) or "flavos",
+    }
+
+
+def read_network_info():
+    ip = _shell(["bash", "-c", "ip -o -4 addr show | awk '!/lo/{print $4}' | cut -d/ -f1 | head -1"])
+    gw = _shell(["bash", "-c", "ip route show default | awk '{print $3}' | head -1"])
+    iface = _shell(["bash", "-c", "ip route show default | awk '{print $5}' | head -1"])
+    nm_active = _shell(["bash", "-c", "systemctl is-active NetworkManager 2>/dev/null"])
+    dns = _shell(["bash", "-c", "resolvectl status 2>/dev/null | grep 'DNS Servers' | head -1 | cut -d: -f2"]).strip()
+    return {
+        "ip":       ip or "Desconectado",
+        "gateway":  gw or "—",
+        "iface":    iface or "—",
+        "dns":      dns or "—",
+        "nm_ok":    nm_active == "active",
+    }
+
+
+def read_datetime_info():
+    now = _shell(["date", "+%d/%m/%Y %H:%M:%S"])
+    tz = _shell(["bash", "-c", "timedatectl 2>/dev/null | awk '/Time zone:/{print $3}'"])
+    ntp = _shell(["bash", "-c", "timedatectl 2>/dev/null | awk '/NTP service:/{print $3}'"])
+    ntp_ok = "active" in ntp.lower() or "yes" in ntp.lower()
+    return {
+        "datetime": now,
+        "timezone": tz or "Desconhecido",
+        "ntp_ok":   ntp_ok,
+    }
+
+
+def read_hostname():
+    return _shell(["hostname"]) or "flavos"
+
+
+def read_user_info():
+    user = _shell(["whoami"])
+    uid = _shell(["id", "-u"])
+    groups = _shell(["groups"])
+    shell = os.environ.get("SHELL", _shell(["bash", "-c", "getent passwd $(whoami) | cut -d: -f7"]))
+    return {"user": user, "uid": uid, "groups": groups, "shell": shell}
+
+
+def read_appearance_info():
+    wallpaper_cfg = os.path.expanduser("~/.config/flavos/wallpaper")
+    if os.path.isfile(wallpaper_cfg):
+        with open(wallpaper_cfg) as f:
+            wallpaper = f.read().strip()
+    else:
+        wallpaper = "/usr/share/flavos/wallpaper.jpeg"
+    icon_theme = _shell(["bash", "-c", "grep gtk-icon-theme-name ~/.gtkrc-2.0 2>/dev/null | cut -d'\"' -f2"])
+    return {"wallpaper": wallpaper, "icon_theme": icon_theme or "Papirus-Dark"}
+
+
+def read_power_info():
+    governor = _shell(["bash", "-c", "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null"])
+    acpi = _shell(["bash", "-c", "acpi -b 2>/dev/null | head -1"])
+    has_battery = bool(acpi)
+    return {
+        "governor": governor or "Indisponível",
+        "acpi":     acpi or "Sem bateria detectada",
+        "has_battery": has_battery,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Componentes de UI reutilizáveis
+# ---------------------------------------------------------------------------
+def _card():
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    box.get_style_context().add_class("card")
+    return box
+
+
+def _row(label_text, value_text="", badge=None):
+    """Linha de informação: label à esquerda, valor/badge à direita."""
+    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    row.get_style_context().add_class("row-item")
+
+    lbl = Gtk.Label(label=label_text, xalign=0)
+    lbl.get_style_context().add_class("row-label")
+    row.pack_start(lbl, True, True, 0)
+
+    if badge:
+        b = Gtk.Label(label=badge[0])
+        b.get_style_context().add_class(badge[1])
+        row.pack_end(b, False, False, 0)
+    elif value_text:
+        val = Gtk.Label(label=value_text, xalign=1)
+        val.get_style_context().add_class("row-value")
+        val.set_max_width_chars(30)
+        val.set_line_wrap(True)
+        row.pack_end(val, False, False, 0)
+
+    return row
+
+
+def _section_header(title, subtitle=""):
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    box.set_margin_bottom(8)
+    t = Gtk.Label(label=title, xalign=0)
+    t.get_style_context().add_class("section-title")
+    box.pack_start(t, False, False, 0)
+    if subtitle:
+        s = Gtk.Label(label=subtitle, xalign=0)
+        s.get_style_context().add_class("section-subtitle")
+        box.pack_start(s, False, False, 0)
+    return box
+
+
+def _page_scroll():
+    scroll = Gtk.ScrolledWindow()
+    scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+    vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    vbox.set_margin_top(32)
+    vbox.set_margin_bottom(32)
+    vbox.set_margin_start(32)
+    vbox.set_margin_end(32)
+    scroll.add(vbox)
+    return scroll, vbox
+
+
+def _show_error(parent, msg):
+    dlg = Gtk.MessageDialog(
+        transient_for=parent, modal=True,
+        message_type=Gtk.MessageType.ERROR,
+        buttons=Gtk.ButtonsType.OK,
+        text=msg
+    )
+    dlg.run()
+    dlg.destroy()
+
+
+def _show_confirm(parent, msg):
+    dlg = Gtk.MessageDialog(
+        transient_for=parent, modal=True,
+        message_type=Gtk.MessageType.WARNING,
+        buttons=Gtk.ButtonsType.OK_CANCEL,
+        text=msg
+    )
+    resp = dlg.run()
+    dlg.destroy()
+    return resp == Gtk.ResponseType.OK
+
+
+# ---------------------------------------------------------------------------
+# Páginas
+# ---------------------------------------------------------------------------
+
+class AboutPage:
+    name = "about"
+    title = "Sobre"
+
+    def build(self, win):
+        scroll, vbox = _page_scroll()
+        info = read_system_info()
+
+        vbox.pack_start(_section_header("Sobre o Sistema", "Informações do ambiente Flavos OS"), False, False, 0)
+
+        card = _card()
+        card.pack_start(_row("Sistema Operacional", info["os"]), False, False, 0)
+        card.pack_start(_row("Kernel Linux", info["kernel"]), False, False, 0)
+        card.pack_start(_row("Arquitetura", info["arch"]), False, False, 0)
+        card.pack_start(_row("Processador (CPU)", info["cpu"]), False, False, 0)
+        card.pack_start(_row("Memória RAM", info["ram"]), False, False, 0)
+        card.pack_start(_row("Uptime", info["uptime"]), False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        return scroll
+
+
+class AppearancePage:
+    name = "appearance"
+    title = "Aparência"
+
+    def build(self, win):
+        scroll, vbox = _page_scroll()
+        info = read_appearance_info()
+
+        vbox.pack_start(_section_header("Aparência", "Wallpaper e tema de ícones"), False, False, 0)
+
+        # Wallpaper
+        card = _card()
+        wrow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        wrow.get_style_context().add_class("row-item")
+        wlbl = Gtk.Label(label="Wallpaper atual", xalign=0)
+        wlbl.get_style_context().add_class("row-label")
+        wrow.pack_start(wlbl, True, True, 0)
+        btn_pick = Gtk.Button(label="Escolher…")
+        btn_pick.connect("clicked", self._pick_wallpaper, win)
+        wrow.pack_end(btn_pick, False, False, 0)
+        card.pack_start(wrow, False, False, 0)
+        card.pack_start(_row("Caminho", info["wallpaper"]), False, False, 0)
+        card.pack_start(_row("Tema de ícones", info["icon_theme"]), False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        # Temas de janela — placeholder
+        card2 = _card()
+        card2.pack_start(_row("Tema de janelas", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        card2.pack_start(_row("Cores de acento", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        vbox.pack_start(card2, False, False, 0)
+
+        return scroll
+
+    def _pick_wallpaper(self, btn, win):
+        dialog = Gtk.FileChooserDialog(
+            title="Escolher Wallpaper",
+            parent=win,
+            action=Gtk.FileChooserAction.OPEN
+        )
+        dialog.add_button("Cancelar", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Aplicar", Gtk.ResponseType.OK)
+
+        ff = Gtk.FileFilter()
+        ff.set_name("Imagens")
+        for p in ["*.jpg", "*.jpeg", "*.png", "*.webp"]:
+            ff.add_pattern(p)
+        dialog.add_filter(ff)
+
+        resp = dialog.run()
+        if resp == Gtk.ResponseType.OK:
+            path = dialog.get_filename()
+            cfg_dir = os.path.expanduser("~/.config/flavos")
+            os.makedirs(cfg_dir, exist_ok=True)
+            with open(os.path.join(cfg_dir, "wallpaper"), "w") as f:
+                f.write(path)
+            _popen(["feh", "--bg-fill", path])
+
+        dialog.destroy()
+
+
+class NetworkPage:
+    name = "network"
+    title = "Rede"
+
+    def build(self, win):
+        self._win = win
+        scroll, vbox = _page_scroll()
+        info = read_network_info()
+
+        nm_badge = ("● Ativo", "badge-ok") if info["nm_ok"] else ("● Inativo", "badge-warn")
+        vbox.pack_start(_section_header("Rede", "Gerenciado via NetworkManager"), False, False, 0)
+
+        # Status
+        card = _card()
+        card.pack_start(_row("NetworkManager", badge=nm_badge), False, False, 0)
+        card.pack_start(_row("Interface ativa", info["iface"]), False, False, 0)
+        card.pack_start(_row("Endereço IPv4", info["ip"]), False, False, 0)
+        card.pack_start(_row("Gateway padrão", info["gateway"]), False, False, 0)
+        card.pack_start(_row("DNS", info["dns"]), False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        # Ações
+        card2 = _card()
+        arow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        arow.get_style_context().add_class("row-item")
+        albl = Gtk.Label(label="Configurar conexões", xalign=0)
+        albl.get_style_context().add_class("row-label")
+        arow.pack_start(albl, True, True, 0)
+        btn_nm = Gtk.Button(label="Abrir NM Editor")
+        btn_nm.connect("clicked", lambda _: _popen(["nm-connection-editor"]))
+        arow.pack_end(btn_nm, False, False, 0)
+        card2.pack_start(arow, False, False, 0)
+
+        arow2 = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        arow2.get_style_context().add_class("row-item")
+        albl2 = Gtk.Label(label="Wi-Fi e outras interfaces", xalign=0)
+        albl2.get_style_context().add_class("row-label")
+        arow2.pack_start(albl2, True, True, 0)
+        b2 = Gtk.Label(label="Próxima versão", xalign=1)
+        b2.get_style_context().add_class("badge-placeholder")
+        arow2.pack_end(b2, False, False, 0)
+        card2.pack_start(arow2, False, False, 0)
+        vbox.pack_start(card2, False, False, 0)
+
+        return scroll
+
+
+class HostnamePage:
+    name = "hostname"
+    title = "Hostname"
+
+    def build(self, win):
+        self._win = win
+        scroll, vbox = _page_scroll()
+        hostname = read_hostname()
+
+        vbox.pack_start(_section_header("Hostname", "Nome desta máquina na rede"), False, False, 0)
+
+        card = _card()
+
+        # Valor atual
+        card.pack_start(_row("Hostname atual", hostname), False, False, 0)
+
+        # Linha de edição
+        erow = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        erow.get_style_context().add_class("row-item")
+        elbl = Gtk.Label(label="Novo hostname (letras, números, hífen — máx. 63 chars):", xalign=0)
+        elbl.get_style_context().add_class("row-value")
+        erow.pack_start(elbl, False, False, 0)
+
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._entry = Gtk.Entry()
+        self._entry.set_placeholder_text("ex: meu-pc")
+        self._entry.set_max_length(63)
+        hbox.pack_start(self._entry, True, True, 0)
+
+        btn = Gtk.Button(label="Aplicar")
+        btn.get_style_context().add_class("action")
+        btn.connect("clicked", self._apply_hostname)
+        hbox.pack_end(btn, False, False, 0)
+        erow.pack_start(hbox, False, False, 0)
+        card.pack_start(erow, False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        return scroll
+
+    def _apply_hostname(self, btn):
+        new_host = self._entry.get_text().strip()
+        if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$', new_host):
+            _show_error(self._win, "Hostname inválido.\nUse apenas letras, números e hífen. Não comece nem termine com hífen.")
+            return
+        if not _show_confirm(self._win, f"Alterar o hostname para:\n\n  {new_host}\n\nEsta ação exige sua senha."):
+            return
+        rc = _pkexec(HELPER_HOSTNAME, new_host)
+        if rc == 0:
+            self._entry.set_text("")
+            dlg = Gtk.MessageDialog(
+                transient_for=self._win, modal=True,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text=f"Hostname alterado para: {new_host}\n\nReinicie para aplicar completamente."
+            )
+            dlg.run()
+            dlg.destroy()
+        else:
+            _show_error(self._win, "Falha ao alterar hostname.\nVerifique permissões ou tente novamente.")
+
+
+class DateTimePage:
+    name = "datetime"
+    title = "Data e Hora"
+
+    def build(self, win):
+        self._win = win
+        scroll, vbox = _page_scroll()
+        info = read_datetime_info()
+
+        vbox.pack_start(_section_header("Data e Hora", "Fuso horário e sincronização NTP"), False, False, 0)
+
+        # Info
+        ntp_badge = ("● Ativo", "badge-ok") if info["ntp_ok"] else ("● Inativo", "badge-warn")
+        card = _card()
+        card.pack_start(_row("Data e Hora", info["datetime"]), False, False, 0)
+        card.pack_start(_row("Fuso Horário", info["timezone"]), False, False, 0)
+        card.pack_start(_row("Sincronização NTP", badge=ntp_badge), False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        # Ação NTP
+        card2 = _card()
+        nrow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        nrow.get_style_context().add_class("row-item")
+        nlbl = Gtk.Label(label="Sincronizar relógio com NTP", xalign=0)
+        nlbl.get_style_context().add_class("row-label")
+        nrow.pack_start(nlbl, True, True, 0)
+        icon_label = "Desativar NTP" if info["ntp_ok"] else "Ativar NTP"
+        btn_ntp = Gtk.Button(label=icon_label)
+        if not info["ntp_ok"]:
+            btn_ntp.get_style_context().add_class("action")
+        btn_ntp.connect("clicked", self._toggle_ntp, info["ntp_ok"])
+        nrow.pack_end(btn_ntp, False, False, 0)
+        card2.pack_start(nrow, False, False, 0)
+
+        # Placeholder: fuso horário
+        card2.pack_start(_row("Alterar fuso horário", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        vbox.pack_start(card2, False, False, 0)
+
+        return scroll
+
+    def _toggle_ntp(self, btn, currently_active):
+        action = "off" if currently_active else "on"
+        verb = "desativar" if currently_active else "ativar"
+        if not _show_confirm(self._win, f"Deseja {verb} a sincronização NTP?\n\nEsta ação exige sua senha."):
+            return
+        rc = _pkexec(HELPER_NTP, action)
+        if rc != 0:
+            _show_error(self._win, "Falha ao alterar NTP.\nVerifique permissões.")
+
+
+class PowerPage:
+    name = "power"
+    title = "Energia"
+
+    def build(self, win):
+        self._win = win
+        scroll, vbox = _page_scroll()
+        info = read_power_info()
+
+        vbox.pack_start(_section_header("Energia", "Configurações de gerenciamento de energia"), False, False, 0)
+
+        # Info do sistema
+        card = _card()
+        card.pack_start(_row("Governador CPU", info["governor"]), False, False, 0)
+        card.pack_start(_row("Bateria", info["acpi"] if info["has_battery"] else "Sem bateria detectada"), False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        # Ações de sessão
+        card2 = _card()
+        card2.pack_start(_row("Suspender sistema", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        card2.pack_start(_row("Hibernar sistema", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        vbox.pack_start(card2, False, False, 0)
+
+        # Menu de energia da shell (ação já funcional)
+        card3 = _card()
+        prow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        prow.get_style_context().add_class("row-item")
+        plbl = Gtk.Label(label="Menu de energia do sistema", xalign=0)
+        plbl.get_style_context().add_class("row-label")
+        prow.pack_start(plbl, True, True, 0)
+        btn_power = Gtk.Button(label="Abrir")
+        btn_power.connect("clicked", lambda _: _popen(["/usr/local/bin/flavos-power"]))
+        prow.pack_end(btn_power, False, False, 0)
+        card3.pack_start(prow, False, False, 0)
+
+        # Fallback para configurações avançadas do xfce4-power-manager
+        pm_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        pm_row.get_style_context().add_class("row-item")
+        pm_lbl = Gtk.Label(label="Configurações avançadas de energia", xalign=0)
+        pm_lbl.get_style_context().add_class("row-label")
+        pm_row.pack_start(pm_lbl, True, True, 0)
+        btn_pm = Gtk.Button(label="Abrir gerenciador")
+        btn_pm.connect("clicked", lambda _: _popen(["xfce4-power-manager-settings"]))
+        pm_row.pack_end(btn_pm, False, False, 0)
+        card3.pack_start(pm_row, False, False, 0)
+        vbox.pack_start(card3, False, False, 0)
+
+        return scroll
+
+
+class UserPage:
+    name = "user"
+    title = "Usuário"
+
+    def build(self, win):
+        scroll, vbox = _page_scroll()
+        info = read_user_info()
+
+        vbox.pack_start(_section_header("Usuário", "Conta de usuário local"), False, False, 0)
+
+        card = _card()
+        card.pack_start(_row("Nome de Usuário", info["user"]), False, False, 0)
+        card.pack_start(_row("UID", info["uid"]), False, False, 0)
+        card.pack_start(_row("Shell padrão", info["shell"]), False, False, 0)
+        card.pack_start(_row("Grupos", info["groups"]), False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        card2 = _card()
+        card2.pack_start(_row("Alterar senha", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        card2.pack_start(_row("Avatar de usuário", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        vbox.pack_start(card2, False, False, 0)
+
+        return scroll
+
+
+class SessionPage:
+    name = "session"
+    title = "Sessão"
+
+    def build(self, win):
+        scroll, vbox = _page_scroll()
+
+        wm = _shell(["bash", "-c", "echo ${WINDOW_MANAGER:-Openbox}"]) or "Openbox"
+        compositor = "Picom"
+
+        vbox.pack_start(_section_header("Sessão", "Componentes da shell gráfica"), False, False, 0)
+
+        card = _card()
+        card.pack_start(_row("Gerenciador de Janelas", wm, badge=("● Ativo", "badge-ok")), False, False, 0)
+        card.pack_start(_row("Compositor", compositor, badge=("● Ativo", "badge-ok")), False, False, 0)
+        card.pack_start(_row("Painel (Taskbar)", "tint2", badge=("● Ativo", "badge-ok")), False, False, 0)
+        card.pack_start(_row("Notificações", "dunst", badge=("● Ativo", "badge-ok")), False, False, 0)
+        vbox.pack_start(card, False, False, 0)
+
+        card2 = _card()
+        card2.pack_start(_row("Sessão Wayland", badge=("Não disponível nesta fase", "badge-placeholder")), False, False, 0)
+        card2.pack_start(_row("Múltiplos monitores", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        vbox.pack_start(card2, False, False, 0)
+
+        return scroll
+
+
+# ---------------------------------------------------------------------------
+# Janela principal
+# ---------------------------------------------------------------------------
+PAGES = [
+    AboutPage(),
+    AppearancePage(),
+    SessionPage(),
+    NetworkPage(),
+    HostnamePage(),
+    DateTimePage(),
+    PowerPage(),
+    UserPage(),
+]
 
 
 class FlavosSettings(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_title("Flavos Settings")
-        self.set_default_size(720, 520)
+        self.set_default_size(840, 580)
+        self.set_icon_name("preferences-system")
 
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(CSS_DATA)
@@ -145,167 +737,32 @@ class FlavosSettings(Gtk.ApplicationWindow):
             Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.add(hbox)
 
-        self.sidebar = Gtk.StackSidebar()
         self.stack = Gtk.Stack()
         self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        self.stack.set_transition_duration(150)
+        self.stack.set_transition_duration(100)
 
+        self.sidebar = Gtk.StackSidebar()
         self.sidebar.set_stack(self.stack)
-        self.sidebar.set_size_request(200, -1)
 
         hbox.pack_start(self.sidebar, False, False, 0)
         hbox.pack_start(self.stack, True, True, 0)
 
-        self.build_about_page()
-        self.build_network_page()
-        self.build_user_page()
-        self.build_hostname_page()
-        self.build_datetime_page()
-        self.build_power_page()
-
-    def create_page_layout(self, title):
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        vbox.set_margin_top(32)
-        vbox.set_margin_bottom(32)
-        vbox.set_margin_start(32)
-        vbox.set_margin_end(32)
-
-        lbl_title = Gtk.Label(label=title, xalign=0)
-        lbl_title.get_style_context().add_class("title")
-        vbox.pack_start(lbl_title, False, False, 0)
-
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        vbox.pack_start(content, False, False, 0)
-
-        scroll.add(vbox)
-        return scroll, content
-
-    def _info_card(self, content, info_pairs):
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        card.get_style_context().add_class("card")
-
-        for k, v in info_pairs:
-            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            lbl_k = Gtk.Label(label=f"<b>{k}</b>", use_markup=True, xalign=0)
-            lbl_k.set_size_request(160, -1)
-            lbl_v = Gtk.Label(label=v, xalign=0)
-            lbl_v.set_line_wrap(True)
-            lbl_v.set_max_width_chars(50)
-            row.pack_start(lbl_k, False, False, 0)
-            row.pack_start(lbl_v, True, True, 0)
-            card.pack_start(row, False, False, 6)
-
-        content.pack_start(card, False, False, 0)
-        return card
-
-    def build_about_page(self):
-        page, content = self.create_page_layout("Sobre o Sistema")
-        kernel = shell_run("uname -r")
-        version = shell_run("grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d'\"' -f2")
-        ram = shell_run("free -h | awk '/^Mem:/ {print $2}'")
-        uptime = shell_run("uptime -p")
-        self._info_card(content, [
-            ("Sistema:", version or "Flavos OS 0.1.0-rc1"),
-            ("Kernel:", kernel),
-            ("Memória:", ram),
-            ("Uptime:", uptime),
-        ])
-        self.stack.add_titled(page, "about", "Sobre")
-
-    def build_network_page(self):
-        page, content = self.create_page_layout("Rede")
-        ip_addr = shell_run("ip -o -4 addr show | awk '!/lo/{print $4}' | cut -d/ -f1 | head -1")
-        route = shell_run("ip route show default | awk '{print $3}' | head -1")
-        self._info_card(content, [
-            ("IPv4:", ip_addr or "Desconectado"),
-            ("Gateway:", route or "N/A"),
-        ])
-        btn = Gtk.Button(label="Reiniciar Rede")
-        btn.connect("clicked", lambda _: subprocess.Popen(
-            ["sudo", "systemctl", "restart", "systemd-networkd"]))
-        content.pack_start(btn, False, False, 16)
-        lbl = Gtk.Label(label="Requer credenciais de administrador.", xalign=0)
-        lbl.get_style_context().add_class("subtitle")
-        content.pack_start(lbl, False, False, 0)
-        self.stack.add_titled(page, "network", "Rede")
-
-    def build_user_page(self):
-        page, content = self.create_page_layout("Conta de Usuário")
-        user = shell_run("whoami")
-        groups = shell_run("groups")
-        self._info_card(content, [
-            ("Usuário:", user),
-            ("Grupos:", groups),
-        ])
-        btn = Gtk.Button(label="Alterar Senha")
-        btn.set_sensitive(False)
-        content.pack_start(btn, False, False, 16)
-        lbl = Gtk.Label(label="Disponível em versão futura.", xalign=0)
-        lbl.get_style_context().add_class("subtitle")
-        content.pack_start(lbl, False, False, 0)
-        self.stack.add_titled(page, "user", "Usuário")
-
-    def build_hostname_page(self):
-        page, content = self.create_page_layout("Identidade da Máquina")
-        hostname = shell_run("cat /etc/hostname")
-        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        card.get_style_context().add_class("card")
-        lbl = Gtk.Label(label="<b>Hostname:</b>", use_markup=True, xalign=0)
-        entry = Gtk.Entry()
-        entry.set_text(hostname)
-        entry.set_sensitive(False)
-        btn = Gtk.Button(label="Aplicar")
-        btn.set_sensitive(False)
-        card.pack_start(lbl, False, False, 0)
-        card.pack_start(entry, False, False, 4)
-        card.pack_start(btn, False, False, 4)
-        content.pack_start(card, False, False, 0)
-        lbl_note = Gtk.Label(label="Disponível em versão futura.", xalign=0)
-        lbl_note.get_style_context().add_class("subtitle")
-        content.pack_start(lbl_note, False, False, 8)
-        self.stack.add_titled(page, "hostname", "Hostname")
-
-    def build_datetime_page(self):
-        page, content = self.create_page_layout("Data e Hora")
-        now = shell_run("date '+%d/%m/%Y %H:%M:%S'")
-        tz = shell_run("timedatectl 2>/dev/null | awk '/Time zone:/{print $3}'")
-        self._info_card(content, [
-            ("Data e Hora:", now),
-            ("Fuso Horário:", tz or "N/A"),
-        ])
-        btn = Gtk.Button(label="Sincronizar com NTP")
-        btn.set_sensitive(False)
-        content.pack_start(btn, False, False, 16)
-        lbl = Gtk.Label(label="Disponível em versão futura.", xalign=0)
-        lbl.get_style_context().add_class("subtitle")
-        content.pack_start(lbl, False, False, 0)
-        self.stack.add_titled(page, "datetime", "Data e Hora")
-
-    def build_power_page(self):
-        page, content = self.create_page_layout("Energia e Sessão")
-        lbl = Gtk.Label(label="Gerenciado pela shell do sistema:", xalign=0)
-        lbl.get_style_context().add_class("subtitle")
-        content.pack_start(lbl, False, False, 0)
-        btn = Gtk.Button(label="Abrir Menu de Energia")
-        btn.connect("clicked", lambda _: subprocess.Popen(["/usr/local/bin/flavos-power"]))
-        content.pack_start(btn, False, False, 12)
-        self.stack.add_titled(page, "power", "Energia")
+        for page in PAGES:
+            widget = page.build(self)
+            self.stack.add_titled(widget, page.name, page.title)
 
 
 class Application(Gtk.Application):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, application_id="org.flavos.Settings", **kwargs)
+    def __init__(self):
+        super().__init__(application_id="org.flavos.Settings")
         self.window = None
 
     def do_activate(self):
         if not self.window:
-            self.window = FlavosSettings(application=self, title="Flavos Settings")
+            self.window = FlavosSettings(application=self)
         self.window.show_all()
         self.window.present()
 

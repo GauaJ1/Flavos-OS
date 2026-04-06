@@ -91,8 +91,16 @@ gir1.2-gtk-3.0
 dunst
 libnotify-bin
 alsa-utils
+pulseaudio
+pulseaudio-utils
 network-manager
 network-manager-gnome
 volumeicon-alsa
 xfce4-power-manager
 xfce4-clipman
+
+# Sistema de Controle de Energia e Bateria (Etapa 10D)
+acpi
+
+# Polkit para helpers privilegiados (Etapa 10D)
+policykit-1

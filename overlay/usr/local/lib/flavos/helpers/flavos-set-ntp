@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Flavos OS — Helper privilegiado: controle de NTP
+# Executado via pkexec. Escopo restrito: timedatectl set-ntp.
+# Argumento: "on" ou "off".
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    echo "Uso: flavos-set-ntp {on|off}" >&2
+    exit 1
+fi
+
+ARG="$1"
+
+case "$ARG" in
+    on|true|1)
+        exec timedatectl set-ntp true
+        ;;
+    off|false|0)
+        exec timedatectl set-ntp false
+        ;;
+    *)
+        echo "ERRO: Argumento inválido. Use 'on' ou 'off'." >&2
+        exit 2
+        ;;
+esac

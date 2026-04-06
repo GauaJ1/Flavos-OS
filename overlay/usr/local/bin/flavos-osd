@@ -1,94 +1,163 @@
 #!/usr/bin/env python3
-# Flavos OS — Shell OSD v3 (corrigido)
-# Componente visual PRÓPRIO da shell, sem dunst.
-# Janela GTK efêmera, posicionada acima do painel.
+# Flavos OS — Shell OSD v4
+# Janela GTK popup efêmera. Fundo sólido, sem RGBA (evita artefatos de compositor).
+# Volume: tenta pactl (PulseAudio/PipeWire), fallback para amixer (ALSA).
 
 import gi
 import sys
 import subprocess
 import re
+
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 
+# --- Design Tokens -------------------------------------------------------
+# Fundo sólido — NÃO usa RGBA. O Picom aplica blur/shadow independentemente.
 CSS = b"""
 window {
-    background-color: #0D1017;
-    border: 1px solid #272D3D;
-    border-radius: 12px;
+    background-color: #1C2030;
+    border-radius: 14px;
 }
-label {
-    color: #E8ECF4;
-    background-color: transparent;
+.osd-box {
+    padding: 20px 24px 18px 24px;
+    border: 1px solid #2E3652;
+    border-radius: 14px;
+    background-color: #1C2030;
 }
-.osd-title {
+.osd-label {
     font-size: 10px;
     font-weight: 700;
-    color: #8891A5;
+    letter-spacing: 1px;
+    color: #5A6480;
 }
 .osd-value {
-    font-size: 26px;
-    font-weight: 700;
+    font-size: 36px;
+    font-weight: 800;
     color: #E8ECF4;
+    margin-top: 2px;
 }
 .osd-muted {
-    font-size: 26px;
-    font-weight: 700;
-    color: #505872;
+    font-size: 36px;
+    font-weight: 800;
+    color: #3A4560;
+    margin-top: 2px;
+}
+progressbar {
+    margin-top: 10px;
 }
 progressbar trough {
-    background-color: #1C2030;
-    border-radius: 3px;
-    min-height: 5px;
+    background-color: #272D3D;
+    border-radius: 4px;
+    min-height: 6px;
+    border: none;
 }
 progressbar progress {
     background-color: #4B8BF5;
-    border-radius: 3px;
-    min-height: 5px;
+    border-radius: 4px;
+    min-height: 6px;
+    border: none;
+}
+.osd-muted-bar progress {
+    background-color: #2E3652;
 }
 """
 
 OSD_TIMEOUT_MS = 1800
+# -------------------------------------------------------------------------
 
 
-def get_volume():
-    """Retorna (nível 0-100, is_muted). Retorna (-1, False) se sem áudio."""
+def _run(cmd):
     try:
-        out = subprocess.check_output(
-            ["amixer", "sget", "Master"],
-            text=True, stderr=subprocess.DEVNULL, timeout=2
-        )
-        vol_match = re.search(r'\[(\d+)%\]', out)
-        if not vol_match:
-            return -1, False
-        muted = '[off]' in out
-        return int(vol_match.group(1)), muted
-    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
-        return -1, False
+        return subprocess.check_output(
+            cmd, text=True, stderr=subprocess.DEVNULL, timeout=2
+        ).strip()
+    except Exception:
+        return ""
+
+
+# --- Volume backend: pactl first, amixer fallback ------------------------
+def get_volume():
+    """Retorna (level 0-100, is_muted). (-1, False) se indisponível."""
+    # 1. PulseAudio / PipeWire via pactl
+    out = _run(["pactl", "get-sink-volume", "@DEFAULT_SINK@"])
+    if out:
+        match = re.search(r'(\d+)%', out)
+        if match:
+            vol = int(match.group(1))
+            mute_out = _run(["pactl", "get-sink-mute", "@DEFAULT_SINK@"])
+            muted = "yes" in mute_out.lower()
+            return vol, muted
+
+    # 2. ALSA via amixer
+    out = _run(["amixer", "sget", "Master"])
+    if out:
+        match = re.search(r'\[(\d+)%\]', out)
+        if match:
+            vol = int(match.group(1))
+            muted = '[off]' in out
+            return vol, muted
+
+    return -1, False
 
 
 def set_volume(delta=0, toggle_mute=False):
+    """Ajusta volume. Usa pactl primeiro, amixer como fallback."""
+    # PulseAudio / PipeWire
+    try:
+        if toggle_mute:
+            subprocess.run(
+                ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+                stderr=subprocess.DEVNULL, timeout=2, check=False
+            )
+        elif delta > 0:
+            subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"+{abs(delta)}%"],
+                stderr=subprocess.DEVNULL, timeout=2, check=False
+            )
+            # Re-garante unmute ao subir
+            subprocess.run(
+                ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"],
+                stderr=subprocess.DEVNULL, timeout=2, check=False
+            )
+        elif delta < 0:
+            subprocess.run(
+                ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"-{abs(delta)}%"],
+                stderr=subprocess.DEVNULL, timeout=2, check=False
+            )
+            subprocess.run(
+                ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"],
+                stderr=subprocess.DEVNULL, timeout=2, check=False
+            )
+        # Se pactl funcionou voltamos
+        if _run(["pactl", "get-sink-volume", "@DEFAULT_SINK@"]):
+            return
+    except Exception:
+        pass
+
+    # Fallback: amixer
     try:
         if toggle_mute:
             subprocess.run(
                 ["amixer", "-q", "sset", "Master", "toggle"],
-                stderr=subprocess.DEVNULL, timeout=2
+                stderr=subprocess.DEVNULL, timeout=2, check=False
             )
         elif delta > 0:
             subprocess.run(
                 ["amixer", "-q", "sset", "Master", f"{abs(delta)}%+", "unmute"],
-                stderr=subprocess.DEVNULL, timeout=2
+                stderr=subprocess.DEVNULL, timeout=2, check=False
             )
         elif delta < 0:
             subprocess.run(
                 ["amixer", "-q", "sset", "Master", f"{abs(delta)}%-", "unmute"],
-                stderr=subprocess.DEVNULL, timeout=2
+                stderr=subprocess.DEVNULL, timeout=2, check=False
             )
     except Exception:
         pass
+# -------------------------------------------------------------------------
 
 
 class ShellOSD(Gtk.Window):
-    def __init__(self, title_text, value_text, fraction=-1.0, is_muted=False, is_unavailable=False):
+    def __init__(self, label_text, value_text, fraction=-1.0, is_muted=False):
         super().__init__(type=Gtk.WindowType.POPUP)
         self.set_decorated(False)
         self.set_skip_taskbar_hint(True)
@@ -96,55 +165,50 @@ class ShellOSD(Gtk.Window):
         self.set_keep_above(True)
         self.set_accept_focus(False)
         self.set_resizable(False)
+        self.set_name("FlavosOSD")
 
-        self.set_app_paintable(True)
-        screen = self.get_screen()
-        visual = screen.get_rgba_visual()
-        if visual and screen.is_composited():
-            self.set_visual(visual)
+        # WM_CLASS para regras do picom
+        self.set_wmclass("flavos-osd", "FlavosOSD")
 
-        width = 220
-        # Fix deprecation limit and positioning
-        display = Gdk.Display.get_default()
-        monitor = display.get_primary_monitor()
-        if not monitor:
-            monitor = display.get_monitor(0)
-        geometry = monitor.get_geometry()
-        sw = geometry.width
-        sh = geometry.height
-        # Centralizado horizontalmente, 100px acima do painel (42px)
-        self.move((sw - width) // 2, sh - 42 - 100 - 20)
-        self.set_default_size(width, 1)
-
+        # Aplicar CSS
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(CSS)
         Gtk.StyleContext.add_provider_for_screen(
-            screen, css_provider,
+            Gdk.Screen.get_default(), css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        vbox.set_margin_top(16)
-        vbox.set_margin_bottom(16)
-        vbox.set_margin_start(20)
-        vbox.set_margin_end(20)
-        self.add(vbox)
+        # Posicionamento: centro horizontal, 160px acima do painel (42px)
+        width = 240
+        display = Gdk.Display.get_default()
+        monitor = display.get_primary_monitor() or display.get_monitor(0)
+        geo = monitor.get_geometry()
+        x = geo.x + (geo.width - width) // 2
+        y = geo.y + geo.height - 42 - 160
+        self.move(x, y)
+        self.set_default_size(width, 1)
 
-        lbl_title = Gtk.Label(label=title_text.upper(), xalign=0)
-        lbl_title.get_style_context().add_class("osd-title")
-        vbox.pack_start(lbl_title, False, False, 0)
+        # Layout
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        outer.get_style_context().add_class("osd-box")
+        self.add(outer)
+
+        lbl_label = Gtk.Label(label=label_text.upper(), xalign=0)
+        lbl_label.get_style_context().add_class("osd-label")
+        outer.pack_start(lbl_label, False, False, 0)
 
         lbl_value = Gtk.Label(label=value_text, xalign=0)
-        if is_muted:
-            lbl_value.get_style_context().add_class("osd-muted")
-        else:
-            lbl_value.get_style_context().add_class("osd-value")
-        vbox.pack_start(lbl_value, False, False, 0)
+        lbl_value.get_style_context().add_class(
+            "osd-muted" if is_muted else "osd-value"
+        )
+        outer.pack_start(lbl_value, False, False, 0)
 
         if fraction >= 0:
             bar = Gtk.ProgressBar()
             bar.set_fraction(max(0.0, min(1.0, fraction)))
-            vbox.pack_start(bar, False, False, 2)
+            if is_muted:
+                bar.get_style_context().add_class("osd-muted-bar")
+            outer.pack_start(bar, False, False, 0)
 
         GLib.timeout_add(OSD_TIMEOUT_MS, self._dismiss)
 
@@ -154,21 +218,25 @@ class ShellOSD(Gtk.Window):
         return False
 
 
-def show_volume_osd():
-    vol, muted = get_volume()
-    if vol < 0:
-        osd = ShellOSD("Volume", "—", is_unavailable=True)
-    elif muted:
-        osd = ShellOSD("Volume", "Mudo", fraction=vol / 100.0, is_muted=True)
-    else:
-        osd = ShellOSD("Volume", f"{vol}%", fraction=vol / 100.0)
+def show_osd(label, value, fraction=-1.0, is_muted=False):
+    osd = ShellOSD(label, value, fraction=fraction, is_muted=is_muted)
     osd.show_all()
     Gtk.main()
 
 
+def show_volume_osd():
+    vol, muted = get_volume()
+    if vol < 0:
+        show_osd("Volume", "—")
+    elif muted:
+        show_osd("Volume", "Mudo", fraction=vol / 100.0, is_muted=True)
+    else:
+        show_osd("Volume", f"{vol}%", fraction=vol / 100.0)
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Uso: flavos-osd {volume|volume-up|volume-down|volume-mute|brightness}")
+        print("Uso: flavos-osd {volume|volume-up|volume-down|volume-mute}")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -184,9 +252,7 @@ def main():
         set_volume(toggle_mute=True)
         show_volume_osd()
     elif cmd == "brightness":
-        osd = ShellOSD("Brilho", "—", is_unavailable=True)
-        osd.show_all()
-        Gtk.main()
+        show_osd("Brilho", "—")
     else:
         print(f"Comando desconhecido: {cmd}")
         sys.exit(1)

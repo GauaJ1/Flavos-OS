@@ -79,6 +79,14 @@ trap cleanup EXIT
 echo "[2/6] Copiando rootfs para partição root..."
 cp -a "${ROOTFS}/"* "$MNT_ROOT/"
 
+# Garantir permissões corretas nos helpers privilegiados (pkexec exige root:root + 0755)
+HELPERS_DIR="${MNT_ROOT}/usr/local/lib/flavos/helpers"
+if [[ -d "$HELPERS_DIR" ]]; then
+    chown root:root "${HELPERS_DIR}/"* 2>/dev/null || true
+    chmod 0755 "${HELPERS_DIR}/"*       2>/dev/null || true
+    echo "  Helpers privilegiados: permissões aplicadas"
+fi
+
 # --- Substituir PARTUUIDs no fstab ---
 echo "[3/6] Configurando fstab com PARTUUIDs reais..."
 sed -i "s|__PARTUUID_ROOT__|${ROOT_PARTUUID}|g" "${MNT_ROOT}/etc/fstab"

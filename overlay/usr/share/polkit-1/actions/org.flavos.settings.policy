@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+
+<!--
+  Flavos OS — Política de autorização para helpers privilegiados do Settings.
+  Apenas os helpers listados abaixo são cobertos por esta política.
+  Scope: alteração de hostname e controle de NTP.
+-->
+<policyconfig>
+
+  <vendor>Flavos OS</vendor>
+  <vendor_url>https://github.com/GauaJ1/Flavos-OS</vendor_url>
+
+  <action id="org.flavos.set-hostname">
+    <description>Alterar o hostname da máquina</description>
+    <message>Informe sua senha para alterar o hostname.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/flavos/helpers/flavos-set-hostname</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+  <action id="org.flavos.set-ntp">
+    <description>Ativar ou desativar sincronização de horário via NTP</description>
+    <message>Informe sua senha para alterar a configuração de NTP.</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/flavos/helpers/flavos-set-ntp</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

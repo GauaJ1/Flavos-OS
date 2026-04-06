@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Flavos OS — Helper privilegiado: alteração de hostname
+# Executado via pkexec. Escopo restrito: apenas hostnamectl.
+# Validação: apenas letras, números e hífen. Máximo 63 chars (RFC 1123).
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    echo "Uso: flavos-set-hostname <novo-hostname>" >&2
+    exit 1
+fi
+
+HOSTNAME="$1"
+
+# Validação estrita: RFC 1123 label
+if [[ ! "$HOSTNAME" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$ ]]; then
+    echo "ERRO: Hostname inválido. Use apenas letras, números e hífen (máx 63 chars)." >&2
+    exit 2
+fi
+
+exec hostnamectl set-hostname "$HOSTNAME"
