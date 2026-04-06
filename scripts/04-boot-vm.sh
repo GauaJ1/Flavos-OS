@@ -92,49 +92,42 @@ case "$DISPLAY_MODE" in
         ;;
 esac
 
-# ----------------- FIX DO PXE (LAB MODE) -----------------
-# O QEMU armazena o caminho PCIe do último boot na OVMF_VARS.
-# Quando alteramos Rede ou Disco, a topologia muda, a BIOS não acha a partição EFI original e cai no PXE.
-# Para evitar isso e garantir flexibilidade, resetamos a NVRAM se o usuário pedir topologia exótica.
-IS_LAB=false
-if [[ "$DISK_BUS" != "virtio" ]] || [[ "$NET_MODEL" != "virtio" ]] || [[ -n "$DUMMY_DISK" ]] || [[ ! -f "$OVMF_VARS" ]]; then
-    IS_LAB=true
-    if [[ -f "$SYSTEM_VARS" ]]; then
-        cp "$SYSTEM_VARS" "$OVMF_VARS"
-    else
-        truncate -s 4M "$OVMF_VARS"
-    fi
-fi
-
-if [[ "$IS_LAB" == "true" ]]; then
-    echo "NVRAM:     Efêmera (Resetada para forçar Autodiscovery EFI)"
+# ----------------- FIX DO PXE (LAB MODE) & NVRAM -----------------
+# O QEMU armazena o caminho PCIe na OVMF_VARS. Com bootindex=1 e discos variados, 
+# a topologia UEFI muda severamente e a velha VRAM tentará encontrar PCI root devices fantasmas.
+# Para garantir integridade forense no laboratório, forçamos o boot EFI limpo extraindo uma NVRAM fresca.
+echo "NVRAM:     Limpando cache UEFI (Reset a partir do Template do Host)"
+if [[ -f "$SYSTEM_VARS" ]]; then
+    cp "$SYSTEM_VARS" "$OVMF_VARS"
 else
-    echo "NVRAM:     Persistente ($OVMF_VARS)"
+    # Fallback if no specific vars template
+    rm -f "$OVMF_VARS"
+    truncate -s 4M "$OVMF_VARS"
 fi
 # ---------------------------------------------------------
 
 MACHINE_FLAG="-machine pc" # Default i440fx
-# Configurar Storage (Disk Bus)
+# Configurar Storage (Disk Bus) com bootindex explícito (Impede Fallback pra PXE falso)
 case "$DISK_BUS" in
     virtio)
-        DRIVE_FLAG="-drive file=$IMAGE,format=raw,if=virtio"
+        DRIVE_FLAG="-drive file=$IMAGE,format=raw,if=none,id=drv0 -device virtio-blk-pci,drive=drv0,bootindex=1"
         echo "Storage:   virtio-blk"
         ;;
     ide)
-        DRIVE_FLAG="-drive file=$IMAGE,format=raw,if=ide"
+        DRIVE_FLAG="-drive file=$IMAGE,format=raw,if=none,id=drv0 -device ide-hd,drive=drv0,bootindex=1"
         echo "Storage:   IDE (Legacy)"
         ;;
     ahci)
         MACHINE_FLAG="-machine q35" # Forçar chipset moderno com AHCI nativo
-        DRIVE_FLAG="-drive id=disk0,file=$IMAGE,format=raw,if=none -device ahci,id=ahci -device ide-hd,drive=disk0,bus=ahci.0"
+        DRIVE_FLAG="-drive id=disk0,file=$IMAGE,format=raw,if=none -device ahci,id=ahci -device ide-hd,drive=disk0,bus=ahci.0,bootindex=1"
         echo "Storage:   SATA (AHCI em Chipset Q35)"
         ;;
     nvme)
-        DRIVE_FLAG="-drive id=nvme0,file=$IMAGE,format=raw,if=none -device nvme,serial=1234,drive=nvme0"
+        DRIVE_FLAG="-drive id=nvme0,file=$IMAGE,format=raw,if=none -device nvme,serial=1234,drive=nvme0,bootindex=1"
         echo "Storage:   NVMe"
         ;;
     *)
-        echo "ERRO: --disk-bus $DISK_BUS não suportado (use: virtio, ahci, nvme)"
+        echo "ERRO: --disk-bus $DISK_BUS não suportado (use: virtio, ide, ahci, nvme)"
         exit 1
         ;;
 esac
