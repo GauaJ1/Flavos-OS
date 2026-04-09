@@ -590,7 +590,7 @@ class AppearancePage:
         resp = dialog.run()
         if resp == Gtk.ResponseType.OK:
             path = dialog.get_filename()
-            _popen(["flavos-shellctl", "wallpaper", "apply", path])
+            _popen(["/usr/local/bin/flavos-shellctl", "wallpaper", "apply", path])
 
         dialog.destroy()
 

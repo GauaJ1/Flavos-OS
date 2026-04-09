@@ -5,6 +5,7 @@
 
 import gi
 import sys
+import os
 import subprocess
 import re
 

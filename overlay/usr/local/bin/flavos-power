@@ -4,6 +4,7 @@
 # O CSS sólido fica apenas no box interno (.power-surface).
 
 import gi
+import os
 import subprocess
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
