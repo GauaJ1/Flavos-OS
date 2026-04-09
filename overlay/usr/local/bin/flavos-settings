@@ -590,11 +590,7 @@ class AppearancePage:
         resp = dialog.run()
         if resp == Gtk.ResponseType.OK:
             path = dialog.get_filename()
-            cfg_dir = os.path.expanduser("~/.config/flavos")
-            os.makedirs(cfg_dir, exist_ok=True)
-            with open(os.path.join(cfg_dir, "wallpaper"), "w") as f:
-                f.write(path)
-            _popen(["feh", "--bg-fill", path])
+            _popen(["flavos-shellctl", "wallpaper", "apply", path])
 
         dialog.destroy()
 

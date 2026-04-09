@@ -166,13 +166,21 @@ class ShellOSD(Gtk.Window):
     def __init__(self, label_text, value_text, fraction=-1.0, is_muted=False):
         super().__init__(type=Gtk.WindowType.POPUP)
         self.set_decorated(False)
+        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
+            self.set_app_paintable(True)
+            screen = self.get_screen()
+            visual = screen.get_rgba_visual()
+            if visual and screen.is_composited():
+                self.set_visual(visual)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
-        self.set_keep_above(True)
-        self.set_accept_focus(False)
         self.set_resizable(False)
-        # WM_CLASS para regras do picom (set_wmclass deprecado; usa set_name)
         self.set_name("FlavosOSD")
+
+        # Hacks X11 isolados condicionalmente
+        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
+            self.set_keep_above(True)
+            self.set_accept_focus(False)
 
         # Aplicar CSS
         css_provider = Gtk.CssProvider()

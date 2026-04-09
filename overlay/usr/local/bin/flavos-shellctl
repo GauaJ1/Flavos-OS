@@ -1,0 +1,106 @@
+#!/bin/bash
+# Flavos OS — Shell Control (flavos-shellctl)
+# Camada Agnostica de Middleware para a Interface
+#
+# Evita chamadas diretas como `openbox --exit` ou `feh` nos aplicativos da shell.
+# O frontend Python só conhece este contrato. Subjacente a ele o sistema roteia.
+
+set -e
+
+ACTION="$1"
+SUB_ACTION="$2"
+PARAM="$3"
+
+usage() {
+    echo "Uso: flavos-shellctl <ação> <sub-ação> [parâmetros]"
+    echo ""
+    echo "Sessão:"
+    echo "  session logout   Encerra efetivamente toda a sessão visual (loginctl/pkill)"
+    echo "  session reboot   Reinicia o sistema via systemd"
+    echo "  session poweroff Desliga o sistema via systemd"
+    echo ""
+    echo "Instância (Soft):"
+    echo "  shell restart    Reinicia os middlewares visuais sem deslogar (Tint2, Picom)"
+    echo ""
+    echo "Orquestração Visual:"
+    echo "  wallpaper apply <path>"
+    echo "                   Aplica papel de parede via contrato global da sessão"
+    exit 1
+}
+
+# -----------------
+# CONTROLE DE SESSÃO
+# -----------------
+if [ "$ACTION" = "session" ]; then
+    if [ "$SUB_ACTION" = "logout" ]; then
+        # Usa primariamente o logind (limpo, destrói TTY visual e volta pro LightDM/TTY1)
+        if [ -n "$XDG_SESSION_ID" ]; then
+            loginctl terminate-session "$XDG_SESSION_ID" 2>/dev/null || true
+        fi
+        
+        # Fallback forçado caso logind falhe (mata WM atual, openbox ou wayland compositor)
+        if [ "$XDG_SESSION_TYPE" = "x11" ]; then
+            openbox --exit 2>/dev/null || killall openbox 2>/dev/null || true
+        else
+            # Placeholder genérico pra derrubar shell Wayland primária no futuro
+            kill -TERM -1 2>/dev/null || true 
+        fi
+        exit 0
+
+    elif [ "$SUB_ACTION" = "reboot" ]; then
+        systemctl reboot
+        exit 0
+
+    elif [ "$SUB_ACTION" = "poweroff" ]; then
+        systemctl poweroff
+        exit 0
+    else
+        usage
+    fi
+fi
+
+# -----------------
+# RESTART DE INSTÂNCIA 
+# -----------------
+# Mata e ressurge processos que decoram a sessão atual (Não desloga o usuário)
+if [ "$ACTION" = "shell" ] && [ "$SUB_ACTION" = "restart" ]; then
+    if [ "$XDG_SESSION_TYPE" = "x11" ]; then
+        echo "Reiniciando componentes X11 (Tint2, Picom)..."
+        killall -q tint2 dunst picom || true
+        sleep 0.5
+        picom -b &
+        tint2 &
+        dunst &
+        exit 0
+    else
+        echo "AÇÃO shell restart em WAYLAND AINDA NÃO IMPLEMENTADA."
+        exit 0
+    fi
+fi
+
+# -----------------
+# ORQUESTRAÇÃO VISUAL
+# -----------------
+if [ "$ACTION" = "wallpaper" ] && [ "$SUB_ACTION" = "apply" ]; then
+    if [ -z "$PARAM" ] || [ ! -f "$PARAM" ]; then
+        echo "Erro: Caminho para imagem de wallpaper inválido."
+        exit 1
+    fi
+    
+    # Salva o contrato em cache para reloads futuros
+    mkdir -p "$HOME/.config/flavos"
+    echo "$PARAM" > "$HOME/.config/flavos/wallpaper"
+
+    if [ "$XDG_SESSION_TYPE" = "x11" ] || [ -z "$XDG_SESSION_TYPE" ]; then
+        # O backend responsável passa a ser exclusivo via pcmanfm ou equivalente designado do X11
+        # NOTA: pcmanfm -w seta o wallpaper estático via dbus/pcmanf daemon, sem quebrar o desktop real.
+        pcmanfm -w "$PARAM" 2>/dev/null || true
+    else
+        # Espaço reservado para o compositor Wayland (swaybg / wpaperd)
+        # swaybg -i "$PARAM" -m fill &
+        echo "AÇÃO wallpaper apply pronta pra Wayland backend (stub)."
+    fi
+    exit 0
+fi
+
+usage

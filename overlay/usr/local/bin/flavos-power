@@ -117,14 +117,14 @@ class PowerMenu(Gtk.Window):
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_default_size(300, -1)
         self.set_resizable(False)
-        self.set_keep_above(True)
-
-        # RGBA permite transparência real sob o box (Picom aplica sombra/cantos)
-        self.set_app_paintable(True)
-        screen = self.get_screen()
-        visual = screen.get_rgba_visual()
-        if visual and screen.is_composited():
-            self.set_visual(visual)
+        # Seções de hack do X11 mantidas condicionalmente para o Xorg/Picom
+        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
+            self.set_keep_above(True)
+            self.set_app_paintable(True)
+            screen = self.get_screen()
+            visual = screen.get_rgba_visual()
+            if visual and screen.is_composited():
+                self.set_visual(visual)
 
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(CSS)
@@ -146,10 +146,10 @@ class PowerMenu(Gtk.Window):
         vbox.pack_start(heading, False, False, 0)
 
         actions = [
-            ("Desligar",        "danger", "systemctl poweroff"),
-            ("Reiniciar",       None,     "systemctl reboot"),
+            ("Desligar",        "danger", "flavos-shellctl session poweroff"),
+            ("Reiniciar",       None,     "flavos-shellctl session reboot"),
             ("Suspender",       None,     "systemctl suspend"),
-            ("Encerrar Sessão", None,     'loginctl terminate-session "${XDG_SESSION_ID:-}" 2>/dev/null || openbox --exit'),
+            ("Encerrar Sessão", None,     "flavos-shellctl session logout"),
         ]
 
         for label, css_class, cmd in actions:
