@@ -14,8 +14,9 @@ processes = {}
 # Pilares visuais básicos X11 provisórios
 # No futuro (Ex: Wayland), comandos mudarão suavemente aqui.
 COMMANDS = {
-    "compositor": ["picom", "-b"],  # picom se daemoniza com -b; o processo principal terminará.
-    "panel": ["tint2"],
+    "compositor": ["picom", "-b"],
+    "main_panel": ["flavos-panel"],
+    "legacy_dock": ["tint2"],
     "notifications": ["dunst"],
     "desktop": ["pcmanfm", "--desktop"]
 }

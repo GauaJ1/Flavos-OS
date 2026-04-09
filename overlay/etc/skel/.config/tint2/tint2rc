@@ -31,18 +31,18 @@ background_color = #232838 90
 border_color = #272D3D 0
 
 # ============================================================
-# PAINEL
+# PAINEL TRANSITÓRIO (Apenas Dock/Systray)
 # ============================================================
-panel_items = LTSC
-panel_size = 100% 42
+panel_items = TS
+panel_size = 0 42
 panel_position = bottom center horizontal
-panel_background_id = 1
-panel_margin = 0 0
+panel_background_id = 0
+panel_margin = 0 4
 panel_padding = 8 0 8
 panel_dock = 0
 panel_layer = top
 wm_menu = 0
-panel_window_name = flavos-panel
+panel_window_name = tint2-dock
 
 # ============================================================
 # LAUNCHER

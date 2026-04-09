@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+# Flavos Native Panel (Etapa 11B)
+# Componente Core da Shell. Controlado via flavos-session-daemon.
+# Atua usando Hint de DOCK provisório no X11.
+
+import gi
+import os
+import subprocess
+import time
+from datetime import datetime
+
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk, GLib
+
+CSS = b"""
+#FlavosPanel {
+    background-color: #0D1017;
+    border-bottom: 2px solid #272D3D;
+}
+
+button.panel-btn {
+    background-image: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    color: #8891A5;
+    font-family: Inter, sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border-radius: 8px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    transition: all 0.2s ease-in-out;
+}
+button.panel-btn:hover {
+    background-image: none;
+    background-color: #232838;
+    color: #E8ECF4;
+}
+button.panel-btn:active, button.panel-btn.active {
+    background-image: none;
+    background-color: #4B8BF5;
+    color: #FFFFFF;
+}
+
+button.launcher {
+    color: #FFFFFF;
+}
+
+label.clock {
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #E8ECF4;
+}
+"""
+
+def spawn_async(cmd_list):
+    """Cria um processo de subprocess invisível à engine Gtk para invocar as ferramentas."""
+    subprocess.Popen(cmd_list, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+class FlavosPanel(Gtk.Window):
+    def __init__(self):
+        super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.set_name("FlavosPanel")
+        
+        # Flag de Transição (Regra explícita da 11B: DOCK e RGBA apenas se X11)
+        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
+            self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+            self.set_app_paintable(True)
+            screen = self.get_screen()
+            visual = screen.get_rgba_visual()
+            if visual and screen.is_composited():
+                self.set_visual(visual)
+                
+        self.set_decorated(False)
+        self.set_resizable(False)
+        # Impede que o panel ganhe foco constante prejudicando input das outras apps
+        self.set_accept_focus(False)
+
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+        )
+
+        display = Gdk.Display.get_default()
+        monitor = display.get_primary_monitor() or display.get_monitor(0)
+        geom = monitor.get_geometry()
+
+        # Layout horizontal expandível até o limite do monitor
+        main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.add(main_box)
+
+        # ====== ESQUERDA: LAUNCHER ======
+        left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        btn_launcher = Gtk.Button(label="FLAVOS")
+        btn_launcher.get_style_context().add_class("panel-btn")
+        btn_launcher.get_style_context().add_class("launcher")
+        # Contrato agnostic
+        btn_launcher.connect("clicked", lambda _: spawn_async(["flavos-shellctl", "launcher", "toggle"]))
+        left_box.pack_start(btn_launcher, False, False, 4)
+        
+        main_box.pack_start(left_box, False, False, 8)
+
+        # ====== CENTRO: DATA/HORA ======
+        center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.lbl_clock = Gtk.Label()
+        self.lbl_clock.get_style_context().add_class("clock")
+        center_box.pack_start(self.lbl_clock, True, True, 0)
+        # Fill/Expand central empurra os extremos
+        main_box.set_center_widget(center_box)
+        
+        self.update_clock()
+        GLib.timeout_add_seconds(1, self.update_clock)
+
+        # ====== DIREITA: OPÇÕES / SYSTRAY WRAPPER ======
+        right_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        
+        btn_settings = Gtk.Button()
+        btn_settings.get_style_context().add_class("panel-btn")
+        icon_set = Gtk.Image.new_from_icon_name("emblem-system-symbolic", Gtk.IconSize.MENU)
+        btn_settings.add(icon_set)
+        btn_settings.connect("clicked", lambda _: spawn_async(["flavos-settings"]))
+        
+        btn_power = Gtk.Button()
+        btn_power.get_style_context().add_class("panel-btn")
+        icon_pwr = Gtk.Image.new_from_icon_name("system-shutdown-symbolic", Gtk.IconSize.MENU)
+        btn_power.add(icon_pwr)
+        btn_power.connect("clicked", lambda _: spawn_async(["flavos-power"]))
+        
+        right_box.pack_end(btn_power, False, False, 4)
+        right_box.pack_end(btn_settings, False, False, 0)
+        
+        main_box.pack_end(right_box, False, False, 8)
+
+        # Seta dimensões nativas forçadas
+        self.set_default_size(geom.width, 36)
+        self.move(0, 0)
+
+    def update_clock(self):
+        now = datetime.now()
+        # Formato limpo e profissional
+        self.lbl_clock.set_text(now.strftime("%a %H:%M").upper())
+        return True
+
+
+if __name__ == "__main__":
+    win = FlavosPanel()
+    win.show_all()
+    Gtk.main()

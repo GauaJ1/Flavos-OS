@@ -75,8 +75,15 @@ if [ "$ACTION" = "shell" ] && [ "$SUB_ACTION" = "restart" ]; then
 fi
 
 # -----------------
-# ORQUESTRAÇÃO VISUAL
+# ORQUESTRAÇÃO VISUAL & UI
 # -----------------
+if [ "$ACTION" = "launcher" ]; then
+    if [ "$SUB_ACTION" = "toggle" ] || [ "$SUB_ACTION" = "open" ]; then
+        jgmenu_run 2>/dev/null || true
+        exit 0
+    fi
+fi
+
 if [ "$ACTION" = "wallpaper" ] && [ "$SUB_ACTION" = "apply" ]; then
     if [ -z "$PARAM" ] || [ ! -f "$PARAM" ]; then
         echo "Erro: Caminho para imagem de wallpaper inválido."
