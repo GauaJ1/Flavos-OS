@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+# Flavos OS — Shell Session Daemon v1
+# Mantém os pilares visuais da Shell (Native Shell Core - Etapa 11)
+# Roda via systemd --user no boot grafico.
+
+import subprocess
+import time
+import signal
+import sys
+import os
+
+processes = {}
+
+# Pilares visuais básicos X11 provisórios
+# No futuro (Ex: Wayland), comandos mudarão suavemente aqui.
+COMMANDS = {
+    "compositor": ["picom", "-b"],  # picom se daemoniza com -b; o processo principal terminará.
+    "panel": ["tint2"],
+    "notifications": ["dunst"],
+    "desktop": ["pcmanfm", "--desktop"]
+}
+
+# Tratamento especial: Picom com -b vai dar detach, não podemos supervisionar facilmente via Popen padrão.
+# Neste contexto native, removeremos o `-b` para deixá-lo no foreground atrelado ao nosso daemon:
+COMMANDS["compositor"] = ["picom"]
+
+def spawn(name):
+    """Inicia um node visual se não estiver ativo."""
+    if name in processes and processes[name].poll() is None:
+         return
+    print(f"[flavos-shell] Iniciando node: {name}", flush=True)
+    processes[name] = subprocess.Popen(
+        COMMANDS[name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
+def stop_all():
+    """Mata todos os filhos elegantemente."""
+    print("[flavos-shell] Encerrando nodes supervisionados...", flush=True)
+    for name, p in processes.items():
+        if p.poll() is None:
+            p.terminate()
+            try:
+                p.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                p.kill()
+
+def handle_term(signum, frame):
+    stop_all()
+    sys.exit(0)
+
+# SIGHUP: Limpa processos e reinicia (Soft reload da shell)
+def handle_hup(signum, frame):
+    print("[flavos-shell] Recebido SIGHUP (Reload). Reiniciando nodes...", flush=True)
+    stop_all()
+    for name in COMMANDS:
+        spawn(name)
+
+signal.signal(signal.SIGTERM, handle_term)
+signal.signal(signal.SIGINT, handle_term)
+signal.signal(signal.SIGHUP, handle_hup)
+
+if __name__ == "__main__":
+    print("[flavos-shell] Daemon Ativado. Assumindo a Shell UI...", flush=True)
+    
+    # 1. Spawning inicial
+    for name in COMMANDS:
+        spawn(name)
+    
+    # 2. Watchdog Loop (Sleep interruptível via sinais)
+    while True:
+        try:
+            time.sleep(2)
+        except InterruptedError:
+            # Continua o loop para que os signal handlers ajam suavemente.
+            continue
+            
+        # Revive se algo vital da UI morrer acidentalmente
+        for name in COMMANDS:
+             # poll() retorna None se ainda estive rodando
+             if processes[name].poll() is not None:
+                 print(f"[flavos-shell] Node morta ({name}). Revivendo automaticamente...", flush=True)
+                 spawn(name)

@@ -65,12 +65,8 @@ fi
 # Mata e ressurge processos que decoram a sessão atual (Não desloga o usuário)
 if [ "$ACTION" = "shell" ] && [ "$SUB_ACTION" = "restart" ]; then
     if [ "$XDG_SESSION_TYPE" = "x11" ]; then
-        echo "Reiniciando componentes X11 (Tint2, Picom)..."
-        killall -q tint2 dunst picom || true
-        sleep 0.5
-        picom -b &
-        tint2 &
-        dunst &
+        echo "Reiniciando componentes X11 via systemd UI daemon..."
+        systemctl --user reload-or-restart flavos-shell.service
         exit 0
     else
         echo "AÇÃO shell restart em WAYLAND AINDA NÃO IMPLEMENTADA."

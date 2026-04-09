@@ -1,0 +1,19 @@
+[Unit]
+Description=Flavos OS Native Shell Daemon
+After=graphical-session-pre.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/local/bin/flavos-session-daemon
+# Permite soft reload sem derrubar totalmente via PID
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=3
+
+# Segurança: as variáveis do display devem estar populadas
+Environment=DISPLAY=:0
+Environment=XDG_SESSION_TYPE=x11
+
+[Install]
+WantedBy=x11-wm.target
+WantedBy=default.target

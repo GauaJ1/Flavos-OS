@@ -2,17 +2,13 @@
 # Flavos OS — Shell Visual (Etapa 9B)
 # Lançado pelo openbox-session. Inicializa os componentes visuais.
 
-# 1. Gerenciador do Desktop e Wallpaper (PCManFM)
-pcmanfm --desktop &
+# 1. Delegação da Shell Visial (Native Core 11A)
+# Picom, tint2, pcmanfm e dunst agora nascem e são controlados via systemd.
+systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
+systemctl --user start flavos-shell.service &
 
-# 2. Compositor e Motion Design
-picom -b
-
-# 3. Painel (tint2)
-tint2 &
-
-# 4. Servidor de Notificações (dunst)
-dunst &
+# 2. Serviços de Infraestrutura X11 e Bandeja do Sistema
+# Permanecem aqui de forma provisória enquanto não forem englobados em units independentes.
 
 # 5. Agente de Autorização
 lxpolkit &
