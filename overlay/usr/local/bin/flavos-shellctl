@@ -79,9 +79,13 @@ fi
 # -----------------
 if [ "$ACTION" = "launcher" ]; then
     if [ "$SUB_ACTION" = "toggle" ] || [ "$SUB_ACTION" = "open" ]; then
-        if pgrep -f "/usr/local/bin/flavos-launcher" >/dev/null; then
-            pkill -f "/usr/local/bin/flavos-launcher"
+        # pgrep retorna exit 1 quando não encontra processo
+        # com set -e ativo, precisamos tratar explicitamente
+        if pgrep -f "/usr/local/bin/flavos-launcher" >/dev/null 2>&1; then
+            pkill -f "/usr/local/bin/flavos-launcher" || true
         else
+            # Garantir que DISPLAY está disponível (invocado por Openbox keybind)
+            export DISPLAY="${DISPLAY:-:0}"
             /usr/local/bin/flavos-launcher &
         fi
         exit 0
