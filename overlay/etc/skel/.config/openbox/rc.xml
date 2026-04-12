@@ -56,7 +56,7 @@
     </keybind>
     <!-- Menu Flavos -->
     <keybind key="Super_L">
-      <action name="Execute"><command>jgmenu_run</command></action>
+      <action name="Execute"><command>/usr/local/bin/flavos-shellctl launcher toggle</command></action>
     </keybind>
     <!-- Window management -->
     <keybind key="A-F4">
@@ -88,7 +88,7 @@
   <mouse>
     <context name="Desktop">
       <mousebind button="Right" action="Press">
-        <action name="Execute"><command>jgmenu_run</command></action>
+        <action name="Execute"><command>/usr/local/bin/flavos-shellctl launcher toggle</command></action>
       </mousebind>
     </context>
     <context name="Titlebar">

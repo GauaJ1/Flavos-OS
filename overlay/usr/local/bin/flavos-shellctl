@@ -79,7 +79,11 @@ fi
 # -----------------
 if [ "$ACTION" = "launcher" ]; then
     if [ "$SUB_ACTION" = "toggle" ] || [ "$SUB_ACTION" = "open" ]; then
-        jgmenu_run 2>/dev/null || true
+        if pgrep -f "/usr/local/bin/flavos-launcher" >/dev/null; then
+            pkill -f "/usr/local/bin/flavos-launcher"
+        else
+            /usr/local/bin/flavos-launcher &
+        fi
         exit 0
     fi
 fi

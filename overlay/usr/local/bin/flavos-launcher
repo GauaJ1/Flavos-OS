@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+# Flavos Native Launcher (Etapa 11C)
+# Design Centralizado, efêmero (mata e morre), sem menus em árvore.
+
+import gi
+import os
+import sys
+import subprocess
+
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk, GLib, Gio
+
+CSS = b"""
+#LauncherWindow {
+    background-color: rgba(13, 16, 23, 0.95);
+    border: 1px solid rgba(80, 80, 80, 0.2);
+    border-radius: 12px;
+}
+
+#SearchEntry {
+    font-family: Inter, sans-serif;
+    font-size: 16px;
+    padding: 12px;
+    background-color: #1A1F2B;
+    color: #E8ECF4;
+    border: 1px solid #272D3D;
+    border-radius: 8px;
+    box-shadow: none;
+}
+#SearchEntry:focus {
+    border-color: #4B8BF5;
+}
+
+label.section-title {
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #8891A5;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+/* Base de cards */
+button.app-btn {
+    background-image: none;
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 8px;
+    transition: all 0.15s ease;
+}
+button.app-btn:hover, button.app-btn:focus {
+    background-color: #232838;
+}
+
+label.app-label {
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    color: #E8ECF4;
+    margin-top: 4px;
+}
+
+button.action-btn {
+    background-color: #1A1F2B;
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #E8ECF4;
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    border: 1px solid #272D3D;
+    transition: all 0.15s ease;
+}
+button.action-btn:hover, button.action-btn:focus {
+    background-color: #232838;
+    border-color: #4B8BF5;
+}
+"""
+
+PINNED_APPS = ["flavos-terminal.desktop", "flavos-files.desktop", "flavos-settings.desktop"]
+
+def get_installed_apps():
+    """Retorna lista de dicionarios com Gio.AppInfo."""
+    apps = []
+    for app in Gio.AppInfo.get_all():
+        if app.should_show():
+            apps.append({
+                "name": app.get_display_name() or "",
+                "id": app.get_id(),
+                "icon": app.get_icon(),
+                "appinfo": app
+            })
+    # Remove duplicates by id
+    unique = {}
+    for a in apps:
+        if a["id"] not in unique:
+            unique[a["id"]] = a
+    return sorted(list(unique.values()), key=lambda x: x["name"].lower())
+
+
+class FlavosLauncher(Gtk.Window):
+    def __init__(self):
+        super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.set_name("LauncherWindow")
+        self.set_title("Flavos Launcher")
+        self.set_default_size(700, 560)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_decorated(False)
+        self.set_resizable(False)
+        
+        # Ignorado por gerenciadores tilling/etc e força float
+        self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+        
+        self.set_app_paintable(True)
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual and screen.is_composited():
+            self.set_visual(visual)
+
+        # Eventos vitais
+        self.connect("focus-out-event", self.on_focus_out)
+        self.connect("key-press-event", self.on_key_press)
+
+        # Carrega CSS
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+        )
+
+        self.apps_data = get_installed_apps()
+
+        # Layout Principal
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        main_box.set_margin_top(24)
+        main_box.set_margin_bottom(24)
+        main_box.set_margin_start(24)
+        main_box.set_margin_end(24)
+        self.add(main_box)
+
+        # 1. Busca
+        top_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        main_box.pack_start(top_hbox, False, False, 0)
+
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_name("SearchEntry")
+        self.search_entry.set_placeholder_text("Pesquisar aplicativos e ações...")
+        self.search_entry.connect("search-changed", self.on_search_changed)
+        top_hbox.pack_start(self.search_entry, True, True, 0)
+        
+        # Ações Rápidas integradas
+        btn_lock = Gtk.Button()
+        # Sem icone pronto universal, usando labels padrao ou icon names
+        btn_lock.set_image(Gtk.Image.new_from_icon_name("system-lock-screen-symbolic", Gtk.IconSize.MENU))
+        btn_lock.get_style_context().add_class("action-btn")
+        btn_lock.set_tooltip_text("Bloquear (Super+L)")
+        btn_lock.connect("clicked", lambda _: self.exec_action(["flavos-shellctl", "session", "lock"]))
+        
+        btn_power = Gtk.Button()
+        btn_power.set_image(Gtk.Image.new_from_icon_name("system-shutdown-symbolic", Gtk.IconSize.MENU))
+        btn_power.get_style_context().add_class("action-btn")
+        btn_power.set_tooltip_text("Energia")
+        btn_power.connect("clicked", lambda _: self.exec_action(["flavos-power"]))
+
+        top_hbox.pack_start(btn_lock, False, False, 0)
+        top_hbox.pack_start(btn_power, False, False, 0)
+
+        # 2. Scrolled Area para Conteúdo (Pinados + Apps)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.get_style_context().add_class("launcher-scroll")
+        main_box.pack_start(scroll, True, True, 0)
+
+        self.content_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        scroll.add(self.content_vbox)
+
+        # Box Pinned
+        self.pinned_lbl = Gtk.Label(label="Fixados", xalign=0)
+        self.pinned_lbl.get_style_context().add_class("section-title")
+        self.content_vbox.pack_start(self.pinned_lbl, False, False, 0)
+
+        self.pinned_flow = Gtk.FlowBox()
+        self.pinned_flow.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.pinned_flow.set_max_children_per_line(6)
+        self.pinned_flow.set_column_spacing(8)
+        self.pinned_flow.set_row_spacing(8)
+        self.content_vbox.pack_start(self.pinned_flow, False, False, 0)
+
+        # Box All Apps / Search
+        self.all_lbl = Gtk.Label(label="Todos os Aplicativos", xalign=0)
+        self.all_lbl.get_style_context().add_class("section-title")
+        self.content_vbox.pack_start(self.all_lbl, False, False, 0)
+
+        self.apps_flow = Gtk.FlowBox()
+        self.apps_flow.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.apps_flow.set_max_children_per_line(6)
+        self.apps_flow.set_column_spacing(8)
+        self.apps_flow.set_row_spacing(8)
+        self.apps_flow.set_homogeneous(True)
+        self.content_vbox.pack_start(self.apps_flow, False, False, 0)
+
+        self.populate_grids()
+
+    def populate_grids(self):
+        # Popula Pinned
+        for pid in PINNED_APPS:
+            match = next((a for a in self.apps_data if a["id"].lower() == pid.lower()), None)
+            if match:
+                self.pinned_flow.add(self.create_app_btn(match))
+
+        # Popula Toda a Grade
+        for app in self.apps_data:
+            self.apps_flow.add(self.create_app_btn(app))
+
+        self.pinned_flow.show_all()
+        self.apps_flow.show_all()
+
+    def create_app_btn(self, app_data):
+        btn = Gtk.Button()
+        btn.get_style_context().add_class("app-btn")
+        
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        btn.add(vbox)
+
+        # App Icon
+        icon_w = Gtk.Image()
+        icon = app_data["icon"]
+        if icon:
+            icon_w.set_from_gicon(icon, Gtk.IconSize.DIALOG)
+        else:
+            icon_w.set_from_icon_name("application-x-executable", Gtk.IconSize.DIALOG)
+        icon_w.set_pixel_size(48)
+        vbox.pack_start(icon_w, False, False, 0)
+
+        # App Label
+        lbl = Gtk.Label(label=app_data["name"])
+        lbl.get_style_context().add_class("app-label")
+        lbl.set_ellipsize(max("end", 1)) # fake pango constant
+        from gi.repository import Pango
+        lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        lbl.set_max_width_chars(12)
+        vbox.pack_start(lbl, False, False, 0)
+
+        btn.connect("clicked", lambda _: self.launch_app(app_data["appinfo"]))
+        return btn
+
+    def launch_app(self, appinfo):
+        try:
+            appinfo.launch()
+        except:
+            pass
+        sys.exit(0)
+
+    def exec_action(self, cmd_args):
+        subprocess.Popen(cmd_args)
+        sys.exit(0)
+
+    def on_search_changed(self, entry):
+        term = entry.get_text().lower().strip()
+        
+        if not term:
+            self.pinned_flow.show()
+            self.pinned_lbl.show()
+            self.all_lbl.set_text("Todos os Aplicativos")
+        else:
+            self.pinned_flow.hide()
+            self.pinned_lbl.hide()
+            self.all_lbl.set_text("Resultados da Busca")
+
+        # Refiltra
+        for child in self.apps_flow.get_children():
+            child.destroy()
+            
+        for app in self.apps_data:
+            if not term or term in app["name"].lower():
+                self.apps_flow.add(self.create_app_btn(app))
+        self.apps_flow.show_all()
+
+    def on_focus_out(self, widget, event):
+        sys.exit(0)
+        
+    def on_key_press(self, widget, event):
+        keyval = event.keyval
+        if keyval == Gdk.KEY_Escape:
+            sys.exit(0)
+            
+        # Pular pro painel abaixo usando Seta para Baixo a partir do Search
+        if keyval == Gdk.KEY_Down and self.get_focus() == self.search_entry:
+            if self.pinned_flow.is_visible() and self.pinned_flow.get_children():
+                self.pinned_flow.get_children()[0].get_child().grab_focus()
+                return True
+            elif self.apps_flow.get_children():
+                self.apps_flow.get_children()[0].get_child().grab_focus()
+                return True
+                
+        # Enter direto do search box invoca o primeiro app da lista filtrada
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) and self.get_focus() == self.search_entry:
+            children = self.apps_flow.get_children()
+            if children:
+                # O FlowBox empacota o btn dento de um FlowBoxChild
+                child_btn = children[0].get_child()
+                if child_btn:
+                    child_btn.clicked()
+                return True
+                
+        return False
+
+if __name__ == '__main__':
+    win = FlavosLauncher()
+    win.show_all()
+    # Força captura de foco imediata assim que mapeado
+    win.present()
+    Gtk.main()
