@@ -10,69 +10,85 @@ import subprocess
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio
 
-CSS = b"""
+CSS = """
 #LauncherWindow {
-    background-color: rgba(13, 16, 23, 0.95);
-    border: 1px solid rgba(80, 80, 80, 0.2);
-    border-radius: 12px;
+    background-color: rgba(22, 26, 33, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 }
 
 #SearchEntry {
     font-family: Inter, sans-serif;
-    font-size: 16px;
-    padding: 12px;
-    background-color: #1A1F2B;
+    font-size: 14px;
+    padding: 12px 18px;
+    background-color: transparent;
     color: #E8ECF4;
-    border: 1px solid #272D3D;
-    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
     box-shadow: none;
 }
 #SearchEntry:focus {
-    border-color: #4B8BF5;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-color: rgba(255, 255, 255, 0.02);
 }
 
-label.section-title {
+/* Quick Actions / Pinned (Quadrados Superiores) */
+button.action-btn {
+    background-image: none;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    padding: 16px;
+    transition: all 0.15s ease;
+}
+button.action-btn:hover, button.action-btn:focus {
+    background-color: rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+label.action-label {
     font-family: Inter, sans-serif;
     font-size: 12px;
-    font-weight: 700;
-    color: #8891A5;
-    margin-top: 16px;
-    margin-bottom: 8px;
+    color: #6C7A8C;
+    margin-top: 8px;
 }
 
-/* Base de cards */
+/* App Grid Principal */
 button.app-btn {
     background-image: none;
     background-color: transparent;
     border: none;
-    border-radius: 8px;
-    padding: 8px;
+    border-radius: 16px;
+    padding: 12px;
     transition: all 0.15s ease;
 }
 button.app-btn:hover, button.app-btn:focus {
-    background-color: #232838;
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 label.app-label {
     font-family: Inter, sans-serif;
-    font-size: 13px;
-    color: #E8ECF4;
-    margin-top: 4px;
+    font-size: 12px;
+    color: #8891A5;
+    margin-top: 8px;
 }
 
-button.action-btn {
-    background-color: #1A1F2B;
-    border-radius: 8px;
-    padding: 8px 16px;
-    color: #E8ECF4;
+/* Botão Show All Applications */
+button.show-all-btn {
     font-family: Inter, sans-serif;
-    font-size: 12px;
-    border: 1px solid #272D3D;
+    font-size: 13px;
+    color: #8891A5;
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 10px 24px;
+    margin-top: 16px;
     transition: all 0.15s ease;
 }
-button.action-btn:hover, button.action-btn:focus {
-    background-color: #232838;
-    border-color: #4B8BF5;
+button.show-all-btn:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: #E8ECF4;
 }
 """
 
@@ -122,7 +138,7 @@ class FlavosLauncher(Gtk.Window):
 
         # Carrega CSS
         provider = Gtk.CssProvider()
-        provider.load_from_data(CSS)
+        provider.load_from_data(CSS.encode('utf-8'))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
@@ -130,95 +146,122 @@ class FlavosLauncher(Gtk.Window):
         self.apps_data = get_installed_apps()
 
         # Layout Principal
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        main_box.set_margin_top(24)
-        main_box.set_margin_bottom(24)
-        main_box.set_margin_start(24)
-        main_box.set_margin_end(24)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        main_box.set_margin_top(32)
+        main_box.set_margin_bottom(32)
+        main_box.set_margin_start(32)
+        main_box.set_margin_end(32)
         self.add(main_box)
 
         # 1. Busca
-        top_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        main_box.pack_start(top_hbox, False, False, 0)
+        search_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        main_box.pack_start(search_hbox, False, False, 0)
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_name("SearchEntry")
-        self.search_entry.set_placeholder_text("Pesquisar aplicativos e ações...")
+        self.search_entry.set_placeholder_text("Search apps and settings...")
         self.search_entry.connect("search-changed", self.on_search_changed)
-        top_hbox.pack_start(self.search_entry, True, True, 0)
+        search_hbox.pack_start(self.search_entry, True, True, 0)
         
-        # Ações Rápidas integradas
-        btn_lock = Gtk.Button()
-        # Sem icone pronto universal, usando labels padrao ou icon names
-        btn_lock.set_image(Gtk.Image.new_from_icon_name("system-lock-screen-symbolic", Gtk.IconSize.MENU))
-        btn_lock.get_style_context().add_class("action-btn")
-        btn_lock.set_tooltip_text("Bloquear (Super+L)")
-        btn_lock.connect("clicked", lambda _: self.exec_action(["flavos-shellctl", "session", "lock"]))
-        
-        btn_power = Gtk.Button()
-        btn_power.set_image(Gtk.Image.new_from_icon_name("system-shutdown-symbolic", Gtk.IconSize.MENU))
-        btn_power.get_style_context().add_class("action-btn")
-        btn_power.set_tooltip_text("Energia")
-        btn_power.connect("clicked", lambda _: self.exec_action(["flavos-power"]))
+        # Link discreto extra "All Apps >" nativo
+        btn_all_apps_txt = Gtk.Label(label="All Apps >")
+        btn_all_apps_txt.get_style_context().add_class("action-label")
+        btn_all_apps_txt.set_margin_start(16)
+        search_hbox.pack_start(btn_all_apps_txt, False, False, 0)
 
-        top_hbox.pack_start(btn_lock, False, False, 0)
-        top_hbox.pack_start(btn_power, False, False, 0)
+        # 2. Pinned & Actions (Primeira linha / 5 items da referencia)
+        self.pinned_flow = Gtk.FlowBox()
+        self.pinned_flow.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.pinned_flow.set_max_children_per_line(5)
+        self.pinned_flow.set_min_children_per_line(5)
+        self.pinned_flow.set_column_spacing(16)
+        self.pinned_flow.set_row_spacing(16)
+        self.pinned_flow.set_homogeneous(True)
+        main_box.pack_start(self.pinned_flow, False, False, 0)
 
-        # 2. Scrolled Area para Conteúdo (Pinados + Apps)
+        # 3. Main Grid Apps Restantes (Duas Linhas 10 items da ref)
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scroll.get_style_context().add_class("launcher-scroll")
+        # Altura forcada p/ duas/tres camadas visiveis sem rolar
+        scroll.set_min_content_height(250)
         main_box.pack_start(scroll, True, True, 0)
-
-        self.content_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        scroll.add(self.content_vbox)
-
-        # Box Pinned
-        self.pinned_lbl = Gtk.Label(label="Fixados", xalign=0)
-        self.pinned_lbl.get_style_context().add_class("section-title")
-        self.content_vbox.pack_start(self.pinned_lbl, False, False, 0)
-
-        self.pinned_flow = Gtk.FlowBox()
-        self.pinned_flow.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.pinned_flow.set_max_children_per_line(6)
-        self.pinned_flow.set_column_spacing(8)
-        self.pinned_flow.set_row_spacing(8)
-        self.content_vbox.pack_start(self.pinned_flow, False, False, 0)
-
-        # Box All Apps / Search
-        self.all_lbl = Gtk.Label(label="Todos os Aplicativos", xalign=0)
-        self.all_lbl.get_style_context().add_class("section-title")
-        self.content_vbox.pack_start(self.all_lbl, False, False, 0)
 
         self.apps_flow = Gtk.FlowBox()
         self.apps_flow.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.apps_flow.set_max_children_per_line(6)
-        self.apps_flow.set_column_spacing(8)
-        self.apps_flow.set_row_spacing(8)
+        self.apps_flow.set_max_children_per_line(5)
+        self.apps_flow.set_min_children_per_line(5)
+        self.apps_flow.set_column_spacing(16)
+        self.apps_flow.set_row_spacing(16)
         self.apps_flow.set_homogeneous(True)
-        self.content_vbox.pack_start(self.apps_flow, False, False, 0)
+        scroll.add(self.apps_flow)
+
+        # 4. Show All Applications Bottom Pill
+        self.btn_show_all = Gtk.Button(label="Show All Applications")
+        self.btn_show_all.get_style_context().add_class("show-all-btn")
+        # Centering it perfectly
+        bottom_align = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        bottom_align.pack_start(self.btn_show_all, True, False, 0)
+        main_box.pack_start(bottom_align, False, False, 0)
 
         self.populate_grids()
 
     def populate_grids(self):
-        # Popula Pinned
-        for pid in PINNED_APPS:
-            match = next((a for a in self.apps_data if a["id"].lower() == pid.lower()), None)
-            if match:
-                self.pinned_flow.add(self.create_app_btn(match))
+        # A. Inject Quick Actions no Pinned Flow
+        # Seguindo a foto: Terminal, Settings, Info, Restart, Lock
+        
+        # 1. Pinned App: Terminal
+        term_match = next((a for a in self.apps_data if "terminal" in a["id"].lower()), None)
+        if term_match: self.pinned_flow.add(self.create_grid_btn(term_match, is_action=True))
+        
+        # 2. Pinned App: Settings
+        set_match = next((a for a in self.apps_data if "settings" in a["id"].lower()), None)
+        if set_match: self.pinned_flow.add(self.create_grid_btn(set_match, is_action=True))
+        
+        # 3. Action: Info
+        self.pinned_flow.add(self.create_custom_action("Info", "dialog-information-symbolic", ["flavos-settings"]))
+        
+        # 4. Action: Restart
+        self.pinned_flow.add(self.create_custom_action("Restart", "system-reboot-symbolic", ["flavos-shellctl", "session", "reboot"]))
+        
+        # 5. Action: Lock
+        self.pinned_flow.add(self.create_custom_action("Lock", "system-lock-screen-symbolic", ["flavos-shellctl", "session", "lock"]))
 
-        # Popula Toda a Grade
+        # B. Popula Main Grade de Apps Excluindo os pinados
+        pinned_ids = [a["id"] for a in self.apps_data if ("terminal" in a["id"].lower() or "settings" in a["id"].lower())]
+        
         for app in self.apps_data:
-            self.apps_flow.add(self.create_app_btn(app))
+            if app["id"] not in pinned_ids:
+                self.apps_flow.add(self.create_grid_btn(app, is_action=False))
 
         self.pinned_flow.show_all()
         self.apps_flow.show_all()
-
-    def create_app_btn(self, app_data):
-        btn = Gtk.Button()
-        btn.get_style_context().add_class("app-btn")
         
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+    def create_custom_action(self, label_str, icon_name, cmd_args):
+        btn = Gtk.Button()
+        btn.get_style_context().add_class("action-btn")
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        btn.add(vbox)
+        
+        icon_w = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DIALOG)
+        icon_w.set_pixel_size(32)
+        vbox.pack_start(icon_w, False, False, 0)
+        
+        lbl = Gtk.Label(label=label_str)
+        lbl.get_style_context().add_class("action-label")
+        vbox.pack_start(lbl, False, False, 0)
+        
+        btn.connect("clicked", lambda _: self.exec_action(cmd_args))
+        return btn
+
+    def create_grid_btn(self, app_data, is_action=False):
+        btn = Gtk.Button()
+        # Se for no flowbox de Pinned (Acoes rapidas no mock), usa o css action-btn, senão app-btn
+        css_class = "action-btn" if is_action else "app-btn"
+        lbl_class = "action-label" if is_action else "app-label"
+        btn.get_style_context().add_class(css_class)
+        
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         btn.add(vbox)
 
         # App Icon
@@ -228,12 +271,13 @@ class FlavosLauncher(Gtk.Window):
             icon_w.set_from_gicon(icon, Gtk.IconSize.DIALOG)
         else:
             icon_w.set_from_icon_name("application-x-executable", Gtk.IconSize.DIALOG)
-        icon_w.set_pixel_size(48)
+            
+        icon_w.set_pixel_size(32 if is_action else 48)
         vbox.pack_start(icon_w, False, False, 0)
 
         # App Label
         lbl = Gtk.Label(label=app_data["name"])
-        lbl.get_style_context().add_class("app-label")
+        lbl.get_style_context().add_class(lbl_class)
         lbl.set_ellipsize(max("end", 1)) # fake pango constant
         from gi.repository import Pango
         lbl.set_ellipsize(Pango.EllipsizeMode.END)
@@ -259,12 +303,10 @@ class FlavosLauncher(Gtk.Window):
         
         if not term:
             self.pinned_flow.show()
-            self.pinned_lbl.show()
-            self.all_lbl.set_text("Todos os Aplicativos")
+            self.btn_show_all.show()
         else:
             self.pinned_flow.hide()
-            self.pinned_lbl.hide()
-            self.all_lbl.set_text("Resultados da Busca")
+            self.btn_show_all.hide()
 
         # Refiltra
         for child in self.apps_flow.get_children():
@@ -272,7 +314,7 @@ class FlavosLauncher(Gtk.Window):
             
         for app in self.apps_data:
             if not term or term in app["name"].lower():
-                self.apps_flow.add(self.create_app_btn(app))
+                self.apps_flow.add(self.create_grid_btn(app, is_action=False))
         self.apps_flow.show_all()
 
     def on_focus_out(self, widget, event):
