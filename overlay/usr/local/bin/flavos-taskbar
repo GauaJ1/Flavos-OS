@@ -8,6 +8,7 @@ import gi
 import os
 import sys
 import json
+from datetime import datetime
 
 # Exit silently in Wayland to prevent PAGER crash loops during transition
 if os.environ.get("XDG_SESSION_TYPE", "x11") != "x11":
@@ -47,6 +48,8 @@ BASE_CSS_SOLID = """
 */
 #FlavosTaskbar WnckTasklist {
     margin: 4px;
+    background-color: transparent;
+    background-image: none;
 }
 
 #FlavosTaskbar WnckTasklist button {
@@ -67,24 +70,30 @@ BASE_CSS_SOLID = """
 }
 
 #FlavosTaskbar WnckTasklist button:hover {
+    background-image: none;
     background-color: #1A1F2B;
     color: #C8CDD8;
 }
 
 #FlavosTaskbar WnckTasklist button:focus-visible {
+    background-image: none;
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
 }
 
-/*
-  Janela ativa
-  Wnck usa pseudo state genérico em seu botão ativado no tasklist.
-  O Gtk chama de ":checked" ou ":active" internamente.
-*/
 #FlavosTaskbar WnckTasklist button:checked {
+    background-image: none;
     background-color: #1E2433;
     color: #E8ECF4;
     border-bottom: 2px solid #4B8BF5;
+}
+
+label.clock {
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #E8ECF4;
+    padding-right: 14px;
 }
 """
 
@@ -97,6 +106,8 @@ BASE_CSS_GLASS = """
 
 #FlavosTaskbar WnckTasklist {{
     margin: 4px;
+    background-color: transparent;
+    background-image: none;
 }}
 
 #FlavosTaskbar WnckTasklist button {{
@@ -117,19 +128,30 @@ BASE_CSS_GLASS = """
 }}
 
 #FlavosTaskbar WnckTasklist button:hover {{
+    background-image: none;
     background-color: rgba(26, 31, 43, {hover_alpha});
     color: #C8CDD8;
 }}
 
 #FlavosTaskbar WnckTasklist button:focus-visible {{
+    background-image: none;
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
 }}
 
 #FlavosTaskbar WnckTasklist button:checked {{
+    background-image: none;
     background-color: #1E2433;
     color: #E8ECF4;
     border-bottom: 2px solid #4B8BF5;
+}}
+
+label.clock {{
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #E8ECF4;
+    padding-right: 14px;
 }}
 """
 
@@ -196,11 +218,24 @@ class FlavosTaskbar(Gtk.Window):
         self.tasklist.set_include_all_workspaces(True)
         self.tasklist.set_button_relief(Gtk.ReliefStyle.NONE)
         
+        # Relógio
+        self.lbl_clock = Gtk.Label()
+        self.lbl_clock.get_style_context().add_class("clock")
+        
         # Embrulha em um Gtk.Box e centraliza as propriedades
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.main_box.pack_start(self.tasklist, True, True, 0)
+        self.main_box.pack_end(self.lbl_clock, False, False, 10)
         
         self.add(self.main_box)
+        
+        self.update_clock()
+        GLib.timeout_add_seconds(1, self.update_clock)
+
+    def update_clock(self):
+        now = datetime.now()
+        self.lbl_clock.set_text(now.strftime("%a, %d %b • %H:%M").title())
+        return True
 
 
 if __name__ == "__main__":

@@ -56,7 +56,12 @@ button.panel-btn:active, button.panel-btn.active {
     background-color: #4B8BF5;
     color: #FFFFFF;
 }
-button.launcher { color: #FFFFFF; }
+label.launcher { 
+    color: #FFFFFF; 
+    font-weight: 800; 
+    font-size: 14px; 
+    letter-spacing: 1px; 
+}
 label.clock {
     font-family: Inter, sans-serif;
     font-size: 13px;
@@ -96,7 +101,12 @@ button.panel-btn:active, button.panel-btn.active {{
     background-color: #4B8BF5;
     color: #FFFFFF;
 }}
-button.launcher {{ color: #FFFFFF; }}
+label.launcher {{ 
+    color: #FFFFFF; 
+    font-weight: 800; 
+    font-size: 14px; 
+    letter-spacing: 1px; 
+}}
 label.clock {{
     font-family: Inter, sans-serif;
     font-size: 13px;
