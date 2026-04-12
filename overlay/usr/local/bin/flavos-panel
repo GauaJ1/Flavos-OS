@@ -7,15 +7,27 @@ import gi
 import os
 import subprocess
 import time
+import json
 from datetime import datetime
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 
-CSS = b"""
+CONFIG_PATH = os.path.expanduser("~/.config/flavos/panel.json")
+
+def load_config():
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"opacity": 100, "alignment": "left", "glassmorphism": False}
+
+BASE_CSS = """
 #FlavosPanel {
-    background-color: #0D1017;
-    border-bottom: 2px solid #272D3D;
+    background-color: rgba(13, 16, 23, {alpha});
+    border-bottom: 2px solid rgba(39, 45, 61, {alpha});
 }
 
 button.panel-btn {
@@ -36,7 +48,7 @@ button.panel-btn {
 }
 button.panel-btn:hover {
     background-image: none;
-    background-color: #232838;
+    background-color: rgba(35, 40, 56, {hover_alpha});
     color: #E8ECF4;
 }
 button.panel-btn:active, button.panel-btn.active {
@@ -81,8 +93,18 @@ class FlavosPanel(Gtk.Window):
         # Impede que o panel ganhe foco constante prejudicando input das outras apps
         self.set_accept_focus(False)
 
+        # Lendo Configuração viva de Painel
+        cfg = load_config()
+        opacity = cfg.get("opacity", 100)
+        align = cfg.get("alignment", "left")
+
+        # Dinamizando CSS Alpha channels
+        alpha_val = float(opacity) / 100.0
+        hover_alpha_val = min(1.0, alpha_val + 0.3) if alpha_val < 1.0 else 1.0
+        parsed_css = BASE_CSS.replace("{alpha}", str(alpha_val)).replace("{hover_alpha}", str(hover_alpha_val)).encode('utf-8')
+
         provider = Gtk.CssProvider()
-        provider.load_from_data(CSS)
+        provider.load_from_data(parsed_css)
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
@@ -100,17 +122,21 @@ class FlavosPanel(Gtk.Window):
         btn_launcher = Gtk.Button(label="FLAVOS")
         btn_launcher.get_style_context().add_class("panel-btn")
         btn_launcher.get_style_context().add_class("launcher")
-        # Contrato agnostic
         btn_launcher.connect("clicked", lambda _: spawn_async(["flavos-shellctl", "launcher", "toggle"]))
-        left_box.pack_start(btn_launcher, False, False, 4)
         
-        main_box.pack_start(left_box, False, False, 8)
-
         # ====== CENTRO: DATA/HORA ======
-        center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.lbl_clock = Gtk.Label()
         self.lbl_clock.get_style_context().add_class("clock")
+        
+        if align == "center":
+            center_box.pack_start(btn_launcher, False, False, 0)
+        else:
+            left_box.pack_start(btn_launcher, False, False, 4)
+            main_box.pack_start(left_box, False, False, 8)
+            
         center_box.pack_start(self.lbl_clock, True, True, 0)
+        
         # Fill/Expand central empurra os extremos
         main_box.set_center_widget(center_box)
         

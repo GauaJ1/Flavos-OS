@@ -10,6 +10,7 @@ import subprocess
 import re
 import os
 import socket
+import json
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
@@ -857,7 +858,7 @@ class SessionPage:
         card = _card()
         card.pack_start(_row("Gerenciador de Janelas", wm, badge=("● Ativo", "badge-ok")), False, False, 0)
         card.pack_start(_row("Compositor", compositor, badge=("● Ativo", "badge-ok")), False, False, 0)
-        card.pack_start(_row("Painel (Taskbar)", "tint2", badge=("● Ativo", "badge-ok")), False, False, 0)
+        card.pack_start(_row("Painel (Taskbar)", "Flavos Panel (Nativo)", badge=("● Ativo", "badge-ok")), False, False, 0)
         card.pack_start(_row("Notificações", "dunst", badge=("● Ativo", "badge-ok")), False, False, 0)
         vbox.pack_start(card, False, False, 0)
 
@@ -869,12 +870,127 @@ class SessionPage:
         return scroll
 
 
+PANEL_CONFIG_PATH = os.path.expanduser("~/.config/flavos/panel.json")
+
+def _load_panel_config():
+    if os.path.exists(PANEL_CONFIG_PATH):
+        try:
+            with open(PANEL_CONFIG_PATH, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"opacity": 100, "alignment": "left", "glassmorphism": False}
+
+def _save_panel_config(cfg):
+    os.makedirs(os.path.dirname(PANEL_CONFIG_PATH), exist_ok=True)
+    with open(PANEL_CONFIG_PATH, "w") as f:
+        json.dump(cfg, f, indent=2)
+
+
+class PanelPage:
+    name = "panel"
+    title = "Painel"
+
+    def build(self, win):
+        self._win = win
+        self._cfg = _load_panel_config()
+
+        scroll, vbox = _page_scroll()
+        vbox.pack_start(_section_header("Painel Nativo", "Personalizar aparência e layout da barra do sistema"), False, False, 0)
+
+        # --- Visual ---
+        card = _card()
+
+        # Glassmorphism switch
+        glass_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        glass_row.get_style_context().add_class("row-item")
+        glass_lbl = Gtk.Label(label="Glassmorphism (fundo transparente)", xalign=0)
+        glass_lbl.get_style_context().add_class("row-label")
+        glass_row.pack_start(glass_lbl, True, True, 0)
+        self._glass_sw = Gtk.Switch()
+        self._glass_sw.set_active(self._cfg.get("glassmorphism", False))
+        self._glass_sw.connect("notify::active", self._on_glass_changed)
+        glass_row.pack_end(self._glass_sw, False, False, 0)
+        card.pack_start(glass_row, False, False, 0)
+
+        # Opacity slider
+        opa_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        opa_row.get_style_context().add_class("row-item")
+        opa_top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        opa_lbl = Gtk.Label(label="Opacidade da barra", xalign=0)
+        opa_lbl.get_style_context().add_class("row-label")
+        self._opa_val_lbl = Gtk.Label(label=f"{self._cfg.get('opacity', 100)}%")
+        self._opa_val_lbl.get_style_context().add_class("row-value")
+        opa_top.pack_start(opa_lbl, True, True, 0)
+        opa_top.pack_end(self._opa_val_lbl, False, False, 0)
+        self._opa_slider = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 30, 100, 5)
+        self._opa_slider.set_value(self._cfg.get("opacity", 100))
+        self._opa_slider.set_draw_value(False)
+        self._opa_slider.connect("value-changed", self._on_opacity_changed)
+        opa_row.pack_start(opa_top, False, False, 0)
+        opa_row.pack_start(self._opa_slider, False, False, 0)
+        card.pack_start(opa_row, False, False, 0)
+
+        vbox.pack_start(card, False, False, 0)
+
+        # --- Layout ---
+        card2 = _card()
+
+        align_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        align_row.get_style_context().add_class("row-item")
+        align_lbl = Gtk.Label(label="Posição dos ícones principais", xalign=0)
+        align_lbl.get_style_context().add_class("row-label")
+        align_row.pack_start(align_lbl, True, True, 0)
+        self._align_combo = Gtk.ComboBoxText()
+        self._align_combo.append("left", "Esquerda (Clássico)")
+        self._align_combo.append("center", "Centro (Moderno)")
+        self._align_combo.set_active_id(self._cfg.get("alignment", "left"))
+        align_row.pack_end(self._align_combo, False, False, 0)
+        card2.pack_start(align_row, False, False, 0)
+
+        vbox.pack_start(card2, False, False, 0)
+
+        # --- Botão Aplicar ---
+        card3 = _card()
+        apply_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        apply_row.get_style_context().add_class("row-item")
+        apply_lbl = Gtk.Label(label="Aplicar e reiniciar painel", xalign=0)
+        apply_lbl.get_style_context().add_class("row-label")
+        apply_row.pack_start(apply_lbl, True, True, 0)
+        btn_apply = Gtk.Button(label="Aplicar")
+        btn_apply.get_style_context().add_class("suggested-action")
+        btn_apply.connect("clicked", self._apply)
+        apply_row.pack_end(btn_apply, False, False, 0)
+        card3.pack_start(apply_row, False, False, 0)
+        vbox.pack_start(card3, False, False, 0)
+
+        return scroll
+
+    def _on_glass_changed(self, sw, _):
+        self._cfg["glassmorphism"] = sw.get_active()
+        # Opacidade padrão ao ligar o glass
+        if sw.get_active() and self._cfg.get("opacity", 100) == 100:
+            self._cfg["opacity"] = 75
+            self._opa_slider.set_value(75)
+
+    def _on_opacity_changed(self, slider):
+        val = int(slider.get_value())
+        self._cfg["opacity"] = val
+        self._opa_val_lbl.set_text(f"{val}%")
+
+    def _apply(self, *_):
+        self._cfg["alignment"] = self._align_combo.get_active_id()
+        _save_panel_config(self._cfg)
+        _popen(["/usr/local/bin/flavos-shellctl", "shell", "restart"])
+
+
 # ---------------------------------------------------------------------------
 # Janela principal
 # ---------------------------------------------------------------------------
 PAGES = [
     AboutPage(),
     AppearancePage(),
+    PanelPage(),
     SessionPage(),
     NetworkPage(),
     HostnamePage(),
