@@ -103,3 +103,6 @@ acpi
 
 # Polkit para helpers privilegiados (Etapa 10D)
 policykit-1
+
+# Super key mapping X11 (Etapa 11B)
+xcape

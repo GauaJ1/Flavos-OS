@@ -18,7 +18,8 @@ COMMANDS = {
     "main_panel": ["flavos-panel"],
     "taskbar": ["flavos-taskbar"],
     "notifications": ["dunst"],
-    "desktop": ["pcmanfm", "--desktop"]
+    "desktop": ["pcmanfm", "--desktop"],
+    "xcape": ["xcape", "-e", "Super_L=Alt_L|F1"]
 }
 
 # Tratamento especial: Picom com -b vai dar detach, não podemos supervisionar facilmente via Popen padrão.
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     
     # 1. Spawning inicial
     # Subir core graphic primeiro (comp e panel superior)
-    for name in ["compositor", "main_panel", "desktop", "notifications"]:
+    for name in ["compositor", "main_panel", "desktop", "notifications", "xcape"]:
         spawn(name)
     
     # Subir taskbar apenas com WM estabelecido p/ hooks do pager Wnck funcionarem.
