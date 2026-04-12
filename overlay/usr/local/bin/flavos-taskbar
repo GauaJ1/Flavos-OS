@@ -121,10 +121,13 @@ separator.task-sep {
     background-image: none;
 }
 
-#FlavosTaskbar WnckTasklist button {
-    background-image: none !important;
-    background-color: transparent !important;
-    border: none !important;
+window#FlavosTaskbar WnckTasklist button {
+    background-image: none;
+    background-color: transparent;
+    border: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
     border-radius: 6px;
     padding: 2px 8px;
     margin: 4px 1px;
@@ -132,29 +135,29 @@ separator.task-sep {
     font-family: Inter, sans-serif;
     font-size: 11px;
     font-weight: 500;
-    border-bottom: 2px solid transparent !important;
+    border-bottom: 2px solid transparent;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1),
                 border-bottom-color 120ms ease;
 }
 
-#FlavosTaskbar WnckTasklist button:hover {
-    background-image: none !important;
-    background-color: #1A1F2B !important;
-    color: #C8CDD8 !important;
+window#FlavosTaskbar WnckTasklist button:hover {
+    background-image: none;
+    background-color: #1A1F2B;
+    color: #C8CDD8;
 }
 
-#FlavosTaskbar WnckTasklist button:focus-visible {
-    background-image: none !important;
+window#FlavosTaskbar WnckTasklist button:focus-visible {
+    background-image: none;
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
 }
 
-#FlavosTaskbar WnckTasklist button:checked {
-    background-image: none !important;
-    background-color: #1E2433 !important;
-    color: #E8ECF4 !important;
-    border-bottom: 2px solid #4B8BF5 !important;
+window#FlavosTaskbar WnckTasklist button:checked {
+    background-image: none;
+    background-color: #1E2433;
+    color: #E8ECF4;
+    border-bottom: 2px solid #4B8BF5;
 }
 
 /* Status icons (direita) */
@@ -238,10 +241,13 @@ separator.task-sep {{
     background-image: none;
 }}
 
-#FlavosTaskbar WnckTasklist button {{
-    background-image: none !important;
-    background-color: transparent !important;
-    border: none !important;
+window#FlavosTaskbar WnckTasklist button {{
+    background-image: none;
+    background-color: transparent;
+    border: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
     border-radius: 6px;
     padding: 2px 8px;
     margin: 4px 1px;
@@ -249,29 +255,29 @@ separator.task-sep {{
     font-family: Inter, sans-serif;
     font-size: 11px;
     font-weight: 500;
-    border-bottom: 2px solid transparent !important;
+    border-bottom: 2px solid transparent;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1),
                 border-bottom-color 120ms ease;
 }}
 
-#FlavosTaskbar WnckTasklist button:hover {{
-    background-image: none !important;
-    background-color: rgba(26, 31, 43, {hover_alpha}) !important;
-    color: #C8CDD8 !important;
+window#FlavosTaskbar WnckTasklist button:hover {{
+    background-image: none;
+    background-color: rgba(26, 31, 43, {hover_alpha});
+    color: #C8CDD8;
 }}
 
-#FlavosTaskbar WnckTasklist button:focus-visible {{
-    background-image: none !important;
+window#FlavosTaskbar WnckTasklist button:focus-visible {{
+    background-image: none;
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
 }}
 
-#FlavosTaskbar WnckTasklist button:checked {{
-    background-image: none !important;
-    background-color: #1E2433 !important;
-    color: #E8ECF4 !important;
-    border-bottom: 2px solid #4B8BF5 !important;
+window#FlavosTaskbar WnckTasklist button:checked {{
+    background-image: none;
+    background-color: #1E2433;
+    color: #E8ECF4;
+    border-bottom: 2px solid #4B8BF5;
 }}
 
 button.status-btn {{
