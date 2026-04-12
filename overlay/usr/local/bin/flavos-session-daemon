@@ -36,6 +36,14 @@ def spawn(name):
         stderr=subprocess.DEVNULL
     )
 
+def spawn_delayed(name, delay=2.0):
+    """Inicia um node visual com atraso assíncrono para garantir que X11/WM subiu."""
+    if name in processes and processes[name].poll() is None:
+         return
+    print(f"[flavos-shell] Iniciando node com delay ({delay}s): {name}", flush=True)
+    time.sleep(delay)
+    spawn(name)
+
 def stop_all():
     """Mata todos os filhos elegantemente."""
     print("[flavos-shell] Encerrando nodes supervisionados...", flush=True)
@@ -66,8 +74,12 @@ if __name__ == "__main__":
     print("[flavos-shell] Daemon Ativado. Assumindo a Shell UI...", flush=True)
     
     # 1. Spawning inicial
-    for name in COMMANDS:
+    # Subir core graphic primeiro (comp e panel superior)
+    for name in ["compositor", "main_panel", "desktop", "notifications"]:
         spawn(name)
+    
+    # Subir taskbar apenas com WM estabelecido p/ hooks do pager Wnck funcionarem.
+    spawn_delayed("taskbar", 1.5)
     
     # 2. Watchdog Loop (Sleep interruptível via sinais)
     while True:

@@ -1,69 +1,79 @@
 #!/usr/bin/env python3
-# Flavos Native Taskbar (Etapa 11C)
-# Barra inferior: mostra janelas abertas do Openbox via Wnck.
-# Gerenciada pelo flavos-session-daemon.
+# Flavos Native Taskbar v2 (Etapa 11C / Refactor Robusto)
+# Barra inferior utilizando núcleo nativo de baixo nível do Wnck.Tasklist.
+# A Tasklist já assume gerenciamento maduro do protocolo de janelas X11.
 
 import gi
 import os
 import sys
 
+# Exit silently in Wayland to prevent PAGER crash loops during transition
+if os.environ.get("XDG_SESSION_TYPE", "x11") != "x11":
+    print("[flavos-taskbar] Ignorado: Wayland ou shell não-X11 detectado.")
+    sys.exit(0)
+
 gi.require_version('Gtk', '3.0')
+# Importante: Precisamos setar o tipo de cliente ANTES do Wnck ser instanciado e hookado
 gi.require_version('Wnck', '3.0')
 from gi.repository import Gtk, Gdk, Wnck, GLib
 
-# ── Design Tokens (seguindo system-css-architecture skill) ──────────────────
+# 1. Definir obrigatoriamente status de Pager para aceitação do XServer.
+Wnck.set_client_type(Wnck.ClientType.PAGER)
+
+# ── Design Tokens (CSS Architecture) ─────────────────────────────────────────
 CSS = """
+/* Fundo e borda superior */
 #FlavosTaskbar {
     background-color: #0D1017;
     border-top: 1px solid #1E2433;
 }
 
-/* Botões de janela na taskbar */
-button.task-btn {
+/* 
+   O Wnck.Tasklist nativo gera GtkButtons padrão.
+   Vamos mirar nossos estilos globalmente dentro da hierarquia dele.
+*/
+#FlavosTaskbar WnckTasklist {
+    margin: 4px;
+}
+
+#FlavosTaskbar WnckTasklist button {
     background-image: none;
     background-color: transparent;
     border: none;
     border-radius: 6px;
-    padding: 4px 10px;
-    margin: 4px 2px;
+    padding: 2px 10px;
+    margin: 0px 2px;
     color: #8891A5;
     font-family: Inter, sans-serif;
     font-size: 12px;
     font-weight: 500;
-    min-width: 120px;
-    max-width: 200px;
     transition: background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-                color 120ms cubic-bezier(0.2, 0, 0, 1);
+                color 120ms cubic-bezier(0.2, 0, 0, 1),
+                border 120ms ease;
+    border-bottom: 2px solid transparent; 
 }
-button.task-btn label {
-    color: inherit;
-}
-button.task-btn:hover {
+
+#FlavosTaskbar WnckTasklist button:hover {
     background-color: #1A1F2B;
     color: #C8CDD8;
 }
-button.task-btn:focus-visible {
+
+#FlavosTaskbar WnckTasklist button:focus-visible {
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
 }
 
-/* Janela ativa — destaque sutil */
-button.task-btn.active-window {
+/*
+  Janela ativa
+  Wnck usa pseudo state genérico em seu botão ativado no tasklist.
+  O Gtk chama de ":checked" ou ":active" internamente.
+*/
+#FlavosTaskbar WnckTasklist button:checked {
     background-color: #1E2433;
     color: #E8ECF4;
     border-bottom: 2px solid #4B8BF5;
 }
-
-/* Indicador de app minimizado */
-button.task-btn.minimized {
-    color: #505870;
-    font-style: italic;
-}
 """
-
-# IDs a ignorar — janelas de sistema sem contexto de usuário
-SKIP_NAMES = {"flavos-panel", "flavos-taskbar", "flavos-launcher", "Desktop"}
-
 
 class FlavosTaskbar(Gtk.Window):
     def __init__(self):
@@ -72,120 +82,46 @@ class FlavosTaskbar(Gtk.Window):
         self.set_title("Flavos Taskbar")
         self.set_decorated(False)
         self.set_resizable(False)
-        self.set_accept_focus(False)   # não rouba foco das janelas abertas
+        self.set_accept_focus(False)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
+        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
 
-        # Posição: DOCK garante que fica abaixo das janelas maximizadas
-        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
-            self.set_type_hint(Gdk.WindowTypeHint.DOCK)
-
-        # CSS
+        # Provider CSS
         provider = Gtk.CssProvider()
         provider.load_from_data(CSS.encode("utf-8"))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
-        # Dimensões: largura total, 36px de altura, borda inferior
         display = Gdk.Display.get_default()
         monitor = display.get_primary_monitor() or display.get_monitor(0)
         geom = monitor.get_geometry()
+        
+        # Geometria da barra inferior
         self.set_default_size(geom.width, 36)
         self.move(geom.x, geom.y + geom.height - 36)
 
-        # Layout
-        self.task_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        self.task_box.set_margin_start(8)
-        self.add(self.task_box)
-
-        # Wnck — monitora janelas do X11
+        # Validando screen connection do Wnck (Core Safety)
         self._screen = Wnck.Screen.get_default()
-        self._screen.connect("window-opened",  self._on_windows_changed)
-        self._screen.connect("window-closed",  self._on_windows_changed)
-        self._screen.connect("active-window-changed", self._on_active_changed)
+        if not self._screen:
+            print("[flavos-taskbar] CRITICAL: Falha ao obter a tela Wnck. O servidor X pode estar indisponível.", file=sys.stderr)
+            sys.exit(1)
 
-        # Polling inicial (Wnck precisa de um ciclo de eventos para popular)
-        GLib.idle_add(self._refresh)
-
-    # ── Handlers ────────────────────────────────────────────────────────────
-
-    def _on_windows_changed(self, screen, *args):
-        self._refresh()
-
-    def _on_active_changed(self, screen, *args):
-        self._refresh()
-
-    def _refresh(self):
-        """Reconstrói os botões de janela."""
-        for child in self.task_box.get_children():
-            child.destroy()
-
-        active = self._screen.get_active_window()
-        windows = self._screen.get_windows_stacked()
-
-        for win in windows:
-            # Filtros: ignora janelas sem nome, de tipo Desktop, ou da shell
-            if win.get_window_type() in (
-                Wnck.WindowType.DESKTOP,
-                Wnck.WindowType.DOCK,
-                Wnck.WindowType.TOOLBAR,
-                Wnck.WindowType.UTILITY,
-                Wnck.WindowType.SPLASH,
-            ):
-                continue
-
-            name = win.get_name() or ""
-            if any(skip.lower() in name.lower() for skip in SKIP_NAMES):
-                continue
-
-            btn = self._make_task_btn(win, active)
-            self.task_box.pack_start(btn, False, False, 0)
-
-        self.task_box.show_all()
-        return False  # remove idle_add repeat
-
-    def _make_task_btn(self, win, active_win):
-        btn = Gtk.Button()
-        btn.get_style_context().add_class("task-btn")
-
-        # Ícone da janela (via pixbuf do Wnck)
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        btn.add(hbox)
-
-        icon = win.get_mini_icon()
-        if icon:
-            img = Gtk.Image.new_from_pixbuf(icon)
-            hbox.pack_start(img, False, False, 0)
-
-        # Nome truncado
-        name = win.get_name() or "Sem título"
-        if len(name) > 22:
-            name = name[:20] + "…"
-        lbl = Gtk.Label(label=name)
-        lbl.set_xalign(0)
-        hbox.pack_start(lbl, True, True, 0)
-
-        # Estado: ativa / minimizada
-        if active_win and win.get_xid() == active_win.get_xid():
-            btn.get_style_context().add_class("active-window")
-        elif win.is_minimized():
-            btn.get_style_context().add_class("minimized")
-
-        # Clique: ativa ou minimiza (toggle)
-        def on_click(_, w=win):
-            if w.is_minimized():
-                w.unminimize(
-                    Gtk.get_current_event_time() or Wnck.TIMESTAMP_NONE
-                )
-            elif self._screen.get_active_window() and \
-                    self._screen.get_active_window().get_xid() == w.get_xid():
-                w.minimize()
-            else:
-                w.activate(Gtk.get_current_event_time() or Wnck.TIMESTAMP_NONE)
-
-        btn.connect("clicked", on_click)
-        return btn
+        # Container nativo do Wnck
+        self.tasklist = Wnck.Tasklist.new()
+        
+        # Customizações recomendadas para ambiente moderno
+        self.tasklist.set_grouping(Wnck.TasklistGroupingType.AUTO_GROUP) # Agrupa pelo app nativamente se encher
+        self.tasklist.set_switch_workspace_on_unminimize(True)
+        self.tasklist.set_include_all_workspaces(True)
+        self.tasklist.set_button_relief(Gtk.ReliefStyle.NONE)
+        
+        # Embrulha em um Gtk.Box e centraliza as propriedades
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.main_box.pack_start(self.tasklist, True, True, 0)
+        
+        self.add(self.main_box)
 
 
 if __name__ == "__main__":
