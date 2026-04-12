@@ -32,10 +32,14 @@ def spawn(name):
     if name in processes and processes[name].poll() is None:
          return
     print(f"[flavos-shell] Iniciando node: {name}", flush=True)
+    # Redireciona stderr para log — crashes silenciosos são indiagnosticáveis
+    log_path = os.path.expanduser(f"~/.local/share/flavos/logs/{name}.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    log_fd = open(log_path, "a")
     processes[name] = subprocess.Popen(
         COMMANDS[name],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        stderr=log_fd
     )
 
 def spawn_fire_and_forget(name):

@@ -399,12 +399,11 @@ class FlavosTaskbar(Gtk.Window):
         main_box.pack_start(tasklist, True, True, 0)
 
         # ── Direita: Status Icons + Relógio ───────────────────────────────
-        # Separador direito
-        sep_right = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        sep_right.get_style_context().add_class("task-sep")
-        main_box.pack_end(sep_right, False, False, 0)
+        # NOTA: pack_end adiciona da borda DIREITA para a ESQUERDA.
+        # Primeira chamada = mais à direita. Última chamada = mais à esquerda.
+        # Ordem visual desejada (esq→dir): [sep] [vol] [net] [notif] [clock]
 
-        # Relógio compacto (discreto, não compete com o do topo)
+        # Relógio compacto (mais à direita)
         self.lbl_clock = Gtk.Label()
         self.lbl_clock.get_style_context().add_class("taskbar-clock")
         main_box.pack_end(self.lbl_clock, False, False, 0)
@@ -416,7 +415,7 @@ class FlavosTaskbar(Gtk.Window):
         btn_notif = Gtk.Button()
         btn_notif.get_style_context().add_class("status-btn")
         btn_notif.add(Gtk.Image.new_from_icon_name(
-            "preferences-system-notifications-symbolic", Gtk.IconSize.MENU
+            "notification-symbolic", Gtk.IconSize.MENU
         ))
         btn_notif.set_tooltip_text("Notificações (placeholder)")
         btn_notif.connect("clicked", lambda _: spawn_app(["dunstctl", "history-pop"]))
@@ -441,6 +440,11 @@ class FlavosTaskbar(Gtk.Window):
         btn_vol.set_tooltip_text("Volume")
         btn_vol.connect("clicked", lambda _: spawn_app(["pavucontrol"]))
         main_box.pack_end(btn_vol, False, False, 0)
+
+        # Separador direito (mais à esquerda do grupo pack_end = entre tasklist e status)
+        sep_right = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        sep_right.get_style_context().add_class("task-sep")
+        main_box.pack_end(sep_right, False, False, 0)
 
         # Inicia relógio
         self.update_clock()
