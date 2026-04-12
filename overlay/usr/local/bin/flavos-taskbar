@@ -122,9 +122,9 @@ separator.task-sep {
 }
 
 #FlavosTaskbar WnckTasklist button {
-    background-image: none;
-    background-color: transparent;
-    border: none;
+    background-image: none !important;
+    background-color: transparent !important;
+    border: none !important;
     border-radius: 6px;
     padding: 2px 8px;
     margin: 4px 1px;
@@ -132,29 +132,29 @@ separator.task-sep {
     font-family: Inter, sans-serif;
     font-size: 11px;
     font-weight: 500;
-    border-bottom: 2px solid transparent;
+    border-bottom: 2px solid transparent !important;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1),
                 border-bottom-color 120ms ease;
 }
 
 #FlavosTaskbar WnckTasklist button:hover {
-    background-image: none;
-    background-color: #1A1F2B;
-    color: #C8CDD8;
+    background-image: none !important;
+    background-color: #1A1F2B !important;
+    color: #C8CDD8 !important;
 }
 
 #FlavosTaskbar WnckTasklist button:focus-visible {
-    background-image: none;
+    background-image: none !important;
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
 }
 
 #FlavosTaskbar WnckTasklist button:checked {
-    background-image: none;
-    background-color: #1E2433;
-    color: #E8ECF4;
-    border-bottom: 2px solid #4B8BF5;
+    background-image: none !important;
+    background-color: #1E2433 !important;
+    color: #E8ECF4 !important;
+    border-bottom: 2px solid #4B8BF5 !important;
 }
 
 /* Status icons (direita) */
@@ -239,9 +239,9 @@ separator.task-sep {{
 }}
 
 #FlavosTaskbar WnckTasklist button {{
-    background-image: none;
-    background-color: transparent;
-    border: none;
+    background-image: none !important;
+    background-color: transparent !important;
+    border: none !important;
     border-radius: 6px;
     padding: 2px 8px;
     margin: 4px 1px;
@@ -249,29 +249,29 @@ separator.task-sep {{
     font-family: Inter, sans-serif;
     font-size: 11px;
     font-weight: 500;
-    border-bottom: 2px solid transparent;
+    border-bottom: 2px solid transparent !important;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1),
                 border-bottom-color 120ms ease;
 }}
 
 #FlavosTaskbar WnckTasklist button:hover {{
-    background-image: none;
-    background-color: rgba(26, 31, 43, {hover_alpha});
-    color: #C8CDD8;
+    background-image: none !important;
+    background-color: rgba(26, 31, 43, {hover_alpha}) !important;
+    color: #C8CDD8 !important;
 }}
 
 #FlavosTaskbar WnckTasklist button:focus-visible {{
-    background-image: none;
+    background-image: none !important;
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
 }}
 
 #FlavosTaskbar WnckTasklist button:checked {{
-    background-image: none;
-    background-color: #1E2433;
-    color: #E8ECF4;
-    border-bottom: 2px solid #4B8BF5;
+    background-image: none !important;
+    background-color: #1E2433 !important;
+    color: #E8ECF4 !important;
+    border-bottom: 2px solid #4B8BF5 !important;
 }}
 
 button.status-btn {{
@@ -394,6 +394,10 @@ class FlavosTaskbar(Gtk.Window):
         tasklist.set_switch_workspace_on_unminimize(True)
         tasklist.set_include_all_workspaces(True)
         tasklist.set_button_relief(Gtk.ReliefStyle.NONE)
+        # O pulo do gato: h-align START faz com que a tasklist não estique 
+        # seus botões infinitamente para preencher o espaço vazio do painel.
+        # Ela apenas ocupará o espaço necessário pelos botões.
+        tasklist.set_halign(Gtk.Align.START)
         main_box.pack_start(tasklist, True, True, 0)
 
         # ── Direita: Status Icons + Relógio ───────────────────────────────
