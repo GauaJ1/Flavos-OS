@@ -106,3 +106,6 @@ policykit-1
 
 # Super key mapping X11 (Etapa 11B)
 xcape
+
+# Clipboard X11
+xclip
