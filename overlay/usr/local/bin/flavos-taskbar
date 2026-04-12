@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-# Flavos Native Taskbar v4 (Etapa 11B — Redesign Premium)
-# Dock híbrida: ícone de menu + apps fixados + Wnck.Tasklist + systray right
+# Flavos Native Taskbar v4 (Correção Final)
+# Dock moderna: menu icon + pinned apps + Wnck.Tasklist + status icons + relógio.
+# Gerenciada pelo flavos-session-daemon.
 #
-# Decisão arquitetural:
-#   - Relógio fica na direita da taskbar INFERIOR (pedido do usuário)
-#   - Ícones de sistema (volume, rede, notificações) ficam na direita
-#   - Branding textual "FLAVOS" fica somente no painel superior
-#   - Botão de Menu usa ícone, aciona flavos-shellctl launcher toggle
+# Decisões arquiteturais:
+#   - Branding "FLAVOS" fica SOMENTE no painel superior (Gtk.Label)
+#   - Relógio inferior: compacto (HH:MM), discreto, não compete com o topo
+#   - Status icons (rede, volume) são wrappers funcionais que abrem ferramentas nativas
+#   - Ícone de notificação é placeholder controlado (dunst não expõe API GTK nativa)
+#   - max-width nos botões Wnck: hipótese aplicada via CSS, validável em teste
 
 import gi
 import os
@@ -30,11 +32,12 @@ Wnck.set_client_type(Wnck.ClientType.PAGER)
 # ── Config ────────────────────────────────────────────────────────────────────
 CONFIG_PATH = os.path.expanduser("~/.config/flavos/panel.json")
 
-# Apps fixados — estrutura organizada: (icon_name, command_argv, tooltip)
+# Apps fixados — estrutura organizada, extensível via config futura.
+# Cada entrada: (icon_name, command_argv, tooltip)
 PINNED_APPS = [
-    ("utilities-terminal",      ["kitty"],      "Terminal"),
-    ("system-file-manager",     ["pcmanfm"],    "Arquivos"),
-    ("accessories-text-editor", ["mousepad"],   "Editor"),
+    ("utilities-terminal",      ["kitty"],    "Terminal"),
+    ("system-file-manager",     ["pcmanfm"],  "Arquivos"),
+    ("accessories-text-editor", ["mousepad"], "Editor"),
 ]
 
 def load_config():
@@ -47,79 +50,72 @@ def load_config():
     return {"opacity": 100, "alignment": "left", "style": "solid"}
 
 
-# ── CSS — System CSS Architecture Skill ───────────────────────────────────────
-# Tokens:
-#   Surface base:       #0D1017
-#   Surface raised:     #131720
-#   Surface raised+1:   #1A1F2B
-#   Border subtle:      rgba(255,255,255,0.06)
-#   Text muted:         #6B7385
-#   Text secondary:     #8891A5
-#   Text primary:       #E8ECF4
-#   Accent:             #4B8BF5
-#   Radius sm:          6px
-#   Radius md:          8px
-#   Radius lg:          12px
-# Motion tokens (state feedback): 100ms cubic-bezier(0.2, 0, 0, 1)
-# Motion tokens (hover emphasis): 150ms ease
+# ── CSS ───────────────────────────────────────────────────────────────────────
+# Motion tokens (system-motion-design skill):
+#   - State feedback: 100ms, cubic-bezier(0.2, 0, 0, 1)
+#   - Hover emphasis: 120ms ease
+# Tokens visuais equalizados com flavos-panel:
+#   - Surface: #0D1017    Border: #272D3D
+#   - Text muted: #8891A5  Text active: #E8ECF4
+#   - Accent: #4B8BF5     Hover surface: #1A1F2B
+#
+# Nota sobre max-width nos botões Wnck.Tasklist:
+# Hipótese validável — GTK3 pode ou não respeitar max-width em botões Wnck
+# nativos. Aplicado como CSS; se não funcionar, o Wnck.Tasklist já faz
+# truncamento natural por pressão de espaço. Sem risco de regressão.
 
 BASE_CSS_SOLID = """
-/* ── Taskbar Surface ──────────────────────────────────────────────────── */
 #FlavosTaskbar {
     background-color: #0D1017;
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 1px solid #272D3D;
 }
 
-/* ── Botão de Menu (ícone do sistema) ──────────────────────────────────── */
+/* Menu button (ícone start) */
 button.menu-btn {
     background-image: none;
     background-color: transparent;
     border: none;
-    border-radius: 8px;
-    min-width: 40px;
-    min-height: 32px;
-    padding: 0 10px;
+    border-radius: 6px;
+    padding: 4px 10px;
     margin: 4px 2px 4px 6px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }
 button.menu-btn:hover {
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
+    background-color: #1A1F2B;
 }
 button.menu-btn:active {
     background-image: none;
-    background-color: rgba(75, 139, 245, 0.3);
+    background-color: #4B8BF5;
 }
 
-/* ── Apps Fixados ──────────────────────────────────────────────────────── */
+/* Apps fixados */
 button.pinned-btn {
     background-image: none;
     background-color: transparent;
     border: none;
-    border-radius: 8px;
-    min-width: 36px;
-    min-height: 32px;
-    padding: 0 8px;
+    border-radius: 6px;
+    padding: 4px 6px;
     margin: 4px 1px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }
 button.pinned-btn:hover {
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
+    background-color: #1A1F2B;
 }
 button.pinned-btn:active {
     background-image: none;
-    background-color: rgba(75, 139, 245, 0.2);
+    background-color: rgba(75, 139, 245, 0.25);
 }
 
-/* ── Separador ────────────────────────────────────────────────────────── */
+/* Separadores */
 separator.task-sep {
-    background-color: rgba(255,255,255,0.08);
+    background-color: #272D3D;
     min-width: 1px;
-    margin: 8px 6px;
+    margin: 8px 4px;
 }
 
-/* ── Wnck.Tasklist — janelas abertas ──────────────────────────────────── */
+/* Wnck.Tasklist — janelas abertas */
 #FlavosTaskbar WnckTasklist {
     background-color: transparent;
     background-image: none;
@@ -130,125 +126,112 @@ separator.task-sep {
     background-color: transparent;
     border: none;
     border-radius: 6px;
-    /* Limite de largura por aba — evita botões gigantes */
-    min-width: 80px;
-    max-width: 180px;
-    padding: 0 10px;
+    padding: 2px 8px;
     margin: 4px 1px;
     color: #8891A5;
     font-family: Inter, sans-serif;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     border-bottom: 2px solid transparent;
+    max-width: 180px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1),
-                border-bottom-color 150ms ease;
+                border-bottom-color 120ms ease;
 }
+
 #FlavosTaskbar WnckTasklist button:hover {
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
+    background-color: #1A1F2B;
     color: #C8CDD8;
 }
+
 #FlavosTaskbar WnckTasklist button:focus-visible {
     background-image: none;
     outline: 2px solid #4B8BF5;
-    outline-offset: -2px;
+    outline-offset: 2px;
 }
+
 #FlavosTaskbar WnckTasklist button:checked {
     background-image: none;
-    background-color: rgba(75, 139, 245, 0.12);
+    background-color: #1E2433;
     color: #E8ECF4;
     border-bottom: 2px solid #4B8BF5;
 }
 
-/* ── Separador direita ─────────────────────────────────────────────────── */
-separator.systray-sep {
-    background-color: rgba(255,255,255,0.08);
-    min-width: 1px;
-    margin: 8px 6px;
-}
-
-/* ── Ícones de sistema (direita) ──────────────────────────────────────── */
-button.systray-btn {
+/* Status icons (direita) */
+button.status-btn {
     background-image: none;
     background-color: transparent;
     border: none;
     border-radius: 6px;
-    min-width: 30px;
-    min-height: 30px;
-    padding: 0 5px;
+    padding: 4px 6px;
     margin: 4px 1px;
-    transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
+    color: #8891A5;
+    transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
+                color 100ms cubic-bezier(0.2, 0, 0, 1);
 }
-button.systray-btn:hover {
+button.status-btn:hover {
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
-}
-button.systray-btn:active {
-    background-image: none;
-    background-color: rgba(75, 139, 245, 0.2);
+    background-color: #1A1F2B;
+    color: #E8ECF4;
 }
 
-/* ── Relógio (direita) ─────────────────────────────────────────────────── */
+/* Relógio compacto (não compete com o informacional do topo) */
 label.taskbar-clock {
     font-family: Inter, sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    color: #C8CDD8;
-    padding: 0 14px 0 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #8891A5;
+    padding: 0 10px 0 4px;
 }
 """
 
 BASE_CSS_GLASS = """
 #FlavosTaskbar {{
     background-color: rgba(13, 16, 23, {alpha});
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 1px solid rgba(39, 45, 61, {alpha});
 }}
 
 button.menu-btn {{
     background-image: none;
     background-color: transparent;
     border: none;
-    border-radius: 8px;
-    min-width: 40px;
-    min-height: 32px;
-    padding: 0 10px;
+    border-radius: 6px;
+    padding: 4px 10px;
     margin: 4px 2px 4px 6px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }}
 button.menu-btn:hover {{
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
+    background-color: rgba(26, 31, 43, {hover_alpha});
 }}
 button.menu-btn:active {{
     background-image: none;
-    background-color: rgba(75, 139, 245, 0.3);
+    background-color: #4B8BF5;
 }}
 
 button.pinned-btn {{
     background-image: none;
     background-color: transparent;
     border: none;
-    border-radius: 8px;
-    min-width: 36px;
-    min-height: 32px;
-    padding: 0 8px;
+    border-radius: 6px;
+    padding: 4px 6px;
     margin: 4px 1px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }}
 button.pinned-btn:hover {{
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
+    background-color: rgba(26, 31, 43, {hover_alpha});
 }}
 button.pinned-btn:active {{
     background-image: none;
-    background-color: rgba(75, 139, 245, 0.2);
+    background-color: rgba(75, 139, 245, 0.25);
 }}
 
-separator.task-sep, separator.systray-sep {{
-    background-color: rgba(255,255,255,0.08);
+separator.task-sep {{
+    background-color: rgba(39, 45, 61, {alpha});
     min-width: 1px;
-    margin: 8px 6px;
+    margin: 8px 4px;
 }}
 
 #FlavosTaskbar WnckTasklist {{
@@ -261,62 +244,61 @@ separator.task-sep, separator.systray-sep {{
     background-color: transparent;
     border: none;
     border-radius: 6px;
-    min-width: 80px;
-    max-width: 180px;
-    padding: 0 10px;
+    padding: 2px 8px;
     margin: 4px 1px;
     color: #8891A5;
     font-family: Inter, sans-serif;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     border-bottom: 2px solid transparent;
+    max-width: 180px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1),
-                border-bottom-color 150ms ease;
+                border-bottom-color 120ms ease;
 }}
+
 #FlavosTaskbar WnckTasklist button:hover {{
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
+    background-color: rgba(26, 31, 43, {hover_alpha});
     color: #C8CDD8;
 }}
+
 #FlavosTaskbar WnckTasklist button:focus-visible {{
     background-image: none;
     outline: 2px solid #4B8BF5;
-    outline-offset: -2px;
+    outline-offset: 2px;
 }}
+
 #FlavosTaskbar WnckTasklist button:checked {{
     background-image: none;
-    background-color: rgba(75, 139, 245, 0.12);
+    background-color: #1E2433;
     color: #E8ECF4;
     border-bottom: 2px solid #4B8BF5;
 }}
 
-button.systray-btn {{
+button.status-btn {{
     background-image: none;
     background-color: transparent;
     border: none;
     border-radius: 6px;
-    min-width: 30px;
-    min-height: 30px;
-    padding: 0 5px;
+    padding: 4px 6px;
     margin: 4px 1px;
-    transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
+    color: #8891A5;
+    transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
+                color 100ms cubic-bezier(0.2, 0, 0, 1);
 }}
-button.systray-btn:hover {{
+button.status-btn:hover {{
     background-image: none;
-    background-color: rgba(255,255,255,0.07);
-}}
-button.systray-btn:active {{
-    background-image: none;
-    background-color: rgba(75, 139, 245, 0.2);
+    background-color: rgba(26, 31, 43, {hover_alpha});
+    color: #E8ECF4;
 }}
 
 label.taskbar-clock {{
     font-family: Inter, sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    color: #C8CDD8;
-    padding: 0 14px 0 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #8891A5;
+    padding: 0 10px 0 4px;
 }}
 """
 
@@ -338,7 +320,7 @@ class FlavosTaskbar(Gtk.Window):
         self.set_skip_pager_hint(True)
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
 
-        # ── Config + CSS ──────────────────────────────────────────────────
+        # ── Config e CSS ──────────────────────────────────────────────────
         cfg = load_config()
         style = cfg.get("style", "solid")
         opacity = cfg.get("opacity", 100)
@@ -349,6 +331,8 @@ class FlavosTaskbar(Gtk.Window):
             visual = screen.get_rgba_visual()
             if visual and screen.is_composited():
                 self.set_visual(visual)
+
+        if style == "glass":
             alpha_val = float(opacity) / 100.0
             hover_alpha_val = min(1.0, alpha_val + 0.25)
             css_str = BASE_CSS_GLASS.format(alpha=alpha_val, hover_alpha=hover_alpha_val)
@@ -365,8 +349,8 @@ class FlavosTaskbar(Gtk.Window):
         display = Gdk.Display.get_default()
         monitor = display.get_primary_monitor() or display.get_monitor(0)
         geom = monitor.get_geometry()
-        self.set_default_size(geom.width, 40)
-        self.move(geom.x, geom.y + geom.height - 40)
+        self.set_default_size(geom.width, 36)
+        self.move(geom.x, geom.y + geom.height - 36)
 
         # ── Wnck Screen ──────────────────────────────────────────────────
         self._screen = Wnck.Screen.get_default()
@@ -375,41 +359,38 @@ class FlavosTaskbar(Gtk.Window):
             sys.exit(1)
 
         # ── Layout ────────────────────────────────────────────────────────
-        # [ Menu ] [ Pinned... ] [ | ] [ Wnck.Tasklist ──────── ] [ | ] [ 🔊 📶 🔔 ] [ Hora ]
+        # [ Menu ] [ Pin ] [ Pin ] [ Pin ] │ [ Wnck.Tasklist ] │ [ 🔊 ] [ 📶 ] [ 🔔 ] [ 14:22 ]
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.add(main_box)
 
-        # === ESQUERDA =====================================================
-
-        # 1. Botão de Menu
+        # ── Esquerda: Menu + Pinned Apps ──────────────────────────────────
+        # 1. Botão de menu (ícone, abre launcher via shellctl)
         btn_menu = Gtk.Button()
         btn_menu.get_style_context().add_class("menu-btn")
-        menu_icon = Gtk.Image.new_from_icon_name(
-            "start-here-symbolic", Gtk.IconSize.SMALL_TOOLBAR
-        )
+        menu_icon = Gtk.Image.new_from_icon_name("start-here-symbolic", Gtk.IconSize.BUTTON)
         btn_menu.add(menu_icon)
-        btn_menu.set_tooltip_text("Menu do Sistema  (Super)")
+        btn_menu.set_tooltip_text("Menu (Super)")
         btn_menu.connect("clicked", lambda _: spawn_app(
             ["/usr/local/bin/flavos-shellctl", "launcher", "toggle"]
         ))
         main_box.pack_start(btn_menu, False, False, 0)
 
-        # 2. Apps Fixados (lista estruturada)
+        # 2. Apps fixados (da lista PINNED_APPS)
         for icon_name, cmd, tooltip in PINNED_APPS:
             btn = Gtk.Button()
             btn.get_style_context().add_class("pinned-btn")
-            img = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.SMALL_TOOLBAR)
+            img = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
             btn.add(img)
             btn.set_tooltip_text(tooltip)
             btn.connect("clicked", lambda _, c=cmd: spawn_app(c))
             main_box.pack_start(btn, False, False, 0)
 
-        # 3. Separador
-        sep1 = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        sep1.get_style_context().add_class("task-sep")
-        main_box.pack_start(sep1, False, False, 0)
+        # 3. Separador esquerdo
+        sep_left = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        sep_left.get_style_context().add_class("task-sep")
+        main_box.pack_start(sep_left, False, False, 0)
 
-        # 4. Wnck.Tasklist — núcleo funcional
+        # ── Centro: Wnck.Tasklist (núcleo funcional) ─────────────────────
         tasklist = Wnck.Tasklist.new()
         tasklist.set_grouping(Wnck.TasklistGroupingType.AUTO_GROUP)
         tasklist.set_switch_workspace_on_unminimize(True)
@@ -417,41 +398,57 @@ class FlavosTaskbar(Gtk.Window):
         tasklist.set_button_relief(Gtk.ReliefStyle.NONE)
         main_box.pack_start(tasklist, True, True, 0)
 
-        # === DIREITA =====================================================
+        # ── Direita: Status Icons + Relógio ───────────────────────────────
+        # Separador direito
+        sep_right = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        sep_right.get_style_context().add_class("task-sep")
+        main_box.pack_end(sep_right, False, False, 0)
 
-        # 5. Separador direita
-        sep2 = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        sep2.get_style_context().add_class("systray-sep")
-        main_box.pack_end(sep2, False, False, 0)
-
-        # 6. Relógio + Data (direita absoluta)
+        # Relógio compacto (discreto, não compete com o do topo)
         self.lbl_clock = Gtk.Label()
         self.lbl_clock.get_style_context().add_class("taskbar-clock")
         main_box.pack_end(self.lbl_clock, False, False, 0)
 
-        # 7. Ícones de sistema (volume, rede, notificações)
-        systray_icons = [
-            ("audio-volume-high-symbolic", ["pavucontrol"],           "Volume"),
-            ("network-wireless-symbolic",  ["nm-connection-editor"],  "Rede"),
-            ("preferences-system-notifications-symbolic", ["dunstctl", "context"], "Notificações"),
-        ]
-        for icon_name, cmd, tooltip in reversed(systray_icons):
-            btn = Gtk.Button()
-            btn.get_style_context().add_class("systray-btn")
-            img = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.SMALL_TOOLBAR)
-            btn.add(img)
-            btn.set_tooltip_text(tooltip)
-            btn.connect("clicked", lambda _, c=cmd: spawn_app(c))
-            main_box.pack_end(btn, False, False, 0)
+        # Ícone de notificações — PLACEHOLDER CONTROLADO
+        # O dunst (serviço de notificações) não expõe API GTK nativa.
+        # Este botão é um placeholder visual que abre a última notificação
+        # via dunstctl. Será substituído por integração real quando disponível.
+        btn_notif = Gtk.Button()
+        btn_notif.get_style_context().add_class("status-btn")
+        btn_notif.add(Gtk.Image.new_from_icon_name(
+            "preferences-system-notifications-symbolic", Gtk.IconSize.MENU
+        ))
+        btn_notif.set_tooltip_text("Notificações (placeholder)")
+        btn_notif.connect("clicked", lambda _: spawn_app(["dunstctl", "history-pop"]))
+        main_box.pack_end(btn_notif, False, False, 0)
 
-        # 8. Relógio — inicia e agenda atualização
+        # Ícone de rede — wrapper funcional (abre nm-connection-editor)
+        btn_net = Gtk.Button()
+        btn_net.get_style_context().add_class("status-btn")
+        btn_net.add(Gtk.Image.new_from_icon_name(
+            "network-wireless-symbolic", Gtk.IconSize.MENU
+        ))
+        btn_net.set_tooltip_text("Rede")
+        btn_net.connect("clicked", lambda _: spawn_app(["nm-connection-editor"]))
+        main_box.pack_end(btn_net, False, False, 0)
+
+        # Ícone de volume — wrapper funcional (abre pavucontrol)
+        btn_vol = Gtk.Button()
+        btn_vol.get_style_context().add_class("status-btn")
+        btn_vol.add(Gtk.Image.new_from_icon_name(
+            "audio-volume-medium-symbolic", Gtk.IconSize.MENU
+        ))
+        btn_vol.set_tooltip_text("Volume")
+        btn_vol.connect("clicked", lambda _: spawn_app(["pavucontrol"]))
+        main_box.pack_end(btn_vol, False, False, 0)
+
+        # Inicia relógio
         self.update_clock()
-        GLib.timeout_add_seconds(1, self.update_clock)
+        GLib.timeout_add_seconds(30, self.update_clock)
 
     def update_clock(self):
         now = datetime.now()
-        # Formato compacto para barra: Sáb 12 Abr • 14:35
-        self.lbl_clock.set_text(now.strftime("%a %d %b  %H:%M").title())
+        self.lbl_clock.set_text(now.strftime("%H:%M"))
         return True
 
 

@@ -8,7 +8,7 @@ import sys
 import subprocess
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib, Gio
+from gi.repository import Gtk, Gdk, GLib, Gio, Pango
 
 CSS = """
 #LauncherWindow {
@@ -135,6 +135,8 @@ class FlavosLauncher(Gtk.Window):
         # Eventos vitais
         self.connect("focus-out-event", self.on_focus_out)
         self.connect("key-press-event", self.on_key_press)
+        # Força foco após o X11 mapear a janela (evita race condition)
+        self.connect("map-event", self._on_mapped)
 
         # Carrega CSS
         provider = Gtk.CssProvider()
@@ -278,8 +280,6 @@ class FlavosLauncher(Gtk.Window):
         # App Label
         lbl = Gtk.Label(label=app_data["name"])
         lbl.get_style_context().add_class(lbl_class)
-        lbl.set_ellipsize(max("end", 1)) # fake pango constant
-        from gi.repository import Pango
         lbl.set_ellipsize(Pango.EllipsizeMode.END)
         lbl.set_max_width_chars(12)
         vbox.pack_start(lbl, False, False, 0)
@@ -317,6 +317,11 @@ class FlavosLauncher(Gtk.Window):
                 self.apps_flow.add(self.create_grid_btn(app, is_action=False))
         self.apps_flow.show_all()
 
+    def _on_mapped(self, widget, event):
+        """Chamado após X11 mapear a janela. Garante foco confiável."""
+        self.present_with_time(Gdk.CURRENT_TIME)
+        return False
+
     def on_focus_out(self, widget, event):
         sys.exit(0)
         
@@ -349,6 +354,6 @@ class FlavosLauncher(Gtk.Window):
 if __name__ == '__main__':
     win = FlavosLauncher()
     win.show_all()
-    # Força captura de foco imediata assim que mapeado
-    win.present()
+    # Foco via idle_add — garante que o event loop do Gtk já está rodando
+    GLib.idle_add(win.present)
     Gtk.main()

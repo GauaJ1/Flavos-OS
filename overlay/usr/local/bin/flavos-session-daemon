@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Flavos OS — Shell Session Daemon v1
+# Flavos OS — Shell Session Daemon v2
 # Mantém os pilares visuais da Shell (Native Shell Core - Etapa 11)
 # Roda via systemd --user no boot grafico.
 
@@ -11,20 +11,21 @@ import os
 
 processes = {}
 
-# Pilares visuais básicos X11 provisórios
-# No futuro (Ex: Wayland), comandos mudarão suavemente aqui.
+# Pilares visuais supervisionados (watchdog revive se morrerem)
 COMMANDS = {
-    "compositor": ["picom", "-b"],
+    "compositor": ["picom"],
     "main_panel": ["flavos-panel"],
     "taskbar": ["flavos-taskbar"],
     "notifications": ["dunst"],
-    "desktop": ["pcmanfm", "--desktop"],
-    "xcape": ["xcape", "-e", "Super_L=Alt_L|F1", "-t", "500"]
+    "desktop": ["pcmanfm", "--desktop"]
 }
 
-# Tratamento especial: Picom com -b vai dar detach, não podemos supervisionar facilmente via Popen padrão.
-# Neste contexto native, removeremos o `-b` para deixá-lo no foreground atrelado ao nosso daemon:
-COMMANDS["compositor"] = ["picom"]
+# Processos "fire-and-forget": sobem uma vez, fazem fork interno, não são supervisionados.
+# O xcape faz fork() e o pai retorna exit 0 imediatamente — isso é comportamento normal,
+# não crash. Tentar revivê-lo causa loop infinito de respawn.
+FIRE_AND_FORGET = {
+    "xcape": ["xcape", "-e", "Super_L=Alt_L|F1"]
+}
 
 def spawn(name):
     """Inicia um node visual se não estiver ativo."""
@@ -37,8 +38,17 @@ def spawn(name):
         stderr=subprocess.DEVNULL
     )
 
+def spawn_fire_and_forget(name):
+    """Inicia processo que faz fork interno. Não será supervisionado."""
+    print(f"[flavos-shell] Fire-and-forget: {name}", flush=True)
+    subprocess.Popen(
+        FIRE_AND_FORGET[name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
 def spawn_delayed(name, delay=2.0):
-    """Inicia um node visual com atraso assíncrono para garantir que X11/WM subiu."""
+    """Inicia um node visual com atraso para garantir que X11/WM subiu."""
     if name in processes and processes[name].poll() is None:
          return
     print(f"[flavos-shell] Iniciando node com delay ({delay}s): {name}", flush=True)
@@ -60,7 +70,6 @@ def handle_term(signum, frame):
     stop_all()
     sys.exit(0)
 
-# SIGHUP: Limpa processos e reinicia (Soft reload da shell)
 def handle_hup(signum, frame):
     print("[flavos-shell] Recebido SIGHUP (Reload). Reiniciando nodes...", flush=True)
     stop_all()
@@ -74,25 +83,25 @@ signal.signal(signal.SIGHUP, handle_hup)
 if __name__ == "__main__":
     print("[flavos-shell] Daemon Ativado. Assumindo a Shell UI...", flush=True)
     
-    # 1. Spawning inicial
-    # Subir core graphic primeiro (comp e panel superior)
-    for name in ["compositor", "main_panel", "desktop", "notifications", "xcape"]:
+    # 1. Core visual (compositor + painel superior + desktop + notificações)
+    for name in ["compositor", "main_panel", "desktop", "notifications"]:
         spawn(name)
     
-    # Subir taskbar apenas com WM estabelecido p/ hooks do pager Wnck funcionarem.
+    # 2. Taskbar com delay — Wnck precisa do WM estabilizado
     spawn_delayed("taskbar", 1.5)
     
-    # 2. Watchdog Loop (Sleep interruptível via sinais)
+    # 3. xcape — fire-and-forget, sobe DEPOIS do Openbox estar pronto
+    #    O delay da taskbar já garante ~1.5s. xcape precisa do WM para capturar.
+    spawn_fire_and_forget("xcape")
+    
+    # 4. Watchdog loop — só supervisiona COMMANDS, não fire-and-forget
     while True:
         try:
             time.sleep(2)
         except InterruptedError:
-            # Continua o loop para que os signal handlers ajam suavemente.
             continue
             
-        # Revive se algo vital da UI morrer acidentalmente
         for name in COMMANDS:
-             # poll() retorna None se ainda estive rodando
-             if processes[name].poll() is not None:
-                 print(f"[flavos-shell] Node morta ({name}). Revivendo automaticamente...", flush=True)
+             if processes.get(name) and processes[name].poll() is not None:
+                 print(f"[flavos-shell] Node morta ({name}). Revivendo...", flush=True)
                  spawn(name)
