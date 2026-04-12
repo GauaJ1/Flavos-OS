@@ -71,7 +71,7 @@ BASE_CSS_SOLID = """
 }
 
 /* Menu button (ícone start) */
-button.menu-btn {
+window#FlavosTaskbar button.menu-btn {
     background-image: none;
     background-color: transparent;
     border: none;
@@ -80,17 +80,17 @@ button.menu-btn {
     margin: 4px 2px 4px 6px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }
-button.menu-btn:hover {
+window#FlavosTaskbar button.menu-btn:hover {
     background-image: none;
     background-color: #1A1F2B;
 }
-button.menu-btn:active {
+window#FlavosTaskbar button.menu-btn:active {
     background-image: none;
     background-color: #4B8BF5;
 }
 
 /* Apps fixados */
-button.pinned-btn {
+window#FlavosTaskbar button.pinned-btn {
     background-image: none;
     background-color: transparent;
     border: none;
@@ -99,11 +99,11 @@ button.pinned-btn {
     margin: 4px 1px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }
-button.pinned-btn:hover {
+window#FlavosTaskbar button.pinned-btn:hover {
     background-image: none;
     background-color: #1A1F2B;
 }
-button.pinned-btn:active {
+window#FlavosTaskbar button.pinned-btn:active {
     background-image: none;
     background-color: rgba(75, 139, 245, 0.25);
 }
@@ -116,7 +116,7 @@ separator.task-sep {
 }
 
 /* Wnck.Tasklist — janelas abertas */
-#FlavosTaskbar WnckTasklist {
+window#FlavosTaskbar WnckTasklist {
     background-color: transparent;
     background-image: none;
 }
@@ -161,7 +161,7 @@ window#FlavosTaskbar WnckTasklist button:checked {
 }
 
 /* Status icons (direita) */
-button.status-btn {
+window#FlavosTaskbar button.status-btn {
     background-image: none;
     background-color: transparent;
     border: none;
@@ -172,7 +172,7 @@ button.status-btn {
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1);
 }
-button.status-btn:hover {
+window#FlavosTaskbar button.status-btn:hover {
     background-image: none;
     background-color: #1A1F2B;
     color: #E8ECF4;
@@ -194,7 +194,7 @@ BASE_CSS_GLASS = """
     border-top: 1px solid rgba(39, 45, 61, {alpha});
 }}
 
-button.menu-btn {{
+window#FlavosTaskbar button.menu-btn {{
     background-image: none;
     background-color: transparent;
     border: none;
@@ -203,16 +203,16 @@ button.menu-btn {{
     margin: 4px 2px 4px 6px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }}
-button.menu-btn:hover {{
+window#FlavosTaskbar button.menu-btn:hover {{
     background-image: none;
     background-color: rgba(26, 31, 43, {hover_alpha});
 }}
-button.menu-btn:active {{
+window#FlavosTaskbar button.menu-btn:active {{
     background-image: none;
     background-color: #4B8BF5;
 }}
 
-button.pinned-btn {{
+window#FlavosTaskbar button.pinned-btn {{
     background-image: none;
     background-color: transparent;
     border: none;
@@ -221,11 +221,11 @@ button.pinned-btn {{
     margin: 4px 1px;
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1);
 }}
-button.pinned-btn:hover {{
+window#FlavosTaskbar button.pinned-btn:hover {{
     background-image: none;
     background-color: rgba(26, 31, 43, {hover_alpha});
 }}
-button.pinned-btn:active {{
+window#FlavosTaskbar button.pinned-btn:active {{
     background-image: none;
     background-color: rgba(75, 139, 245, 0.25);
 }}
@@ -236,7 +236,7 @@ separator.task-sep {{
     margin: 8px 4px;
 }}
 
-#FlavosTaskbar WnckTasklist {{
+window#FlavosTaskbar WnckTasklist {{
     background-color: transparent;
     background-image: none;
 }}
@@ -280,7 +280,7 @@ window#FlavosTaskbar WnckTasklist button:checked {{
     border-bottom: 2px solid #4B8BF5;
 }}
 
-button.status-btn {{
+window#FlavosTaskbar button.status-btn {{
     background-image: none;
     background-color: transparent;
     border: none;
@@ -291,7 +291,7 @@ button.status-btn {{
     transition: background-color 100ms cubic-bezier(0.2, 0, 0, 1),
                 color 100ms cubic-bezier(0.2, 0, 0, 1);
 }}
-button.status-btn:hover {{
+window#FlavosTaskbar button.status-btn:hover {{
     background-image: none;
     background-color: rgba(26, 31, 43, {hover_alpha});
     color: #E8ECF4;
