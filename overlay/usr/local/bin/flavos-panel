@@ -6,9 +6,7 @@
 import gi
 import os
 import subprocess
-import time
 import json
-from datetime import datetime
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
@@ -171,18 +169,14 @@ class FlavosPanel(Gtk.Window):
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.add(main_box)
 
-        # ====== ESQUERDA: LAUNCHER (BRANDING) ======
-        # Convertido de Gtk.Button para Gtk.Label por decisão arquitetural.
+        # ====== ESQUERDA: BRANDING ======
         left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         lbl_branding = Gtk.Label(label="FLAVOS")
-        # Mantemos as classes panel-btn nativas para herdarem alinhamento, mas reforçamos como label puro
         lbl_branding.get_style_context().add_class("panel-btn")
         lbl_branding.get_style_context().add_class("launcher")
-        # Removido o evento de clique e o pseudo-foco do OS.
-        # ====== CENTRO: DATA/HORA ======
+
+        # ====== CENTRO: espaço vazio (clock agora fica na taskbar inferior) ======
         center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        self.lbl_clock = Gtk.Label()
-        self.lbl_clock.get_style_context().add_class("clock")
         
         if align == "center":
             center_box.pack_start(lbl_branding, False, False, 0)
@@ -190,13 +184,7 @@ class FlavosPanel(Gtk.Window):
             left_box.pack_start(lbl_branding, False, False, 4)
             main_box.pack_start(left_box, False, False, 8)
             
-        center_box.pack_start(self.lbl_clock, True, True, 0)
-        
-        # Fill/Expand central empurra os extremos
         main_box.set_center_widget(center_box)
-        
-        self.update_clock()
-        GLib.timeout_add_seconds(1, self.update_clock)
 
         # ====== DIREITA: OPÇÕES / SYSTRAY WRAPPER ======
         right_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
@@ -213,21 +201,8 @@ class FlavosPanel(Gtk.Window):
         btn_power.add(icon_pwr)
         btn_power.connect("clicked", lambda _: spawn_async(["flavos-power"]))
         
-        # Ícones "dummy" funcionais restaurados para rede e áudio, mapeando para o Settings (Sistematização sem Systray Gtk3 legado)
-        btn_net = Gtk.Button()
-        btn_net.get_style_context().add_class("panel-btn")
-        btn_net.add(Gtk.Image.new_from_icon_name("network-wireless-symbolic", Gtk.IconSize.MENU))
-        btn_net.connect("clicked", lambda _: spawn_async(["nm-connection-editor"]))
-        
-        btn_vol = Gtk.Button()
-        btn_vol.get_style_context().add_class("panel-btn")
-        btn_vol.add(Gtk.Image.new_from_icon_name("audio-volume-high-symbolic", Gtk.IconSize.MENU))
-        btn_vol.connect("clicked", lambda _: spawn_async(["pavucontrol"]))
-
         right_box.pack_end(btn_power, False, False, 4)
         right_box.pack_end(btn_settings, False, False, 0)
-        right_box.pack_end(btn_net, False, False, 0)
-        right_box.pack_end(btn_vol, False, False, 0)
         
         main_box.pack_end(right_box, False, False, 8)
 
@@ -235,11 +210,9 @@ class FlavosPanel(Gtk.Window):
         self.set_default_size(geom.width, 36)
         self.move(geom.x, geom.y)
 
-    def update_clock(self):
-        now = datetime.now()
-        # Formato com data + relógio 
-        self.lbl_clock.set_text(now.strftime("%a, %d %b • %H:%M").title())
-        return True
+    def show_all_then_show(self):
+        """Stub de compatibilidade."""
+        pass
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ COMMANDS = {
     "taskbar": ["flavos-taskbar"],
     "notifications": ["dunst"],
     "desktop": ["pcmanfm", "--desktop"],
-    "xcape": ["xcape", "-e", "Super_L=Alt_L|F1"]
+    "xcape": ["xcape", "-e", "Super_L=Alt_L|F1", "-t", "500"]
 }
 
 # Tratamento especial: Picom com -b vai dar detach, não podemos supervisionar facilmente via Popen padrão.
