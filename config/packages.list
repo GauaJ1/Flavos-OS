@@ -72,10 +72,8 @@ viewnior
 xdg-utils
 shared-mime-info
 
-tint2
 lxpolkit
 libpam-systemd
-jgmenu
 feh
 picom
 fonts-inter

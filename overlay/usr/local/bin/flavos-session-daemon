@@ -16,7 +16,6 @@ processes = {}
 COMMANDS = {
     "compositor": ["picom", "-b"],
     "main_panel": ["flavos-panel"],
-    "legacy_dock": ["tint2"],
     "notifications": ["dunst"],
     "desktop": ["pcmanfm", "--desktop"]
 }
