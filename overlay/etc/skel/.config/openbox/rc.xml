@@ -87,9 +87,7 @@
   </keyboard>
   <mouse>
     <context name="Desktop">
-      <mousebind button="Right" action="Press">
-        <action name="Execute"><command>/usr/local/bin/flavos-shellctl launcher toggle</command></action>
-      </mousebind>
+      <!-- Right-click no desktop: sem ação (launcher somente via Super) -->
     </context>
     <context name="Titlebar">
       <mousebind button="Left" action="Drag">

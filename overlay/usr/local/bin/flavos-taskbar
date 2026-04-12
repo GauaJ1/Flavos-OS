@@ -457,6 +457,12 @@ class FlavosTaskbar(Gtk.Window):
 
 
 if __name__ == "__main__":
-    win = FlavosTaskbar()
-    win.show_all()
-    Gtk.main()
+    import traceback
+    try:
+        win = FlavosTaskbar()
+        win.show_all()
+        Gtk.main()
+    except Exception as e:
+        print(f"[flavos-taskbar] CRASH: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
