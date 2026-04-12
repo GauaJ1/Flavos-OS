@@ -39,22 +39,12 @@ button.panel-btn {
     font-family: Inter, sans-serif;
     font-weight: 700;
     font-size: 13px;
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-left: 14px;
+    padding-right: 14px;
     border-radius: 8px;
     margin-top: 4px;
     margin-bottom: 4px;
     transition: all 0.2s ease-in-out;
-}
-eventbox.panel-btn {
-    padding-left: 8px;
-    padding-right: 8px;
-}
-eventbox.panel-btn label {
-    font-size: 13px;
-    font-weight: 800;
-    color: #E8ECF4;
-    cursor: pointer;
 }
 button.panel-btn:hover {
     background-image: none;
@@ -89,22 +79,12 @@ button.panel-btn {{
     font-family: Inter, sans-serif;
     font-weight: 700;
     font-size: 13px;
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-left: 14px;
+    padding-right: 14px;
     border-radius: 8px;
     margin-top: 4px;
     margin-bottom: 4px;
     transition: all 0.2s ease-in-out;
-}}
-eventbox.panel-btn {{
-    padding-left: 8px;
-    padding-right: 8px;
-}}
-eventbox.panel-btn label {{
-    font-size: 13px;
-    font-weight: 800;
-    color: #E8ECF4;
-    cursor: pointer;
 }}
 button.panel-btn:hover {{
     background-image: none;
@@ -142,6 +122,8 @@ class FlavosPanel(Gtk.Window):
         self.set_decorated(False)
         self.set_resizable(False)
         self.set_accept_focus(False)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
 
         # Lendo Configuração viva de Painel
         cfg = load_config()
@@ -179,33 +161,23 @@ class FlavosPanel(Gtk.Window):
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.add(main_box)
 
-        # ====== ESQUERDA: LAUNCHER (AGORA COMO TEXTO) ======
+        # ====== ESQUERDA: LAUNCHER (BRANDING) ======
+        # Convertido de Gtk.Button para Gtk.Label por decisão arquitetural.
         left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        
-        lbl_launcher = Gtk.Label(label="FLAVOS")
-        lbl_launcher.get_style_context().add_class("launcher")
-        
-        # Embrulhar o Label em Gtk.EventBox para escutar cliques sem ser um "Botão" visual
-        event_box = Gtk.EventBox()
-        event_box.add(lbl_launcher)
-        
-        # CSS nativo para forçar o cursor de clique no texto
-        window = event_box.get_window()
-        if window:
-            window.set_cursor(Gdk.Cursor(Gdk.CursorType.HAND2))
-            
-        event_box.connect("button-press-event", lambda w, e: spawn_async(["flavos-shellctl", "launcher", "toggle"]))
-        event_box.get_style_context().add_class("panel-btn")
-        
+        lbl_branding = Gtk.Label(label="FLAVOS")
+        # Mantemos as classes panel-btn nativas para herdarem alinhamento, mas reforçamos como label puro
+        lbl_branding.get_style_context().add_class("panel-btn")
+        lbl_branding.get_style_context().add_class("launcher")
+        # Removido o evento de clique e o pseudo-foco do OS.
         # ====== CENTRO: DATA/HORA ======
         center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.lbl_clock = Gtk.Label()
         self.lbl_clock.get_style_context().add_class("clock")
         
         if align == "center":
-            center_box.pack_start(event_box, False, False, 0)
+            center_box.pack_start(lbl_branding, False, False, 0)
         else:
-            left_box.pack_start(event_box, False, False, 16)
+            left_box.pack_start(lbl_branding, False, False, 4)
             main_box.pack_start(left_box, False, False, 8)
             
         center_box.pack_start(self.lbl_clock, True, True, 0)
@@ -231,8 +203,21 @@ class FlavosPanel(Gtk.Window):
         btn_power.add(icon_pwr)
         btn_power.connect("clicked", lambda _: spawn_async(["flavos-power"]))
         
+        # Ícones "dummy" funcionais restaurados para rede e áudio, mapeando para o Settings (Sistematização sem Systray Gtk3 legado)
+        btn_net = Gtk.Button()
+        btn_net.get_style_context().add_class("panel-btn")
+        btn_net.add(Gtk.Image.new_from_icon_name("network-wireless-symbolic", Gtk.IconSize.MENU))
+        btn_net.connect("clicked", lambda _: spawn_async(["nm-connection-editor"]))
+        
+        btn_vol = Gtk.Button()
+        btn_vol.get_style_context().add_class("panel-btn")
+        btn_vol.add(Gtk.Image.new_from_icon_name("audio-volume-high-symbolic", Gtk.IconSize.MENU))
+        btn_vol.connect("clicked", lambda _: spawn_async(["pavucontrol"]))
+
         right_box.pack_end(btn_power, False, False, 4)
         right_box.pack_end(btn_settings, False, False, 0)
+        right_box.pack_end(btn_net, False, False, 0)
+        right_box.pack_end(btn_vol, False, False, 0)
         
         main_box.pack_end(right_box, False, False, 8)
 
@@ -242,8 +227,8 @@ class FlavosPanel(Gtk.Window):
 
     def update_clock(self):
         now = datetime.now()
-        # Formato limpo e profissional
-        self.lbl_clock.set_text(now.strftime("%a %H:%M").upper())
+        # Formato com data + relógio 
+        self.lbl_clock.set_text(now.strftime("%a, %d %b • %H:%M").title())
         return True
 
 
