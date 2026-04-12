@@ -205,9 +205,9 @@ class FlavosPanel(Gtk.Window):
         
         main_box.pack_end(right_box, False, False, 8)
 
-        # Seta dimensões nativas forçadas na borda INFERIOR do monitor
+        # Painel ancorado no TOPO do monitor
         self.set_default_size(geom.width, 36)
-        self.move(geom.x, geom.y + geom.height - 36)
+        self.move(geom.x, geom.y)
 
     def update_clock(self):
         now = datetime.now()

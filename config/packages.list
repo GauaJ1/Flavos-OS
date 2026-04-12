@@ -84,6 +84,7 @@ papirus-icon-theme
 python3
 python3-gi
 gir1.2-gtk-3.0
+gir1.2-wnck-3.0
 
 # Serviços Visuais da Shell e Applets de Sistema (Etapa 10B/10C)
 dunst
