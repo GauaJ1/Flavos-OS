@@ -22,14 +22,14 @@ def load_config():
                 return json.load(f)
         except:
             pass
-    return {"opacity": 100, "alignment": "left", "glassmorphism": False}
+    return {"opacity": 100, "alignment": "left", "style": "solid"}
 
-BASE_CSS = """
+# CSS Base — usa {alpha} no modo glass e cor sólida no solid
+BASE_CSS_SOLID = """
 #FlavosPanel {
-    background-color: rgba(13, 16, 23, {alpha});
-    border-bottom: 2px solid rgba(39, 45, 61, {alpha});
+    background-color: #0D1017;
+    border-bottom: 2px solid #272D3D;
 }
-
 button.panel-btn {
     background-image: none;
     background-color: transparent;
@@ -48,7 +48,7 @@ button.panel-btn {
 }
 button.panel-btn:hover {
     background-image: none;
-    background-color: rgba(35, 40, 56, {hover_alpha});
+    background-color: #232838;
     color: #E8ECF4;
 }
 button.panel-btn:active, button.panel-btn.active {
@@ -56,17 +56,53 @@ button.panel-btn:active, button.panel-btn.active {
     background-color: #4B8BF5;
     color: #FFFFFF;
 }
-
-button.launcher {
-    color: #FFFFFF;
-}
-
+button.launcher { color: #FFFFFF; }
 label.clock {
     font-family: Inter, sans-serif;
     font-size: 13px;
     font-weight: 600;
     color: #E8ECF4;
 }
+"""
+
+BASE_CSS_GLASS = """
+#FlavosPanel {{
+    background-color: rgba(13, 16, 23, {alpha});
+    border-bottom: 2px solid rgba(39, 45, 61, {alpha});
+}}
+button.panel-btn {{
+    background-image: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    color: #8891A5;
+    font-family: Inter, sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border-radius: 8px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    transition: all 0.2s ease-in-out;
+}}
+button.panel-btn:hover {{
+    background-image: none;
+    background-color: rgba(35, 40, 56, {hover_alpha});
+    color: #E8ECF4;
+}}
+button.panel-btn:active, button.panel-btn.active {{
+    background-image: none;
+    background-color: #4B8BF5;
+    color: #FFFFFF;
+}}
+button.launcher {{ color: #FFFFFF; }}
+label.clock {{
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #E8ECF4;
+}}
 """
 
 def spawn_async(cmd_list):
@@ -79,32 +115,38 @@ class FlavosPanel(Gtk.Window):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         self.set_name("FlavosPanel")
         
-        # Flag de Transição (Regra explícita da 11B: DOCK e RGBA apenas se X11)
+        # Hint de DOCK: solução de transição X11 (ver regra 11B)
         if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
             self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+
+        self.set_decorated(False)
+        self.set_resizable(False)
+        self.set_accept_focus(False)
+
+        # Lendo Configuração viva de Painel
+        cfg = load_config()
+        style = cfg.get("style", "solid")   # "solid" | "glass"
+        opacity = cfg.get("opacity", 100)
+        align = cfg.get("alignment", "left")
+
+        # RGBA visual: só ativado no modo glass com compositor ativo
+        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11" and style == "glass":
             self.set_app_paintable(True)
             screen = self.get_screen()
             visual = screen.get_rgba_visual()
             if visual and screen.is_composited():
                 self.set_visual(visual)
-                
-        self.set_decorated(False)
-        self.set_resizable(False)
-        # Impede que o panel ganhe foco constante prejudicando input das outras apps
-        self.set_accept_focus(False)
 
-        # Lendo Configuração viva de Painel
-        cfg = load_config()
-        opacity = cfg.get("opacity", 100)
-        align = cfg.get("alignment", "left")
-
-        # Dinamizando CSS Alpha channels
-        alpha_val = float(opacity) / 100.0
-        hover_alpha_val = min(1.0, alpha_val + 0.3) if alpha_val < 1.0 else 1.0
-        parsed_css = BASE_CSS.replace("{alpha}", str(alpha_val)).replace("{hover_alpha}", str(hover_alpha_val)).encode('utf-8')
+        # CSS condicional por modo
+        if style == "glass":
+            alpha_val = float(opacity) / 100.0
+            hover_alpha_val = min(1.0, alpha_val + 0.25)
+            css_str = BASE_CSS_GLASS.format(alpha=alpha_val, hover_alpha=hover_alpha_val)
+        else:
+            css_str = BASE_CSS_SOLID
 
         provider = Gtk.CssProvider()
-        provider.load_from_data(parsed_css)
+        provider.load_from_data(css_str.encode("utf-8"))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
