@@ -411,8 +411,9 @@ class FlavosTaskbar(Gtk.Window):
         # Primeira chamada = mais à direita. Última chamada = mais à esquerda.
         # Ordem visual desejada (esq→dir): [sep] [vol] [net] [notif] [clock]
 
-        # Relógio compacto (mais à direita)
+        # Relógio compacto
         self.lbl_clock = Gtk.Label()
+        self.lbl_clock.set_justify(Gtk.Justification.CENTER)
         self.lbl_clock.get_style_context().add_class("taskbar-clock")
         main_box.pack_end(self.lbl_clock, False, False, 0)
 
@@ -439,14 +440,14 @@ class FlavosTaskbar(Gtk.Window):
         btn_net.connect("clicked", lambda _: spawn_app(["nm-connection-editor"]))
         main_box.pack_end(btn_net, False, False, 0)
 
-        # Ícone de volume — wrapper funcional (abre pavucontrol)
+        # Ícone de volume — wrapper funcional (abre flavos-osd)
         btn_vol = Gtk.Button()
         btn_vol.get_style_context().add_class("status-btn")
         btn_vol.add(Gtk.Image.new_from_icon_name(
             "audio-volume-medium-symbolic", Gtk.IconSize.MENU
         ))
         btn_vol.set_tooltip_text("Volume")
-        btn_vol.connect("clicked", lambda _: spawn_app(["pavucontrol"]))
+        btn_vol.connect("clicked", lambda _: spawn_app(["flavos-osd", "volume"]))
         main_box.pack_end(btn_vol, False, False, 0)
 
         # Separador direito (mais à esquerda do grupo pack_end = entre tasklist e status)
@@ -460,7 +461,9 @@ class FlavosTaskbar(Gtk.Window):
 
     def update_clock(self):
         now = datetime.now()
-        self.lbl_clock.set_text(now.strftime("%H:%M"))
+        # Formato: <hora>\n<data>
+        # Usa Pango markup para destacar a hora suavemente
+        self.lbl_clock.set_markup(now.strftime("<b>%H:%M</b>\n<span size='smaller'>%d/%m/%Y</span>"))
         return True
 
 
