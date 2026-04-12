@@ -7,6 +7,8 @@ import gi
 import os
 import sys
 
+import json
+
 # Exit silently in Wayland to prevent PAGER crash loops during transition
 if os.environ.get("XDG_SESSION_TYPE", "x11") != "x11":
     print("[flavos-taskbar] Ignorado: Wayland ou shell não-X11 detectado.")
@@ -20,13 +22,24 @@ from gi.repository import Gtk, Gdk, Wnck, GLib
 # 1. Definir obrigatoriamente status de Pager para aceitação do XServer.
 Wnck.set_client_type(Wnck.ClientType.PAGER)
 
+CONFIG_PATH = os.path.expanduser("~/.config/flavos/panel.json")
+
+def load_config():
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"opacity": 100, "alignment": "left", "style": "solid"}
+
 # ── Design Tokens (CSS Architecture) ─────────────────────────────────────────
-CSS = """
+CSS_BASE = """
 /* Fundo e borda superior */
-#FlavosTaskbar {
-    background-color: #0D1017;
-    border-top: 1px solid #1E2433;
-}
+#FlavosTaskbar {{
+    background-color: {bg_color};
+    border-top: 1px solid {border_color};
+}}
 
 /* 
    O Wnck.Tasklist nativo gera GtkButtons padrão.
@@ -36,8 +49,7 @@ CSS = """
     margin: 4px;
 }
 
-#FlavosTaskbar WnckTasklist button {
-    background-image: none;
+#FlavosTaskbar WnckTasklist button {{
     background-color: transparent;
     border: none;
     border-radius: 6px;
@@ -51,28 +63,23 @@ CSS = """
                 color 120ms cubic-bezier(0.2, 0, 0, 1),
                 border 120ms ease;
     border-bottom: 2px solid transparent; 
-}
+}}
 
-#FlavosTaskbar WnckTasklist button:hover {
-    background-color: #1A1F2B;
+#FlavosTaskbar WnckTasklist button:hover {{
+    background-color: {hover_bg};
     color: #C8CDD8;
-}
+}}
 
-#FlavosTaskbar WnckTasklist button:focus-visible {
+#FlavosTaskbar WnckTasklist button:focus-visible {{
     outline: 2px solid #4B8BF5;
     outline-offset: 2px;
-}
+}}
 
-/*
-  Janela ativa
-  Wnck usa pseudo state genérico em seu botão ativado no tasklist.
-  O Gtk chama de ":checked" ou ":active" internamente.
-*/
-#FlavosTaskbar WnckTasklist button:checked {
-    background-color: #1E2433;
+#FlavosTaskbar WnckTasklist button:checked {{
+    background-color: {active_bg};
     color: #E8ECF4;
     border-bottom: 2px solid #4B8BF5;
-}
+}}
 """
 
 class FlavosTaskbar(Gtk.Window):
@@ -87,9 +94,34 @@ class FlavosTaskbar(Gtk.Window):
         self.set_skip_pager_hint(True)
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
 
+        # Setup Transparência / Visual
+        cfg = load_config()
+        style = cfg.get("style", "solid")
+        opacity = float(cfg.get("opacity", 100)) / 100.0
+        
+        # Permitindo compositing visual no vidro
+        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11" and style == "glass":
+            self.set_app_paintable(True)
+            screen_dk = self.get_screen()
+            visual = screen_dk.get_rgba_visual()
+            if visual and screen_dk.is_composited():
+                self.set_visual(visual)
+
+        bg_color = f"rgba(13, 16, 23, {opacity})" if style == "glass" else "#0D1017"
+        border_color = f"rgba(30, 36, 51, {opacity})" if style == "glass" else "#1E2433"
+        hover_bg = f"rgba(26, 31, 43, {min(1.0, opacity + 0.2)})" if style == "glass" else "#1A1F2B"
+        active_bg = f"rgba(30, 36, 51, {min(1.0, opacity + 0.3)})" if style == "glass" else "#1E2433"
+        
+        css_final = CSS_BASE.format(
+            bg_color=bg_color,
+            border_color=border_color,
+            hover_bg=hover_bg,
+            active_bg=active_bg
+        )
+
         # Provider CSS
         provider = Gtk.CssProvider()
-        provider.load_from_data(CSS.encode("utf-8"))
+        provider.load_from_data(css_final.encode("utf-8"))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
@@ -115,7 +147,10 @@ class FlavosTaskbar(Gtk.Window):
         self.tasklist.set_grouping(Wnck.TasklistGroupingType.AUTO_GROUP) # Agrupa pelo app nativamente se encher
         self.tasklist.set_switch_workspace_on_unminimize(True)
         self.tasklist.set_include_all_workspaces(True)
-        self.tasklist.set_button_relief(Gtk.ReliefStyle.NONE)
+        self.tasklist.set_button_relief(Gtk.ReliefStyle.NORMAL) # Deixa o Wnck gerir o icone padrão do Gtk
+        
+        # Ocultar label padrão se usar muito espaço e não mostrar ícones
+        # Wnck exibe ícone nativamente em NORMAL.
         
         # Embrulha em um Gtk.Box e centraliza as propriedades
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)

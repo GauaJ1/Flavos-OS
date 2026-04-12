@@ -39,12 +39,22 @@ button.panel-btn {
     font-family: Inter, sans-serif;
     font-weight: 700;
     font-size: 13px;
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: 8px;
+    padding-right: 8px;
     border-radius: 8px;
     margin-top: 4px;
     margin-bottom: 4px;
     transition: all 0.2s ease-in-out;
+}
+eventbox.panel-btn {
+    padding-left: 8px;
+    padding-right: 8px;
+}
+eventbox.panel-btn label {
+    font-size: 13px;
+    font-weight: 800;
+    color: #E8ECF4;
+    cursor: pointer;
 }
 button.panel-btn:hover {
     background-image: none;
@@ -79,12 +89,22 @@ button.panel-btn {{
     font-family: Inter, sans-serif;
     font-weight: 700;
     font-size: 13px;
-    padding-left: 14px;
-    padding-right: 14px;
+    padding-left: 8px;
+    padding-right: 8px;
     border-radius: 8px;
     margin-top: 4px;
     margin-bottom: 4px;
     transition: all 0.2s ease-in-out;
+}}
+eventbox.panel-btn {{
+    padding-left: 8px;
+    padding-right: 8px;
+}}
+eventbox.panel-btn label {{
+    font-size: 13px;
+    font-weight: 800;
+    color: #E8ECF4;
+    cursor: pointer;
 }}
 button.panel-btn:hover {{
     background-image: none;
@@ -159,12 +179,23 @@ class FlavosPanel(Gtk.Window):
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.add(main_box)
 
-        # ====== ESQUERDA: LAUNCHER ======
+        # ====== ESQUERDA: LAUNCHER (AGORA COMO TEXTO) ======
         left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        btn_launcher = Gtk.Button(label="FLAVOS")
-        btn_launcher.get_style_context().add_class("panel-btn")
-        btn_launcher.get_style_context().add_class("launcher")
-        btn_launcher.connect("clicked", lambda _: spawn_async(["flavos-shellctl", "launcher", "toggle"]))
+        
+        lbl_launcher = Gtk.Label(label="FLAVOS")
+        lbl_launcher.get_style_context().add_class("launcher")
+        
+        # Embrulhar o Label em Gtk.EventBox para escutar cliques sem ser um "Botão" visual
+        event_box = Gtk.EventBox()
+        event_box.add(lbl_launcher)
+        
+        # CSS nativo para forçar o cursor de clique no texto
+        window = event_box.get_window()
+        if window:
+            window.set_cursor(Gdk.Cursor(Gdk.CursorType.HAND2))
+            
+        event_box.connect("button-press-event", lambda w, e: spawn_async(["flavos-shellctl", "launcher", "toggle"]))
+        event_box.get_style_context().add_class("panel-btn")
         
         # ====== CENTRO: DATA/HORA ======
         center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -172,9 +203,9 @@ class FlavosPanel(Gtk.Window):
         self.lbl_clock.get_style_context().add_class("clock")
         
         if align == "center":
-            center_box.pack_start(btn_launcher, False, False, 0)
+            center_box.pack_start(event_box, False, False, 0)
         else:
-            left_box.pack_start(btn_launcher, False, False, 4)
+            left_box.pack_start(event_box, False, False, 16)
             main_box.pack_start(left_box, False, False, 8)
             
         center_box.pack_start(self.lbl_clock, True, True, 0)
