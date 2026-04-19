@@ -9,6 +9,15 @@ source "${PROJECT_ROOT}/config/flavos.conf"
 
 IMAGE="${PROJECT_ROOT}/${IMAGE_PATH}"
 
+# ─── Fix: XDG_RUNTIME_DIR sob sudo ────────────────────────────────────────────
+# 'sudo make boot-gui' descarta o ambiente do usuario original.
+# SUDO_UID preserva o UID real — usamos para recontruir o socket do PulseAudio.
+if [[ -z "${XDG_RUNTIME_DIR:-}" ]] && [[ -n "${SUDO_UID:-}" ]]; then
+    export XDG_RUNTIME_DIR="/run/user/${SUDO_UID}"
+fi
+# Caminho do socket PulseAudio para passar explicitamente ao QEMU
+PULSE_SOCKET="${XDG_RUNTIME_DIR:-}/pulse/native"
+
 if [[ ! -f "$IMAGE" ]]; then
     echo "ERRO: Imagem não encontrada em $IMAGE."
     echo "Execute 'make all' para gerar a imagem completa."
@@ -89,10 +98,15 @@ case "$DISPLAY_MODE" in
     --gui)
         DISPLAY_FLAGS="-display gtk -serial stdio"
         INPUT_FLAGS="-device usb-ehci,id=ehci -device usb-tablet,bus=ehci.0"
-        # Áudio: Intel HDA virtual → PulseAudio do host
-        AUDIO_FLAGS="-audiodev pa,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0"
-        echo "Display:   GUI (GTK) com usb-tablet"
-        echo "Audio:     Intel HDA (PulseAudio)"
+        # Áudio: Intel HDA virtual → PulseAudio do host (socket explícito)
+        if [[ -S "${PULSE_SOCKET:-}" ]]; then
+            AUDIO_FLAGS="-audiodev pa,id=snd0,server=unix:${PULSE_SOCKET} -device intel-hda -device hda-duplex,audiodev=snd0"
+            echo "Audio:     Intel HDA → PulseAudio (${PULSE_SOCKET})"
+        else
+            # Fallback: ALSA direto (sem PulseAudio ou socket inacessível)
+            AUDIO_FLAGS="-audiodev alsa,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0"
+            echo "Audio:     Intel HDA → ALSA (fallback — PulseAudio socket nao encontrado)"
+        fi
         ;;
 esac
 
