@@ -3,8 +3,19 @@
 # Lançado pelo openbox-session. Inicializa os componentes visuais.
 
 # 1. Delegação da Shell Visual (Native Core — Etapa 11)
-# picom, dunst, taskbar e painel nascem e são controlados via systemd.
-# Wallpaper é restaurado pelo session daemon (feh fire-and-forget).
+# picom, dunst, taskbar, painel e nemo-desktop nascem via systemd.
+
+# Configurar wallpaper ANTES de nemo-desktop subir.
+# gsettings set garante que o nemo-desktop lê o valor correto ao iniciar.
+_WP="$HOME/.config/flavos/wallpaper"
+_WP_DEFAULT="/usr/share/flavos/wallpaper.jpeg"
+_WALLPAPER="$_WP_DEFAULT"
+[ -f "$_WP" ] && _WALLPAPER="$(cat "$_WP")"
+[ -f "$_WALLPAPER" ] || _WALLPAPER="$_WP_DEFAULT"
+gsettings set org.cinnamon.desktop.background picture-uri "file://${_WALLPAPER}" 2>/dev/null || true
+gsettings set org.cinnamon.desktop.background picture-options 'zoom' 2>/dev/null || true
+unset _WP _WP_DEFAULT _WALLPAPER
+
 systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
 systemctl --user start flavos-shell.service &
 
