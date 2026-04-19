@@ -5,16 +5,28 @@
 # 1. Delegação da Shell Visual (Native Core — Etapa 11)
 # picom, dunst, taskbar, painel e nemo-desktop nascem via systemd.
 
-# Configurar wallpaper ANTES de nemo-desktop subir.
-# gsettings set garante que o nemo-desktop lê o valor correto ao iniciar.
-_WP="$HOME/.config/flavos/wallpaper"
+# --- Wallpaper: 3 camadas de garantia ---
+
+# Camada 1: feh imediato no root window (antes de nemo-desktop)
+_WP_CACHE="$HOME/.config/flavos/wallpaper"
 _WP_DEFAULT="/usr/share/flavos/wallpaper.jpeg"
 _WALLPAPER="$_WP_DEFAULT"
-[ -f "$_WP" ] && _WALLPAPER="$(cat "$_WP")"
+[ -f "$_WP_CACHE" ] && _WALLPAPER="$(cat "$_WP_CACHE")"
 [ -f "$_WALLPAPER" ] || _WALLPAPER="$_WP_DEFAULT"
+feh --no-fehbg --bg-fill "$_WALLPAPER" 2>/dev/null || true
+
+# Camada 2: gsettings (nemo-desktop le ao inicializar, se schema disponivel)
 gsettings set org.cinnamon.desktop.background picture-uri "file://${_WALLPAPER}" 2>/dev/null || true
 gsettings set org.cinnamon.desktop.background picture-options 'zoom' 2>/dev/null || true
-unset _WP _WP_DEFAULT _WALLPAPER
+unset _WP_CACHE _WP_DEFAULT _WALLPAPER
+
+# Camada 3: feh com delay (4s apos nemo-desktop terminar de inicializar)
+# nemo-desktop so redesenha o background uma vez no startup — feh depois persiste.
+(sleep 4; \
+  _W="/usr/share/flavos/wallpaper.jpeg"; \
+  [ -f "$HOME/.config/flavos/wallpaper" ] && _W=$(cat "$HOME/.config/flavos/wallpaper"); \
+  [ -f "$_W" ] || _W="/usr/share/flavos/wallpaper.jpeg"; \
+  feh --no-fehbg --bg-fill "$_W" 2>/dev/null) &
 
 systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
 systemctl --user start flavos-shell.service &

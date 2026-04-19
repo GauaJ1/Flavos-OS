@@ -8,12 +8,14 @@ picture-uri='file:///usr/share/flavos/wallpaper.jpeg'
 picture-options='zoom'
 color-shading-type='solid'
 primary-color='#0d1017'
+secondary-color='#0d1017'
 
 [org/gnome/desktop/background]
 picture-uri='file:///usr/share/flavos/wallpaper.jpeg'
 picture-options='zoom'
 color-shading-type='solid'
 primary-color='#0d1017'
+secondary-color='#0d1017'
 
 # --- Nemo Desktop: ícones e comportamento ---
 [org/nemo/desktop]
