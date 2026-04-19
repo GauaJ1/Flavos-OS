@@ -67,6 +67,7 @@ x11-xserver-utils
 # Apps Nativos Essenciais (Etapa 10C / 12B)
 kitty
 nemo
+dconf-cli
 mousepad
 viewnior
 xdg-utils

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Lixeira
+Comment=Contém arquivos excluídos
+Icon=user-trash
+Type=Link
+URL=trash:///

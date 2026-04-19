@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Firefox ESR
+Comment=Navegar na Web
+Icon=firefox-esr
+Type=Application
+Exec=firefox-esr %u
+StartupWMClass=Firefox
+StartupNotify=true
+Terminal=false

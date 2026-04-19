@@ -1,0 +1,30 @@
+# Flavos OS — Defaults de sistema para nemo-desktop
+# Aplicado via dconf (requer 'dconf update' no rootfs)
+# Cobre tanto o schema Cinnamon (usado pelo nemo-desktop) quanto GNOME (fallback)
+
+# --- Wallpaper ---
+[org/cinnamon/desktop/background]
+picture-uri='file:///usr/share/flavos/wallpaper.jpeg'
+picture-options='zoom'
+color-shading-type='solid'
+primary-color='#0d1017'
+
+[org/gnome/desktop/background]
+picture-uri='file:///usr/share/flavos/wallpaper.jpeg'
+picture-options='zoom'
+color-shading-type='solid'
+primary-color='#0d1017'
+
+# --- Nemo Desktop: ícones e comportamento ---
+[org/nemo/desktop]
+show-desktop-icons=true
+trash-icon-visible=true
+home-icon-visible=false
+network-icon-visible=false
+volumes-visible=false
+font='Inter 10'
+
+# --- Nemo preferências gerais ---
+[org/nemo/preferences]
+show-hidden-files=false
+default-folder-viewer='icon-view'

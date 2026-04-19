@@ -162,9 +162,6 @@ if [[ -d "$OVERLAY" ]]; then
         chroot "$ROOTFS" chmod 0440 /etc/sudoers.d/flavos-power 2>/dev/null || true
         chroot "$ROOTFS" chmod 0440 /etc/sudoers.d/flavos-settings 2>/dev/null || true
     fi
-
-    echo "  Compilando gschemas (wallpaper defaults)..."
-    chroot "$ROOTFS" glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
 fi
 
 # --- Re-sincronizar dotfiles do skel para o home do usuário ---
@@ -180,10 +177,30 @@ if [[ -d "${ROOTFS}/etc/skel" ]]; then
         [[ "$bname" == "." || "$bname" == ".." ]] && continue
         cp -a "$item" "${ROOTFS}/home/${SYS_USER}/"
     done
+    # Copiar diretórios visíveis do skel (ex: Desktop/)
+    for item in "${ROOTFS}/etc/skel/"*; do
+        [[ -e "$item" ]] || continue
+        cp -a "$item" "${ROOTFS}/home/${SYS_USER}/"
+    done
     # Garantir ownership correto
     chroot "$ROOTFS" chown -R "${SYS_USER}:${SYS_USER}" "/home/${SYS_USER}"
     echo "  Dotfiles sincronizados e ownership corrigido."
+
+    # Marcar .desktop files do Desktop como confiáveis/executáveis
+    # Nemo exige +x para mostrar como ícone clicável (não como arquivo de texto)
+    if [[ -d "${ROOTFS}/home/${SYS_USER}/Desktop" ]]; then
+        chmod +x "${ROOTFS}/home/${SYS_USER}/Desktop/"*.desktop 2>/dev/null || true
+        echo "  Desktop .desktop files marcados como executáveis."
+    fi
 fi
+
+# --- Compilar dconf database para nemo-desktop e gsettings ---
+# O nemo-desktop lê wallpaper e configurações via gsettings/dconf.
+# 'dconf update' compila os arquivos em /etc/dconf/db/local.d/ para o DB binário.
+# Sem isso, as chaves do sistema ficam invisíveis e o desktop fica cinza.
+echo "  Compilando dconf database do sistema..."
+chroot "$ROOTFS" dconf update 2>/dev/null || \
+    echo "  AVISO: dconf update falhou (dconf pode nao estar instalado — instalar via packages.list)"
 
 echo "[6/6] Gerando initramfs..."
 # O initramfs precisa incluir módulos virtio para boot em QEMU
