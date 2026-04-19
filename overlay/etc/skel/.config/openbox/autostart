@@ -2,8 +2,9 @@
 # Flavos OS — Shell Visual (Etapa 9B)
 # Lançado pelo openbox-session. Inicializa os componentes visuais.
 
-# 1. Delegação da Shell Visial (Native Core 11A)
-# Picom, tint2, pcmanfm e dunst agora nascem e são controlados via systemd.
+# 1. Delegação da Shell Visual (Native Core — Etapa 11)
+# picom, dunst, taskbar e painel nascem e são controlados via systemd.
+# Wallpaper é restaurado pelo session daemon (feh fire-and-forget).
 systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
 systemctl --user start flavos-shell.service &
 

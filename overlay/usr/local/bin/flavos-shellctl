@@ -118,9 +118,12 @@ if [ "$ACTION" = "wallpaper" ] && [ "$SUB_ACTION" = "apply" ]; then
     echo "$PARAM" > "$HOME/.config/flavos/wallpaper"
 
     if [ "$XDG_SESSION_TYPE" = "x11" ] || [ -z "$XDG_SESSION_TYPE" ]; then
-        # O backend responsável passa a ser exclusivo via pcmanfm ou equivalente designado do X11
-        # NOTA: pcmanfm -w seta o wallpaper estático via dbus/pcmanf daemon, sem quebrar o desktop real.
-        pcmanfm -w "$PARAM" 2>/dev/null || true
+        # feh aplica o wallpaper e escreve ~/.fehbg para restaurar na proxima sessao
+        feh --no-fehbg --bg-fill "$PARAM" 2>/dev/null || true
+        # Gerar ~/.fehbg manualmente para session daemon poder restaurar no proximo boot
+        echo "#!/usr/bin/env bash" > "$HOME/.fehbg"
+        echo "feh --no-fehbg --bg-fill '${PARAM}'" >> "$HOME/.fehbg"
+        chmod +x "$HOME/.fehbg"
     else
         # Espaço reservado para o compositor Wayland (swaybg / wpaperd)
         # swaybg -i "$PARAM" -m fill &

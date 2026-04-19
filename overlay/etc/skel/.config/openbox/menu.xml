@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Flavos OS - Menu de contexto do desktop (Openbox root menu)
+  Exibido ao clicar com botao direito no desktop.
+  Substitui o menu que o pcmanfm fornecia no modo desktop.
+-->
+<openbox_menu xmlns="http://openbox.org/3.4/menu">
+
+  <!-- Menu principal do Desktop -->
+  <menu id="root-menu" label="Flavos OS">
+
+    <!-- Apps essenciais -->
+    <item label="Terminal">
+      <action name="Execute"><command>kitty</command></action>
+    </item>
+    <item label="Arquivos">
+      <action name="Execute"><command>nemo</command></action>
+    </item>
+    <item label="Navegador">
+      <action name="Execute"><command>firefox-esr</command></action>
+    </item>
+    <item label="Editor de Texto">
+      <action name="Execute"><command>mousepad</command></action>
+    </item>
+
+    <separator/>
+
+    <!-- Configurações -->
+    <item label="Configurações">
+      <action name="Execute"><command>flavos-settings</command></action>
+    </item>
+    <item label="Mudar Wallpaper…">
+      <action name="Execute">
+        <command>bash -c "nemo /usr/share/flavos/ 2>/dev/null || nemo ~/"</command>
+      </action>
+    </item>
+
+    <separator/>
+
+    <!-- Sistema -->
+    <item label="Energia / Sessão…">
+      <action name="Execute"><command>flavos-power</command></action>
+    </item>
+
+  </menu>
+
+</openbox_menu>

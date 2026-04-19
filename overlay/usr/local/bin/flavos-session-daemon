@@ -17,14 +17,18 @@ COMMANDS = {
     "main_panel": ["flavos-panel"],
     "taskbar": ["flavos-taskbar"],
     "notifications": ["dunst"],
-    "desktop": ["pcmanfm", "--desktop"]
 }
 
 # Processos "fire-and-forget": sobem uma vez, fazem fork interno, não são supervisionados.
 # O xcape faz fork() e o pai retorna exit 0 imediatamente — isso é comportamento normal,
 # não crash. Tentar revivê-lo causa loop infinito de respawn.
+# O feh --bg-fill restaura o wallpaper salvo; se não houver .fehbg, usa o wallpaper padrao.
 FIRE_AND_FORGET = {
-    "xcape": ["xcape", "-e", "Super_L=Alt_L|F1"]
+    "xcape":      ["xcape", "-e", "Super_L=Alt_L|F1"],
+    "wallpaper":  ["bash", "-c",
+        '[ -x ~/.fehbg ] && ~/.fehbg || '
+        'feh --bg-fill /usr/share/flavos/wallpaper.jpeg 2>/dev/null || true'
+    ],
 }
 
 def spawn(name):

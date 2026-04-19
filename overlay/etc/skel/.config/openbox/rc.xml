@@ -99,7 +99,10 @@
   </keyboard>
   <mouse>
     <context name="Desktop">
-      <!-- Right-click no desktop: sem ação (launcher somente via Super) -->
+      <!-- Right-click no desktop: menu nativo Flavos (substitui menu do pcmanfm) -->
+      <mousebind button="Right" action="Press">
+        <action name="ShowMenu"><menu>root-menu</menu></action>
+      </mousebind>
     </context>
     <context name="Titlebar">
       <mousebind button="Left" action="Drag">
