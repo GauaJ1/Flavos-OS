@@ -9,11 +9,12 @@
 | 3 | Root Filesystem Mínimo | rootfs funcional em build/rootfs/ | ✅ Completa |
 | 4 | Boot Chain | Imagem .img com ESP + root + bootloader | ✅ Completa |
 | 5 | Primeiro Boot em VM | Boot até login prompt no QEMU | ✅ Completa |
-| 6 | Userspace e Serviços | Rede, SSH, usuário não-root | ⬜ Próxima |
-| 7 | Branding Inicial | os-release, issue, motd, hostname | ⬜ |
-| 8 | Imagem Reproduzível | Pipeline completo make all funcional | ⬜ |
-| 9 | Update/Recovery/Logging | Estratégia de atualização e fallback | ⬜ |
-| 10 | Refinamento V1 | Documentação final, testes, limpeza | ⬜ |
+| 6 | Userspace e Serviços | Rede, SSH, usuário não-root | ✅ Completa |
+| 7 | Branding Inicial | os-release, issue, motd, hostname | ✅ Completa |
+| 8 | Imagem Reproduzível | Pipeline completo make all funcional | ✅ Completa |
+| 9 | Update/Recovery/Logging | Estratégia de atualização e fallback | ✅ Completa |
+| 10 | Refinamento V1 | Documentação final, testes, limpeza | ✅ Completa |
+| 11 | Flavos Shell Preview | Shell UI nativa funcional (Basis) | ✅ Completa |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -66,7 +67,14 @@
 - Documentar resultado
 - Validar: todos os 11 critérios de boot
 
-## Decisões Fixas (V1)
+### Etapa 11 — Flavos Shell Preview 0.1 "Basis" ✅
+- **11A:** Terminal nativo com funcionalidade aprimorada (Kitty clipboard).
+- **11B:** Gerenciamento central — Session Daemon, Taskbar Wnck e Top Panel (DOCK).
+- **11C:** Launcher confiável — PID File, motion enter/exit, focus guard.
+- **11D:** OSD Visual Feedback — Singleton, glass, motion translateY, volume/brilho.
+- **11E:** Preview Consolidação — Freeze feature-set, documentation "Basis", estabilidade garantida.
+
+## Decisões Fixas (Base)
 
 | Aspecto | Decisão |
 |---|---|
