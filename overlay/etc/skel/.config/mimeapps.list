@@ -1,15 +1,30 @@
+# Flavos OS — User MIME defaults
+# Location: ~/.config/mimeapps.list (via skel)
+#
+# Espelha /etc/xdg/mimeapps.list no estado inicial.
+# O usuario pode editar este arquivo sem afetar o nivel de sistema.
+#
+# [Added Associations] nao utilizado: as entradas MimeType= nos .desktop
+# files ja garantem a presenca dos apps no menu "Abrir com" do Nemo.
+
 [Default Applications]
-text/html=firefox-esr.desktop
+# --- Web e links ---
 x-scheme-handler/http=firefox-esr.desktop
 x-scheme-handler/https=firefox-esr.desktop
 x-scheme-handler/ftp=firefox-esr.desktop
-application/xhtml+xml=firefox-esr.desktop
-application/xml=firefox-esr.desktop
-inode/directory=nemo.desktop
+text/html=firefox-esr.desktop
 
-[Added Associations]
-text/html=firefox-esr.desktop;
-x-scheme-handler/http=firefox-esr.desktop;
-x-scheme-handler/https=firefox-esr.desktop;
-application/xhtml+xml=firefox-esr.desktop;
-inode/directory=nemo.desktop;
+# --- Diretorios ---
+inode/directory=flavos-files.desktop
+
+# --- Texto ---
+text/plain=flavos-text.desktop
+
+# --- Imagens ---
+image/jpeg=flavos-image.desktop
+image/png=flavos-image.desktop
+image/webp=flavos-image.desktop
+image/gif=flavos-image.desktop
+image/svg+xml=flavos-image.desktop
+image/bmp=flavos-image.desktop
+image/tiff=flavos-image.desktop

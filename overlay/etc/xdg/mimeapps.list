@@ -1,13 +1,39 @@
+# Flavos OS — System-level MIME defaults
+# Location: /etc/xdg/mimeapps.list
+#
+# Hierarquia xdg-open (XDG MIME Applications Spec):
+#   1. ~/.config/mimeapps.list           — preferencias do usuario (maior prioridade)
+#   2. /etc/xdg/mimeapps.list            — este arquivo (admin/distro, $XDG_CONFIG_DIRS)
+#   3. $XDG_DATA_DIRS/applications/*.desktop MimeType fields — fallback por pacote
+#
+# Este arquivo define os defaults do sistema Flavos OS.
+# Pacotes Debian nao sobrescrevem este arquivo em upgrades.
+# O usuario pode sobrescrever via ~/.config/mimeapps.list sem alterar este.
+#
+# [Added Associations] NAO e incluido aqui.
+# Esse bloco adiciona apps ao menu "Abrir com" sem defini-los como padrao.
+# Para defaults do sistema, [Default Applications] e suficiente e mais limpo.
+# As entradas MimeType= nos .desktop files (flavos-image.desktop, etc.)
+# ja populam o menu "Abrir com" automaticamente sem precisar duplicar aqui.
+
 [Default Applications]
+# --- Web e links ---
+x-scheme-handler/http=firefox-esr.desktop
+x-scheme-handler/https=firefox-esr.desktop
+x-scheme-handler/ftp=firefox-esr.desktop
+text/html=firefox-esr.desktop
+
+# --- Diretorios ---
 inode/directory=flavos-files.desktop
+
+# --- Texto ---
 text/plain=flavos-text.desktop
-text/markdown=flavos-text.desktop
-text/html=flavos-text.desktop
-text/x-shellscript=flavos-text.desktop
-application/json=flavos-text.desktop
+
+# --- Imagens ---
 image/jpeg=flavos-image.desktop
 image/png=flavos-image.desktop
-image/gif=flavos-image.desktop
-image/bmp=flavos-image.desktop
-image/svg+xml=flavos-image.desktop
 image/webp=flavos-image.desktop
+image/gif=flavos-image.desktop
+image/svg+xml=flavos-image.desktop
+image/bmp=flavos-image.desktop
+image/tiff=flavos-image.desktop
