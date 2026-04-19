@@ -79,15 +79,30 @@ fi
 # -----------------
 if [ "$ACTION" = "launcher" ]; then
     if [ "$SUB_ACTION" = "toggle" ] || [ "$SUB_ACTION" = "open" ]; then
-        # pgrep retorna exit 1 quando não encontra processo
-        # com set -e ativo, precisamos tratar explicitamente
-        if pgrep -f "/usr/local/bin/flavos-launcher" >/dev/null 2>&1; then
-            pkill -f "/usr/local/bin/flavos-launcher" || true
-        else
-            # Garantir que DISPLAY está disponível (invocado por Openbox keybind)
-            export DISPLAY="${DISPLAY:-:0}"
-            /usr/local/bin/flavos-launcher &
+        # ── Toggle baseado em PID file — contrato atômico com flavos-launcher ──
+        # Razão: pgrep retorna exit 1 (falharia com set -e) e não garante que
+        # o processo está visível. O PID file é escrito pelo launcher ao iniciar
+        # e removido ao sair, sendo a fonte de verdade do estado do launcher.
+        LAUNCHER_PID_FILE="/tmp/flavos-launcher.pid"
+
+        if [ -f "$LAUNCHER_PID_FILE" ]; then
+            # Lê o PID armazenado
+            STORED_PID=""
+            STORED_PID=$(cat "$LAUNCHER_PID_FILE" 2>/dev/null) || true
+
+            if [ -n "$STORED_PID" ] && kill -0 "$STORED_PID" 2>/dev/null; then
+                # Processo vivo → fechar via SIGTERM (dispara fade-out limpo no launcher)
+                kill -TERM "$STORED_PID" || true
+                exit 0
+            else
+                # PID stale: processo morreu sem limpar o arquivo → remover e reabrir
+                rm -f "$LAUNCHER_PID_FILE"
+            fi
         fi
+
+        # Launcher não está ativo → abrir
+        export DISPLAY="${DISPLAY:-:0}"
+        /usr/local/bin/flavos-launcher &
         exit 0
     fi
 fi

@@ -1,15 +1,32 @@
 #!/usr/bin/env python3
-# Flavos Native Launcher (Etapa 11C)
-# Design Centralizado, efêmero (mata e morre), sem menus em árvore.
+# Flavos Native Launcher (Etapa 11C — Final)
+# Design centralizado, efêmero. Sem menus em árvore.
+#
+# Arquitetura de estabilidade:
+#   - PID file em /tmp/flavos-launcher.pid — contrato atômico com shellctl
+#   - Focus guard de 300ms bloqueia on_focus_out transitório do X11
+#   - Única fonte de foco: present_with_time() dentro do map-event
+#   - Fade-in 120ms (ease-out) e fade-out 80ms (ease-in) via GLib.timeout_add
+#   - Saída sempre via _quit() → fade-out → Gtk.main_quit() (sem sys.exit direto)
 
 import gi
 import os
 import sys
+import signal
+import atexit
 import subprocess
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib, Gio, Pango
 
+# ─── Constantes de sistema ────────────────────────────────────────────────────
+PID_FILE       = "/tmp/flavos-launcher.pid"
+FOCUS_GUARD_MS = 300   # Janela de proteção contra focus-out transitório do X11
+FADE_IN_MS     = 120   # Motion skill: entrada 120ms ease-out
+FADE_OUT_MS    = 80    # Motion skill: saída 80ms ease-in
+FADE_TICK_MS   = 16    # ~60fps (não bloqueante, via GLib.timeout_add)
+
+# ─── CSS — Design System Flavos OS ────────────────────────────────────────────
 CSS = """
 #LauncherWindow {
     background-color: rgba(22, 26, 33, 0.65);
@@ -33,14 +50,13 @@ CSS = """
     background-color: rgba(255, 255, 255, 0.02);
 }
 
-/* Quick Actions / Pinned (Quadrados Superiores) */
 button.action-btn {
     background-image: none;
     background-color: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.03);
     border-radius: 16px;
     padding: 16px;
-    transition: all 0.15s ease;
+    transition: background-color 150ms ease, border-color 150ms ease;
 }
 button.action-btn:hover, button.action-btn:focus {
     background-color: rgba(0, 0, 0, 0.4);
@@ -54,14 +70,13 @@ label.action-label {
     margin-top: 8px;
 }
 
-/* App Grid Principal */
 button.app-btn {
     background-image: none;
     background-color: transparent;
     border: none;
     border-radius: 16px;
     padding: 12px;
-    transition: all 0.15s ease;
+    transition: background-color 150ms ease;
 }
 button.app-btn:hover, button.app-btn:focus {
     background-color: rgba(255, 255, 255, 0.05);
@@ -74,17 +89,17 @@ label.app-label {
     margin-top: 8px;
 }
 
-/* Botão Show All Applications */
 button.show-all-btn {
     font-family: Inter, sans-serif;
     font-size: 13px;
     color: #8891A5;
     background-color: transparent;
+    background-image: none;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 24px;
     padding: 10px 24px;
     margin-top: 16px;
-    transition: all 0.15s ease;
+    transition: background-color 150ms ease, color 150ms ease;
 }
 button.show-all-btn:hover {
     background-color: rgba(255, 255, 255, 0.05);
@@ -92,28 +107,41 @@ button.show-all-btn:hover {
 }
 """
 
-PINNED_APPS = ["flavos-terminal.desktop", "flavos-files.desktop", "flavos-settings.desktop"]
-
+# ─── Dados de aplicativos ──────────────────────────────────────────────────────
 def get_installed_apps():
-    """Retorna lista de dicionarios com Gio.AppInfo."""
-    apps = []
+    """Retorna lista de dicts com informações de Gio.AppInfo, sem duplicatas."""
+    unique = {}
     for app in Gio.AppInfo.get_all():
         if app.should_show():
-            apps.append({
-                "name": app.get_display_name() or "",
-                "id": app.get_id(),
-                "icon": app.get_icon(),
-                "appinfo": app
-            })
-    # Remove duplicates by id
-    unique = {}
-    for a in apps:
-        if a["id"] not in unique:
-            unique[a["id"]] = a
-    return sorted(list(unique.values()), key=lambda x: x["name"].lower())
+            aid = app.get_id()
+            if aid not in unique:
+                unique[aid] = {
+                    "name":    app.get_display_name() or "",
+                    "id":      aid,
+                    "icon":    app.get_icon(),
+                    "appinfo": app,
+                }
+    return sorted(unique.values(), key=lambda x: x["name"].lower())
 
 
+# ─── PID File — contrato atômico com flavos-shellctl ─────────────────────────
+def _write_pid():
+    try:
+        with open(PID_FILE, "w") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass  # Não crítico: shellctl usa SIGTERM/kill -0 para validar
+
+def _remove_pid():
+    try:
+        os.unlink(PID_FILE)
+    except OSError:
+        pass
+
+
+# ─── Janela Principal ─────────────────────────────────────────────────────────
 class FlavosLauncher(Gtk.Window):
+
     def __init__(self):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         self.set_name("LauncherWindow")
@@ -122,32 +150,48 @@ class FlavosLauncher(Gtk.Window):
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_decorated(False)
         self.set_resizable(False)
-        
-        # Ignorado por gerenciadores tilling/etc e força float
+        # DIALOG: flutua sobre tudo, evita tile em WMs com modo tiling
         self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
-        
         self.set_app_paintable(True)
+
+        # Inicia invisível: o fade-in começa após o map-event
+        self.set_opacity(0.0)
+
+        # ── Suporte a transparência RGBA (compositor ativo) ────────────────────
         screen = self.get_screen()
         visual = screen.get_rgba_visual()
         if visual and screen.is_composited():
             self.set_visual(visual)
 
-        # Eventos vitais
-        self.connect("focus-out-event", self.on_focus_out)
-        self.connect("key-press-event", self.on_key_press)
-        # Força foco após o X11 mapear a janela (evita race condition)
+        # ── Estado interno ─────────────────────────────────────────────────────
+        # _focus_guard: True durante os primeiros FOCUS_GUARD_MS após abertura.
+        # Protege contra o focus-out transitório que o X11 emite enquanto o WM
+        # ainda está entregando o foco para a nova janela mapeada.
+        self._focus_guard = True
+        # _quitting: True quando a sequência de saída já foi iniciada.
+        # Garante idempotência — _quit() só executa uma vez.
+        self._quitting = False
+
+        # ── Sinais ────────────────────────────────────────────────────────────
+        self.connect("focus-out-event", self._on_focus_out)
+        self.connect("key-press-event", self._on_key_press)
+        # map-event: ÚNICA fonte de foco. Chamado pelo X11 após mapear a janela.
+        # GLib.idle_add(win.present) foi REMOVIDO — causava race condition de
+        # dupla requisição de foco ao WM.
         self.connect("map-event", self._on_mapped)
 
-        # Carrega CSS
+        # ── CSS ───────────────────────────────────────────────────────────────
         provider = Gtk.CssProvider()
-        provider.load_from_data(CSS.encode('utf-8'))
+        provider.load_from_data(CSS.encode("utf-8"))
         Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+            Gdk.Screen.get_default(), provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
+        # ── Dados ─────────────────────────────────────────────────────────────
         self.apps_data = get_installed_apps()
 
-        # Layout Principal
+        # ── Layout ────────────────────────────────────────────────────────────
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
         main_box.set_margin_top(32)
         main_box.set_margin_bottom(32)
@@ -155,23 +199,22 @@ class FlavosLauncher(Gtk.Window):
         main_box.set_margin_end(32)
         self.add(main_box)
 
-        # 1. Busca
+        # 1. Barra de busca
         search_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         main_box.pack_start(search_hbox, False, False, 0)
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_name("SearchEntry")
         self.search_entry.set_placeholder_text("Search apps and settings...")
-        self.search_entry.connect("search-changed", self.on_search_changed)
+        self.search_entry.connect("search-changed", self._on_search_changed)
         search_hbox.pack_start(self.search_entry, True, True, 0)
-        
-        # Link discreto extra "All Apps >" nativo
-        btn_all_apps_txt = Gtk.Label(label="All Apps >")
-        btn_all_apps_txt.get_style_context().add_class("action-label")
-        btn_all_apps_txt.set_margin_start(16)
-        search_hbox.pack_start(btn_all_apps_txt, False, False, 0)
 
-        # 2. Pinned & Actions (Primeira linha / 5 items da referencia)
+        lbl_all = Gtk.Label(label="All Apps >")
+        lbl_all.get_style_context().add_class("action-label")
+        lbl_all.set_margin_start(16)
+        search_hbox.pack_start(lbl_all, False, False, 0)
+
+        # 2. Pinned / Quick Actions
         self.pinned_flow = Gtk.FlowBox()
         self.pinned_flow.set_selection_mode(Gtk.SelectionMode.NONE)
         self.pinned_flow.set_max_children_per_line(5)
@@ -181,11 +224,9 @@ class FlavosLauncher(Gtk.Window):
         self.pinned_flow.set_homogeneous(True)
         main_box.pack_start(self.pinned_flow, False, False, 0)
 
-        # 3. Main Grid Apps Restantes (Duas Linhas 10 items da ref)
+        # 3. Grade principal (scrollável)
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scroll.get_style_context().add_class("launcher-scroll")
-        # Altura forcada p/ duas/tres camadas visiveis sem rolar
         scroll.set_min_content_height(250)
         main_box.pack_start(scroll, True, True, 0)
 
@@ -198,109 +239,234 @@ class FlavosLauncher(Gtk.Window):
         self.apps_flow.set_homogeneous(True)
         scroll.add(self.apps_flow)
 
-        # 4. Show All Applications Bottom Pill
+        # 4. Botão Show All
         self.btn_show_all = Gtk.Button(label="Show All Applications")
         self.btn_show_all.get_style_context().add_class("show-all-btn")
-        # Centering it perfectly
         bottom_align = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         bottom_align.pack_start(self.btn_show_all, True, False, 0)
         main_box.pack_start(bottom_align, False, False, 0)
 
-        self.populate_grids()
+        self._populate_grids()
 
-    def populate_grids(self):
-        # A. Inject Quick Actions no Pinned Flow
-        # Seguindo a foto: Terminal, Settings, Info, Restart, Lock
-        
-        # 1. Pinned App: Terminal
-        term_match = next((a for a in self.apps_data if "terminal" in a["id"].lower()), None)
-        if term_match: self.pinned_flow.add(self.create_grid_btn(term_match, is_action=True))
-        
-        # 2. Pinned App: Settings
-        set_match = next((a for a in self.apps_data if "settings" in a["id"].lower()), None)
-        if set_match: self.pinned_flow.add(self.create_grid_btn(set_match, is_action=True))
-        
-        # 3. Action: Info
-        self.pinned_flow.add(self.create_custom_action("Info", "dialog-information-symbolic", ["flavos-settings"]))
-        
-        # 4. Action: Restart
-        self.pinned_flow.add(self.create_custom_action("Restart", "system-reboot-symbolic", ["flavos-shellctl", "session", "reboot"]))
-        
-        # 5. Action: Lock
-        self.pinned_flow.add(self.create_custom_action("Lock", "system-lock-screen-symbolic", ["flavos-shellctl", "session", "lock"]))
+    # ── Mapeamento e foco ─────────────────────────────────────────────────────
 
-        # B. Popula Main Grade de Apps Excluindo os pinados
-        pinned_ids = [a["id"] for a in self.apps_data if ("terminal" in a["id"].lower() or "settings" in a["id"].lower())]
-        
+    def _on_mapped(self, widget, event):
+        """
+        Chamado pelo X11 após mapear a janela.
+        Fonte única e confiável de foco para X11 + Openbox.
+        """
+        # Solicita foco ao WM (present_with_time é o correto para X11)
+        self.present_with_time(Gdk.CURRENT_TIME)
+        # Inicia o fade-in (opacidade 0 → 1 em FADE_IN_MS ms)
+        self._fade_in()
+        # Libera o focus-guard após FOCUS_GUARD_MS ms
+        GLib.timeout_add(FOCUS_GUARD_MS, self._release_focus_guard)
+        return False
+
+    def _release_focus_guard(self):
+        """
+        Libera o guard 300ms após mapeamento.
+        Retorna False para que GLib remova o timeout (executa uma única vez).
+        """
+        self._focus_guard = False
+        return False  # GLib.SOURCE_REMOVE
+
+    # ── Motor de animação ─────────────────────────────────────────────────────
+
+    def _fade_in(self):
+        """
+        Fade-in: opacidade 0.0 → 1.0 em FADE_IN_MS ms.
+        Simula ease-out: progressão linear com clip no alvo.
+        Não bloqueia o event loop — usa GLib.timeout_add.
+        """
+        steps = max(1, FADE_IN_MS // FADE_TICK_MS)  # ex: 120//16 = 7
+        delta = 1.0 / steps
+        self._animate(delta=delta, target=1.0, on_done=None)
+
+    def _fade_out(self, on_done=None):
+        """
+        Fade-out: opacidade atual → 0.0 em FADE_OUT_MS ms.
+        Simula ease-in: progressão linear com clip no alvo.
+        Chama on_done ao terminar (padrão: Gtk.main_quit).
+        """
+        if self._quitting:
+            return
+        self._quitting = True
+        steps = max(1, FADE_OUT_MS // FADE_TICK_MS)  # ex: 80//16 = 5
+        delta = -(1.0 / steps)
+        self._animate(delta=delta, target=0.0, on_done=on_done or Gtk.main_quit)
+
+    def _animate(self, delta, target, on_done=None):
+        """
+        Motor genérico de animação por opacidade.
+        Executa uma tick a cada FADE_TICK_MS ms via GLib.timeout_add.
+        Não bloqueia input. Interrompível (se _quitting mudar, para).
+        """
+        def _tick():
+            current = self.get_opacity()
+            next_val = current + delta
+            # Clamp exato no target para evitar overshooting
+            if delta > 0:
+                next_val = min(next_val, target)
+            else:
+                next_val = max(next_val, target)
+            self.set_opacity(next_val)
+            if abs(next_val - target) < 0.001:
+                # Chegou ao target — executa callback e para o timeout
+                if on_done:
+                    on_done()
+                return False  # GLib.SOURCE_REMOVE
+            return True  # GLib.SOURCE_CONTINUE
+
+        GLib.timeout_add(FADE_TICK_MS, _tick)
+
+    # ── Saída limpa ───────────────────────────────────────────────────────────
+
+    def _quit(self):
+        """
+        Ponto único de saída do launcher.
+        Garante: remoção do PID file → fade-out → Gtk.main_quit().
+        Idempotente: se _quitting já é True, não faz nada.
+        """
+        if self._quitting:
+            return
+        _remove_pid()
+        self._fade_out(on_done=Gtk.main_quit)
+
+    # ── Handlers de eventos ───────────────────────────────────────────────────
+
+    def _on_focus_out(self, widget, event):
+        """
+        Fecha o launcher ao perder foco.
+        Protegido pelo focus guard de FOCUS_GUARD_MS ms:
+        ignora focus-out transitórios emitidos pelo X11 durante o mapeamento.
+        """
+        if self._focus_guard or self._quitting:
+            return False
+        self._quit()
+        return False
+
+    def _on_key_press(self, widget, event):
+        keyval = event.keyval
+
+        # Escape → fechar
+        if keyval == Gdk.KEY_Escape:
+            self._quit()
+            return True
+
+        # Seta para baixo no search → navegar para a grade
+        if keyval == Gdk.KEY_Down and self.get_focus() == self.search_entry:
+            if self.pinned_flow.is_visible() and self.pinned_flow.get_children():
+                self.pinned_flow.get_children()[0].get_child().grab_focus()
+                return True
+            if self.apps_flow.get_children():
+                self.apps_flow.get_children()[0].get_child().grab_focus()
+                return True
+
+        # Enter no search → lançar primeiro resultado
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) \
+                and self.get_focus() == self.search_entry:
+            children = self.apps_flow.get_children()
+            if children:
+                child_btn = children[0].get_child()
+                if child_btn:
+                    child_btn.clicked()
+                return True
+
+        return False
+
+    # ── Populamento da grade ──────────────────────────────────────────────────
+
+    def _populate_grids(self):
+        # Pinned: Terminal
+        term = next((a for a in self.apps_data if "terminal" in a["id"].lower()), None)
+        if term:
+            self.pinned_flow.add(self._create_grid_btn(term, is_action=True))
+
+        # Pinned: Settings
+        sett = next((a for a in self.apps_data if "settings" in a["id"].lower()), None)
+        if sett:
+            self.pinned_flow.add(self._create_grid_btn(sett, is_action=True))
+
+        # Quick Actions fixas
+        self.pinned_flow.add(self._create_action_btn(
+            "Info", "dialog-information-symbolic", ["flavos-settings"]))
+        self.pinned_flow.add(self._create_action_btn(
+            "Restart", "system-reboot-symbolic", ["flavos-shellctl", "session", "reboot"]))
+        self.pinned_flow.add(self._create_action_btn(
+            "Lock", "system-lock-screen-symbolic", ["flavos-shellctl", "session", "lock"]))
+
+        # Grade principal: todos exceto pinned
+        pinned_ids = {
+            a["id"] for a in self.apps_data
+            if "terminal" in a["id"].lower() or "settings" in a["id"].lower()
+        }
         for app in self.apps_data:
             if app["id"] not in pinned_ids:
-                self.apps_flow.add(self.create_grid_btn(app, is_action=False))
+                self.apps_flow.add(self._create_grid_btn(app, is_action=False))
 
         self.pinned_flow.show_all()
         self.apps_flow.show_all()
-        
-    def create_custom_action(self, label_str, icon_name, cmd_args):
+
+    def _create_action_btn(self, label_str, icon_name, cmd_args):
         btn = Gtk.Button()
         btn.get_style_context().add_class("action-btn")
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         btn.add(vbox)
-        
+
         icon_w = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DIALOG)
         icon_w.set_pixel_size(32)
         vbox.pack_start(icon_w, False, False, 0)
-        
+
         lbl = Gtk.Label(label=label_str)
         lbl.get_style_context().add_class("action-label")
         vbox.pack_start(lbl, False, False, 0)
-        
-        btn.connect("clicked", lambda _: self.exec_action(cmd_args))
+
+        btn.connect("clicked", lambda _: self._exec_action(cmd_args))
         return btn
 
-    def create_grid_btn(self, app_data, is_action=False):
+    def _create_grid_btn(self, app_data, is_action=False):
         btn = Gtk.Button()
-        # Se for no flowbox de Pinned (Acoes rapidas no mock), usa o css action-btn, senão app-btn
-        css_class = "action-btn" if is_action else "app-btn"
-        lbl_class = "action-label" if is_action else "app-label"
-        btn.get_style_context().add_class(css_class)
-        
+        btn.get_style_context().add_class("action-btn" if is_action else "app-btn")
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         btn.add(vbox)
 
-        # App Icon
+        # Ícone
         icon_w = Gtk.Image()
         icon = app_data["icon"]
         if icon:
             icon_w.set_from_gicon(icon, Gtk.IconSize.DIALOG)
         else:
             icon_w.set_from_icon_name("application-x-executable", Gtk.IconSize.DIALOG)
-            
         icon_w.set_pixel_size(32 if is_action else 48)
         vbox.pack_start(icon_w, False, False, 0)
 
-        # App Label
+        # Label com truncamento elegante
         lbl = Gtk.Label(label=app_data["name"])
-        lbl.get_style_context().add_class(lbl_class)
+        lbl.get_style_context().add_class("action-label" if is_action else "app-label")
         lbl.set_ellipsize(Pango.EllipsizeMode.END)
         lbl.set_max_width_chars(12)
         vbox.pack_start(lbl, False, False, 0)
 
-        btn.connect("clicked", lambda _: self.launch_app(app_data["appinfo"]))
+        btn.connect("clicked", lambda _: self._launch_app(app_data["appinfo"]))
         return btn
 
-    def launch_app(self, appinfo):
+    def _launch_app(self, appinfo):
         try:
             appinfo.launch()
-        except:
+        except Exception:
             pass
-        sys.exit(0)
+        self._quit()
 
-    def exec_action(self, cmd_args):
+    def _exec_action(self, cmd_args):
         subprocess.Popen(cmd_args)
-        sys.exit(0)
+        self._quit()
 
-    def on_search_changed(self, entry):
+    # ── Busca ─────────────────────────────────────────────────────────────────
+
+    def _on_search_changed(self, entry):
         term = entry.get_text().lower().strip()
-        
+
         if not term:
             self.pinned_flow.show()
             self.btn_show_all.show()
@@ -308,52 +474,40 @@ class FlavosLauncher(Gtk.Window):
             self.pinned_flow.hide()
             self.btn_show_all.hide()
 
-        # Refiltra
         for child in self.apps_flow.get_children():
             child.destroy()
-            
+
         for app in self.apps_data:
             if not term or term in app["name"].lower():
-                self.apps_flow.add(self.create_grid_btn(app, is_action=False))
+                self.apps_flow.add(self._create_grid_btn(app, is_action=False))
         self.apps_flow.show_all()
 
-    def _on_mapped(self, widget, event):
-        """Chamado após X11 mapear a janela. Garante foco confiável."""
-        self.present_with_time(Gdk.CURRENT_TIME)
-        return False
 
-    def on_focus_out(self, widget, event):
-        sys.exit(0)
-        
-    def on_key_press(self, widget, event):
-        keyval = event.keyval
-        if keyval == Gdk.KEY_Escape:
-            sys.exit(0)
-            
-        # Pular pro painel abaixo usando Seta para Baixo a partir do Search
-        if keyval == Gdk.KEY_Down and self.get_focus() == self.search_entry:
-            if self.pinned_flow.is_visible() and self.pinned_flow.get_children():
-                self.pinned_flow.get_children()[0].get_child().grab_focus()
-                return True
-            elif self.apps_flow.get_children():
-                self.apps_flow.get_children()[0].get_child().grab_focus()
-                return True
-                
-        # Enter direto do search box invoca o primeiro app da lista filtrada
-        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) and self.get_focus() == self.search_entry:
-            children = self.apps_flow.get_children()
-            if children:
-                # O FlowBox empacota o btn dento de um FlowBoxChild
-                child_btn = children[0].get_child()
-                if child_btn:
-                    child_btn.clicked()
-                return True
-                
-        return False
+# ─── Entrypoint ───────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    # 1. Gravar PID — contrato com flavos-shellctl
+    _write_pid()
 
-if __name__ == '__main__':
-    win = FlavosLauncher()
-    win.show_all()
-    # Foco via idle_add — garante que o event loop do Gtk já está rodando
-    GLib.idle_add(win.present)
-    Gtk.main()
+    # 2. Garantir cleanup mesmo em caso de SIGKILL ou crash
+    atexit.register(_remove_pid)
+
+    # 3. SIGTERM limpo (enviado pelo shellctl no toggle)
+    #    Fecha imediatamente via Gtk.main_quit (sem fade-out neste caso,
+    #    pois o sinal pode vir enquanto a janela ainda está animando)
+    signal.signal(signal.SIGTERM, lambda *_: Gtk.main_quit())
+
+    # 4. Iniciar janela
+    try:
+        win = FlavosLauncher()
+        win.show_all()
+        # NOTA: idle_add(win.present) foi REMOVIDO.
+        # O foco é gerenciado exclusivamente pelo map-event → present_with_time.
+        Gtk.main()
+    except Exception:
+        import traceback
+        log_dir = os.path.expanduser("~/.local/share/flavos/logs")
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "launcher.log"), "a") as f:
+            traceback.print_exc(file=f)
+    finally:
+        _remove_pid()
