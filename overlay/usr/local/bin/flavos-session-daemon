@@ -91,16 +91,17 @@ signal.signal(signal.SIGHUP, handle_hup)
 if __name__ == "__main__":
     print("[flavos-shell] Daemon Ativado. Assumindo a Shell UI...", flush=True)
     
-    # 1. Core visual (compositor + painel superior + desktop + notificações)
-    for name in ["compositor", "main_panel", "desktop", "notifications"]:
+    # 1. Core visual (compositor + painel superior + notificações)
+    for name in ["compositor", "main_panel", "notifications"]:
         spawn(name)
     
     # 2. Taskbar com delay — Wnck precisa do WM estabilizado
     spawn_delayed("taskbar", 1.5)
     
-    # 3. xcape — fire-and-forget, sobe DEPOIS do Openbox estar pronto
+    # 3. Fire-and-forget: xcape (keybind Super) + wallpaper (feh restore)
     #    O delay da taskbar já garante ~1.5s. xcape precisa do WM para capturar.
-    spawn_fire_and_forget("xcape")
+    for ff_name in FIRE_AND_FORGET:
+        spawn_fire_and_forget(ff_name)
     
     # 4. Watchdog loop — só supervisiona COMMANDS, não fire-and-forget
     while True:
