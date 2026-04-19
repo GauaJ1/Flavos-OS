@@ -17,18 +17,14 @@ COMMANDS = {
     "main_panel": ["flavos-panel"],
     "taskbar": ["flavos-taskbar"],
     "notifications": ["dunst"],
+    "desktop": ["nemo-desktop"],
 }
 
 # Processos "fire-and-forget": sobem uma vez, fazem fork interno, não são supervisionados.
 # O xcape faz fork() e o pai retorna exit 0 imediatamente — isso é comportamento normal,
 # não crash. Tentar revivê-lo causa loop infinito de respawn.
-# O feh --bg-fill restaura o wallpaper salvo; se não houver .fehbg, usa o wallpaper padrao.
 FIRE_AND_FORGET = {
-    "xcape":      ["xcape", "-e", "Super_L=Alt_L|F1"],
-    "wallpaper":  ["bash", "-c",
-        '[ -x ~/.fehbg ] && ~/.fehbg || '
-        'feh --bg-fill /usr/share/flavos/wallpaper.jpeg 2>/dev/null || true'
-    ],
+    "xcape": ["xcape", "-e", "Super_L=Alt_L|F1"],
 }
 
 def spawn(name):
@@ -91,8 +87,8 @@ signal.signal(signal.SIGHUP, handle_hup)
 if __name__ == "__main__":
     print("[flavos-shell] Daemon Ativado. Assumindo a Shell UI...", flush=True)
     
-    # 1. Core visual (compositor + painel superior + notificações)
-    for name in ["compositor", "main_panel", "notifications"]:
+    # 1. Core visual (compositor + painel superior + desktop + notificações)
+    for name in ["compositor", "main_panel", "desktop", "notifications"]:
         spawn(name)
     
     # 2. Taskbar com delay — Wnck precisa do WM estabilizado

@@ -99,10 +99,7 @@
   </keyboard>
   <mouse>
     <context name="Desktop">
-      <!-- Right-click no desktop: menu nativo Flavos (substitui menu do pcmanfm) -->
-      <mousebind button="Right" action="Press">
-        <action name="ShowMenu"><menu>root-menu</menu></action>
-      </mousebind>
+      <!-- Nemo-desktop gerencia o root window e fornece o menu de contexto nativo -->
     </context>
     <context name="Titlebar">
       <mousebind button="Left" action="Drag">

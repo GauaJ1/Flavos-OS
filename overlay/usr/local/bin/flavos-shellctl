@@ -118,15 +118,18 @@ if [ "$ACTION" = "wallpaper" ] && [ "$SUB_ACTION" = "apply" ]; then
     echo "$PARAM" > "$HOME/.config/flavos/wallpaper"
 
     if [ "$XDG_SESSION_TYPE" = "x11" ] || [ -z "$XDG_SESSION_TYPE" ]; then
-        # feh aplica o wallpaper e escreve ~/.fehbg para restaurar na proxima sessao
-        feh --no-fehbg --bg-fill "$PARAM" 2>/dev/null || true
-        # Gerar ~/.fehbg manualmente para session daemon poder restaurar no proximo boot
-        echo "#!/usr/bin/env bash" > "$HOME/.fehbg"
-        echo "feh --no-fehbg --bg-fill '${PARAM}'" >> "$HOME/.fehbg"
-        chmod +x "$HOME/.fehbg"
+        # Nemo-desktop lê wallpaper via gsettings (org.cinnamon.desktop.background)
+        # Tenta o schema do Cinnamon (nemo-desktop), depois GNOME, depois fallback feh
+        if gsettings set org.cinnamon.desktop.background picture-uri "file://${PARAM}" 2>/dev/null; then
+            gsettings set org.cinnamon.desktop.background picture-options "zoom" 2>/dev/null
+        elif gsettings set org.gnome.desktop.background picture-uri "file://${PARAM}" 2>/dev/null; then
+            gsettings set org.gnome.desktop.background picture-options "zoom" 2>/dev/null
+        else
+            # Fallback: feh direto (sem nemo-desktop gerenciando root window)
+            feh --no-fehbg --bg-fill "$PARAM" 2>/dev/null || true
+        fi
     else
         # Espaço reservado para o compositor Wayland (swaybg / wpaperd)
-        # swaybg -i "$PARAM" -m fill &
         echo "AÇÃO wallpaper apply pronta pra Wayland backend (stub)."
     fi
     exit 0
