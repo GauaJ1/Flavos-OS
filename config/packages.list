@@ -112,3 +112,9 @@ xclip
 
 # Controle de brilho (Etapa 11D — opcional, fallback para /sys/class/backlight)
 brightnessctl
+
+# ─── Etapa 12A — Navegador Padrão e Web Experience ────────────────────────────
+# Navegador: Firefox ESR
+# Justificativa: pacote LTS do Debian, GTK nativo, integração xdg-open, ícone Papirus.
+# NÃO instalar via snap. Usar somente apt dentro do chroot.
+firefox-esr

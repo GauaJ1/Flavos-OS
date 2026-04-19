@@ -92,6 +92,10 @@
     <keybind key="C-A-Delete">
       <action name="Execute"><command>/usr/local/bin/flavos-power</command></action>
     </keybind>
+    <!-- Navegador padrão (Etapa 12A) -->
+    <keybind key="C-A-b">
+      <action name="Execute"><command>firefox-esr</command></action>
+    </keybind>
   </keyboard>
   <mouse>
     <context name="Desktop">
@@ -133,6 +137,11 @@
     </context>
   </mouse>
   <applications>
+    <!-- Firefox ESR (Etapa 12A) — decoração e foco garantidos -->
+    <application class="Firefox*" name="Navigator">
+      <decor>yes</decor>
+      <focus>yes</focus>
+    </application>
     <application class="*">
       <decor>yes</decor>
     </application>

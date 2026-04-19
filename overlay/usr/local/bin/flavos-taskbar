@@ -35,9 +35,10 @@ CONFIG_PATH = os.path.expanduser("~/.config/flavos/panel.json")
 # Apps fixados — estrutura organizada, extensível via config futura.
 # Cada entrada: (icon_name, command_argv, tooltip)
 PINNED_APPS = [
-    ("utilities-terminal",      ["kitty"],    "Terminal"),
-    ("system-file-manager",     ["pcmanfm"],  "Arquivos"),
-    ("accessories-text-editor", ["mousepad"], "Editor"),
+    ("utilities-terminal",      ["kitty"],          "Terminal"),
+    ("system-file-manager",     ["pcmanfm"],         "Arquivos"),
+    ("accessories-text-editor", ["mousepad"],        "Editor"),
+    ("firefox-esr",             ["firefox-esr"],     "Navegador"),   # 12A
 ]
 
 def load_config():

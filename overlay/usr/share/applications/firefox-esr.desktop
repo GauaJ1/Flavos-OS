@@ -1,0 +1,16 @@
+[Desktop Entry]
+Version=1.0
+Name=Firefox ESR
+Name[pt_BR]=Firefox ESR
+GenericName=Navegador Web
+GenericName[pt_BR]=Navegador Web
+Comment=Navegação rápida, privada e segura na web
+Comment[pt_BR]=Navegação rápida, privada e segura na web
+Exec=firefox-esr %u
+Icon=firefox-esr
+Terminal=false
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/rdf+xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;
+StartupNotify=true
+StartupWMClass=Firefox
