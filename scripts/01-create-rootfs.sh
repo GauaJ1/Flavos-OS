@@ -142,6 +142,8 @@ chroot "$ROOTFS" systemctl enable NetworkManager 2>/dev/null || true
 chroot "$ROOTFS" systemctl disable systemd-networkd 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable systemd-resolved 2>/dev/null || true
 chroot "$ROOTFS" systemctl enable ssh 2>/dev/null || true
+# NTP: habilitar systemd-timesyncd (necessário para timedatectl set-ntp)
+chroot "$ROOTFS" systemctl enable systemd-timesyncd 2>/dev/null || true
 # Mouse no console (Etapa 7E)
 chroot "$ROOTFS" systemctl enable gpm 2>/dev/null || true
 
@@ -158,6 +160,7 @@ if [[ -d "$OVERLAY" ]]; then
     if [[ -d "${ROOTFS}/etc/sudoers.d" ]]; then
         chroot "$ROOTFS" chown -R root:root /etc/sudoers.d
         chroot "$ROOTFS" chmod 0440 /etc/sudoers.d/flavos-power 2>/dev/null || true
+        chroot "$ROOTFS" chmod 0440 /etc/sudoers.d/flavos-settings 2>/dev/null || true
     fi
 fi
 

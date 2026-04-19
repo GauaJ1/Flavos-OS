@@ -36,7 +36,7 @@ CONFIG_PATH = os.path.expanduser("~/.config/flavos/panel.json")
 # Cada entrada: (icon_name, command_argv, tooltip)
 PINNED_APPS = [
     ("utilities-terminal",      ["kitty"],          "Terminal"),
-    ("system-file-manager",     ["pcmanfm"],         "Arquivos"),
+    ("system-file-manager",     ["nemo"],            "Arquivos"),
     ("accessories-text-editor", ["mousepad"],        "Editor"),
     ("firefox-esr",             ["firefox-esr"],     "Navegador"),   # 12A
 ]

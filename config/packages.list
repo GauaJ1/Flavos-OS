@@ -64,9 +64,9 @@ openbox
 x11-xserver-utils
 
 # Shell Visual (Etapa 9B)
-# Apps Nativos Essenciais (Etapa 10C)
+# Apps Nativos Essenciais (Etapa 10C / 12B)
 kitty
-pcmanfm
+nemo
 mousepad
 viewnior
 xdg-utils
@@ -76,6 +76,7 @@ lxpolkit
 libpam-systemd
 feh
 picom
+pcmanfm
 fonts-inter
 fonts-roboto
 papirus-icon-theme

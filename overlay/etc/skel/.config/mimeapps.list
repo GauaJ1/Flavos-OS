@@ -5,9 +5,11 @@ x-scheme-handler/https=firefox-esr.desktop
 x-scheme-handler/ftp=firefox-esr.desktop
 application/xhtml+xml=firefox-esr.desktop
 application/xml=firefox-esr.desktop
+inode/directory=nemo.desktop
 
 [Added Associations]
 text/html=firefox-esr.desktop;
 x-scheme-handler/http=firefox-esr.desktop;
 x-scheme-handler/https=firefox-esr.desktop;
 application/xhtml+xml=firefox-esr.desktop;
+inode/directory=nemo.desktop;
