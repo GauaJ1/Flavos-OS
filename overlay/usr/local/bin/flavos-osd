@@ -1,71 +1,176 @@
 #!/usr/bin/env python3
-# Flavos OS — Shell OSD v4
-# Janela GTK popup efêmera. Fundo sólido, sem RGBA (evita artefatos de compositor).
-# Volume: tenta pactl (PulseAudio/PipeWire), fallback para amixer (ALSA).
+# Flavos OS — OSD v5 (Etapa 11D — Native Visual Feedback System)
+#
+# Hierarquia de superfícies de feedback:
+#   OSD   → Volume, Brilho — feedback imediato de hardware
+#         → Posição: centro-horizontal, acima da taskbar
+#   Toast → Canal de feedback interno da shell Flavos OS
+#         → NÃO substitui dunst — exclusivo para eventos de shell
+#         → Posição: canto inferior direito, acima da taskbar
+#
+# Singleton via PID file /tmp/flavos-osd.pid:
+#   Nova invocação mata instância anterior via SIGKILL antes de abrir.
+#   Resolve disparos rápidos (ex: segurar volume) sem instâncias concorrentes.
+#
+# Motion (system-motion-design.md):
+#   Entrada: 120ms ease-out | opacity 0→1 + slide Y +8px→0
+#   Saída:   100ms ease-in  | opacity 1→0 + slide Y 0→+8px
+#   Fallback VM: pure opacity fade (is_composited() == False → sem move)
+#
+# Brilho (honesto):
+#   Lê /sys/class/backlight. Se indisponível (VM, monitor externo),
+#   exibe estado "Não disponível" — sem fingir ajuste funcional.
 
 import gi
 import sys
 import os
-import subprocess
 import re
+import signal
+import atexit
+import subprocess
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 
-# --- Design Tokens -------------------------------------------------------
-# Fundo sólido — NÃO usa RGBA. O Picom aplica blur/shadow independentemente.
-CSS = b"""
-window {
-    background-color: #1C2030;
-    border-radius: 14px;
+# ─── Constantes ───────────────────────────────────────────────────────────────
+OSD_PID_FILE    = "/tmp/flavos-osd.pid"
+OSD_TIMEOUT_MS  = 1800   # Auto-dismiss para OSD de hardware
+TOAST_TIMEOUT_MS = 3000  # Auto-dismiss para Toast de shell
+
+# Motion tokens (system-motion-design.md — categoria B: panel/popover)
+ENTER_MS  = 120   # Entrada: ease-out
+EXIT_MS   = 100   # Saída: ease-in (mais decisiva, menos teatral)
+TICK_MS   = 16    # ~60fps — GLib.timeout_add, não bloqueante
+SLIDE_Y   = 8     # px de deslocamento vertical (discreto, não dramático)
+
+# Geometria da shell (espelha rc.xml margins)
+TASKBAR_H = 36    # Taskbar inferior
+PANEL_H   = 32    # Painel superior
+
+# ─── CSS — Design System Flavos OS ────────────────────────────────────────────
+# Glass semi-transparente: rgba(22,26,33,0.88) + blur do Picom por baixo.
+# Fundo solido foi substituido para consistencia com Panel e Launcher.
+CSS = """
+/* -- OSD: Volume / Brilho -- */
+#FlavosOSD {
+    background-color: rgba(22, 26, 33, 0.88);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
 }
 .osd-box {
-    padding: 20px 24px 18px 24px;
-    border: 1px solid #2E3652;
-    border-radius: 14px;
-    background-color: #1C2030;
+    padding: 18px 22px 16px 22px;
+}
+.osd-icon {
+    margin-right: 14px;
 }
 .osd-label {
+    font-family: Inter, sans-serif;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 1px;
-    color: #5A6480;
+    color: #4A5470;
 }
 .osd-value {
-    font-size: 36px;
+    font-family: Inter, sans-serif;
+    font-size: 32px;
     font-weight: 800;
     color: #E8ECF4;
-    margin-top: 2px;
+    margin-top: 1px;
 }
 .osd-muted {
-    font-size: 36px;
+    font-family: Inter, sans-serif;
+    font-size: 32px;
     font-weight: 800;
     color: #3A4560;
-    margin-top: 2px;
+    margin-top: 1px;
+}
+.osd-unavailable {
+    font-family: Inter, sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4A5470;
+    margin-top: 4px;
 }
 progressbar {
-    margin-top: 10px;
+    margin-top: 8px;
 }
 progressbar trough {
     background-color: #272D3D;
-    border-radius: 4px;
-    min-height: 6px;
+    border-radius: 3px;
+    min-height: 5px;
     border: none;
 }
 progressbar progress {
     background-color: #4B8BF5;
-    border-radius: 4px;
-    min-height: 6px;
+    border-radius: 3px;
+    min-height: 5px;
     border: none;
 }
 .osd-muted-bar progress {
     background-color: #2E3652;
 }
+
+/* -- Toast: Canal de feedback da shell Flavos -- */
+#FlavosToast {
+    background-color: rgba(22, 26, 33, 0.88);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.toast-box {
+    padding: 14px 18px;
+}
+.toast-title {
+    font-family: Inter, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #E8ECF4;
+}
+.toast-body {
+    font-family: Inter, sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    color: #6C7A8C;
+    margin-top: 2px;
+}
 """
 
-OSD_TIMEOUT_MS = 1800
-# -------------------------------------------------------------------------
+# ─── Singleton: Anti-instâncias concorrentes ──────────────────────────────────
 
+def _kill_previous_osd():
+    """
+    Mata instância anterior via SIGKILL antes de abrir nova.
+    Necessário para disparos rápidos (ex: segurar XF86AudioRaiseVolume).
+    SIGKILL garante término imediato sem esperar cleanup da instância antiga.
+    O PID file é removido aqui, antes de escrever o novo — sequência atômica.
+    """
+    if not os.path.exists(OSD_PID_FILE):
+        return
+    try:
+        raw = open(OSD_PID_FILE).read().strip()
+        if raw:
+            os.kill(int(raw), signal.SIGKILL)
+    except (OSError, ValueError, ProcessLookupError):
+        pass
+    finally:
+        try:
+            os.unlink(OSD_PID_FILE)
+        except OSError:
+            pass
+
+def _write_osd_pid():
+    try:
+        with open(OSD_PID_FILE, "w") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
+
+def _remove_osd_pid():
+    try:
+        os.unlink(OSD_PID_FILE)
+    except OSError:
+        pass
+
+# ─── Utilitário de subprocesso ────────────────────────────────────────────────
 
 def _run(cmd):
     try:
@@ -75,184 +180,465 @@ def _run(cmd):
     except Exception:
         return ""
 
+# ─── Backend de Volume ────────────────────────────────────────────────────────
 
-# --- Volume backend: pactl first, amixer fallback ------------------------
 def get_volume():
     """Retorna (level 0-100, is_muted). (-1, False) se indisponível."""
-    # 1. PulseAudio / PipeWire via pactl
     out = _run(["pactl", "get-sink-volume", "@DEFAULT_SINK@"])
     if out:
-        match = re.search(r'(\d+)%', out)
-        if match:
-            vol = int(match.group(1))
-            mute_out = _run(["pactl", "get-sink-mute", "@DEFAULT_SINK@"])
-            muted = "yes" in mute_out.lower()
+        m = re.search(r'(\d+)%', out)
+        if m:
+            vol = int(m.group(1))
+            muted = "yes" in _run(["pactl", "get-sink-mute", "@DEFAULT_SINK@"]).lower()
             return vol, muted
-
-    # 2. ALSA via amixer
     out = _run(["amixer", "sget", "Master"])
     if out:
-        match = re.search(r'\[(\d+)%\]', out)
-        if match:
-            vol = int(match.group(1))
-            muted = '[off]' in out
-            return vol, muted
-
+        m = re.search(r'\[(\d+)%\]', out)
+        if m:
+            return int(m.group(1)), '[off]' in out
     return -1, False
 
-
 def set_volume(delta=0, toggle_mute=False):
-    """Ajusta volume. Usa pactl primeiro, amixer como fallback."""
-    # PulseAudio / PipeWire
+    """Ajusta volume. pactl primeiro, amixer como fallback."""
     try:
         if toggle_mute:
             subprocess.run(
                 ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+                stderr=subprocess.DEVNULL, timeout=2, check=False)
         elif delta > 0:
             subprocess.run(
                 ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"+{abs(delta)}%"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+                stderr=subprocess.DEVNULL, timeout=2, check=False)
             subprocess.run(
                 ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+                stderr=subprocess.DEVNULL, timeout=2, check=False)
             # Clamp estrito a 100%
             subprocess.run(
                 ["bash", "-c",
-                 "vol=$(pactl get-sink-volume @DEFAULT_SINK@ | awk -F' / ' '{print $2}' | grep -o '[0-9]\\+' | head -1);"
-                 "if [ -n \"$vol\" ] && [ \"$vol\" -gt 100 ]; then pactl set-sink-volume @DEFAULT_SINK@ 100%; fi"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+                 "vol=$(pactl get-sink-volume @DEFAULT_SINK@"
+                 " | awk -F'/' '{print $2}' | grep -o '[0-9]\\+' | head -1);"
+                 " [ -n \"$vol\" ] && [ \"$vol\" -gt 100 ]"
+                 " && pactl set-sink-volume @DEFAULT_SINK@ 100%; true"],
+                stderr=subprocess.DEVNULL, timeout=2, check=False)
         elif delta < 0:
             subprocess.run(
                 ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"-{abs(delta)}%"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+                stderr=subprocess.DEVNULL, timeout=2, check=False)
             subprocess.run(
                 ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
-        # Se pactl funcionou voltamos
+                stderr=subprocess.DEVNULL, timeout=2, check=False)
         if _run(["pactl", "get-sink-volume", "@DEFAULT_SINK@"]):
             return
     except Exception:
         pass
-
     # Fallback: amixer
     try:
         if toggle_mute:
-            subprocess.run(
-                ["amixer", "-q", "sset", "Master", "toggle"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+            subprocess.run(["amixer", "-q", "sset", "Master", "toggle"],
+                           stderr=subprocess.DEVNULL, timeout=2, check=False)
         elif delta > 0:
-            subprocess.run(
-                ["amixer", "-q", "sset", "Master", f"{abs(delta)}%+", "unmute"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+            subprocess.run(["amixer", "-q", "sset", "Master", f"{abs(delta)}%+", "unmute"],
+                           stderr=subprocess.DEVNULL, timeout=2, check=False)
         elif delta < 0:
-            subprocess.run(
-                ["amixer", "-q", "sset", "Master", f"{abs(delta)}%-", "unmute"],
-                stderr=subprocess.DEVNULL, timeout=2, check=False
-            )
+            subprocess.run(["amixer", "-q", "sset", "Master", f"{abs(delta)}%-", "unmute"],
+                           stderr=subprocess.DEVNULL, timeout=2, check=False)
     except Exception:
         pass
-# -------------------------------------------------------------------------
 
+# ─── Backend de Brilho (honesto) ──────────────────────────────────────────────
 
-class ShellOSD(Gtk.Window):
-    def __init__(self, label_text, value_text, fraction=-1.0, is_muted=False):
+def _find_backlight():
+    """
+    Procura entrada válida em /sys/class/backlight.
+    Retorna o path ou None se não disponível (VM, monitor externo sem DDC).
+    """
+    try:
+        entries = [e for e in os.listdir("/sys/class/backlight")
+                   if not e.startswith('.')]
+        if entries:
+            return os.path.join("/sys/class/backlight", entries[0])
+    except OSError:
+        pass
+    return None
+
+def get_brightness():
+    """
+    Retorna (level 0-100, disponivel).
+    Honesto: se não há backlight real, retorna (-1, False).
+    Não finge ajuste funcional nem retorna valor arbitrário.
+    """
+    bl = _find_backlight()
+    if not bl:
+        return -1, False
+    try:
+        cur  = int(open(os.path.join(bl, "brightness")).read().strip())
+        maxi = int(open(os.path.join(bl, "max_brightness")).read().strip())
+        if maxi > 0:
+            return round((cur / maxi) * 100), True
+    except (OSError, ValueError):
+        pass
+    return -1, False
+
+def set_brightness(delta):
+    """
+    Ajusta brilho via brightnessctl (preferido) ou escrita direta em /sys.
+    Sem-op elegante se não há backlight — sem erro, sem crash.
+    """
+    bl = _find_backlight()
+    if not bl:
+        return  # Sem backlight detectado — comportamento honesto, não trava
+    # 1. brightnessctl (se instalado)
+    try:
+        sign = "+" if delta > 0 else "-"
+        subprocess.run(
+            ["brightnessctl", "s", f"{abs(delta)}%{sign}"],
+            stderr=subprocess.DEVNULL, timeout=2, check=False)
+        return
+    except FileNotFoundError:
+        pass
+    # 2. Fallback: escrita direta em /sys (requer permissão adequada)
+    try:
+        cur  = int(open(os.path.join(bl, "brightness")).read().strip())
+        maxi = int(open(os.path.join(bl, "max_brightness")).read().strip())
+        step = max(1, round(maxi * abs(delta) / 100))
+        new_val = max(1, min(maxi, cur + (step if delta > 0 else -step)))
+        with open(os.path.join(bl, "brightness"), "w") as f:
+            f.write(str(new_val))
+    except (OSError, ValueError):
+        pass
+
+# ─── Motor de Animação Base ───────────────────────────────────────────────────
+
+class AnimatedOSDBase(Gtk.Window):
+    """
+    Classe base compartilhada por FlavosOSD e FlavosToast.
+
+    Implementa o motor de animação conforme system-motion-design.md:
+    - Entrada: 120ms ease-out, opacity 0→1, slide Y +SLIDE_Y→0
+    - Saída:   100ms ease-in,  opacity 1→0, slide Y 0→+SLIDE_Y
+    - A fórmula de offset usa a opacidade como interpolador:
+        offset = SLIDE_Y * (1.0 - opacity)
+      Quando opacity=0 → offset=SLIDE_Y (ponto inicial, emergindo de baixo)
+      Quando opacity=1 → offset=0      (posição final, encaixado)
+      Isso garante que fade e slide progridem na mesma curva.
+
+    Fallback VM: se is_composited() == False, move() é omitido (pure fade).
+    Razão: em VM com software rendering, move() agressivo pode causar jitter.
+    O fade puro ainda comunica presença/ausência sem sacrificar a qualidade.
+    """
+
+    def __init__(self, window_id, timeout_ms):
         super().__init__(type=Gtk.WindowType.POPUP)
+        self.set_name(window_id)
         self.set_decorated(False)
-        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
-            self.set_app_paintable(True)
-            screen = self.get_screen()
-            visual = screen.get_rgba_visual()
-            if visual and screen.is_composited():
-                self.set_visual(visual)
+        self.set_resizable(False)
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
-        self.set_resizable(False)
-        self.set_name("FlavosOSD")
+        self.set_accept_focus(False)   # OSD/Toast NUNCA roba foco
+        self.set_keep_above(True)
+        self.set_app_paintable(True)
 
-        # Hacks X11 isolados condicionalmente
-        if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
-            self.set_keep_above(True)
-            self.set_accept_focus(False)
+        # Detecta compositor para decisão de slide Y
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        self._composited = bool(visual and screen.is_composited())
+        if self._composited:
+            self.set_visual(visual)
 
-        # Aplicar CSS
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(CSS)
+        self._quitting = False
+        self._base_x   = 0
+        self._base_y   = 0
+
+        # CSS compartilhado
+        provider = Gtk.CssProvider()
+        provider.load_from_data(CSS.encode('utf-8'))
         Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(), css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_USER
-        )
+            Gdk.Screen.get_default(), provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_USER)
 
-        # Posicionamento: centro horizontal, 160px acima do painel (42px)
-        width = 240
-        display = Gdk.Display.get_default()
-        monitor = display.get_primary_monitor() or display.get_monitor(0)
-        geo = monitor.get_geometry()
-        x = geo.x + (geo.width - width) // 2
-        y = geo.y + geo.height - 42 - 160
+        # Registra auto-dismiss
+        GLib.timeout_add(timeout_ms, self._begin_dismiss)
+
+    def _set_base_position(self, x, y):
+        self._base_x = x
+        self._base_y = y
         self.move(x, y)
-        self.set_default_size(width, 1)
 
-        # Layout
+    def _begin_fade_in(self):
+        """
+        Inicia animação de entrada: opacity 0→1, slide Y +SLIDE_Y→0.
+        Chamado após posicionamento e show_all().
+        """
+        self.set_opacity(0.0)
+        if self._composited:
+            # Começa SLIDE_Y abaixo — vai convergir para base_y
+            self.move(self._base_x, self._base_y + SLIDE_Y)
+
+        steps     = max(1, ENTER_MS // TICK_MS)
+        op_step   = 1.0 / steps
+
+        def _tick():
+            if self._quitting:
+                return False  # Interrompível
+            op = min(1.0, self.get_opacity() + op_step)
+            self.set_opacity(op)
+            if self._composited:
+                # Fórmula: offset converge para 0 conforme opacity vai a 1
+                offset = int(SLIDE_Y * (1.0 - op))
+                self.move(self._base_x, self._base_y + offset)
+            if op >= 1.0:
+                return False  # Fim do fade-in
+            return True
+
+        GLib.timeout_add(TICK_MS, _tick)
+
+    def _begin_dismiss(self):
+        """Callback do auto-dismiss. Inicia fade-out."""
+        self._do_fade_out()
+        return False  # GLib.SOURCE_REMOVE
+
+    def _do_fade_out(self):
+        """
+        Inicia animação de saída: opacity 1→0, slide Y 0→+SLIDE_Y.
+        Idempotente: protegido por _quitting.
+        Chama Gtk.main_quit() ao fim — cleanup limpo.
+        """
+        if self._quitting:
+            return
+        self._quitting = True
+
+        steps   = max(1, EXIT_MS // TICK_MS)
+        op_step = 1.0 / steps
+
+        def _tick():
+            op = max(0.0, self.get_opacity() - op_step)
+            self.set_opacity(op)
+            if self._composited:
+                offset = int(SLIDE_Y * (1.0 - op))
+                self.move(self._base_x, self._base_y + offset)
+            if op <= 0.0:
+                Gtk.main_quit()
+                return False
+            return True
+
+        GLib.timeout_add(TICK_MS, _tick)
+
+# ─── FlavosOSD — Volume / Brilho ─────────────────────────────────────────────
+
+class FlavosOSD(AnimatedOSDBase):
+    """
+    OSD principal para feedback de hardware: Volume e Brilho.
+    Posição: centro-horizontal, OFFSET_Y px acima da taskbar inferior.
+    Anatomia: [ícone] [label category | valor | barra de progresso]
+    """
+
+    OSD_WIDTH  = 248
+    OFFSET_Y   = 160  # px acima do topo da taskbar
+
+    def __init__(self, label_text, value_text, icon_name,
+                 fraction=-1.0, is_muted=False, unavailable=False):
+        super().__init__("FlavosOSD", OSD_TIMEOUT_MS)
+
+        # ── Layout ────────────────────────────────────────────────────────────
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         outer.get_style_context().add_class("osd-box")
         self.add(outer)
 
-        lbl_label = Gtk.Label(label=label_text.upper(), xalign=0)
-        lbl_label.get_style_context().add_class("osd-label")
-        outer.pack_start(lbl_label, False, False, 0)
+        # Linha principal: ícone à esquerda, textos à direita
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        row.set_valign(Gtk.Align.CENTER)
+        outer.pack_start(row, False, False, 0)
 
-        lbl_value = Gtk.Label(label=value_text, xalign=0)
-        lbl_value.get_style_context().add_class(
-            "osd-muted" if is_muted else "osd-value"
-        )
-        outer.pack_start(lbl_value, False, False, 0)
+        # Ícone simbólico (Papirus, consistente com taskbar)
+        icon_w = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.DIALOG)
+        icon_w.set_pixel_size(28)
+        icon_w.get_style_context().add_class("osd-icon")
+        row.pack_start(icon_w, False, False, 0)
 
-        if fraction >= 0:
+        # Coluna de texto: categoria + valor
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        row.pack_start(col, True, True, 0)
+
+        lbl_cat = Gtk.Label(label=label_text.upper(), xalign=0)
+        lbl_cat.get_style_context().add_class("osd-label")
+        col.pack_start(lbl_cat, False, False, 0)
+
+        if unavailable:
+            lbl_val = Gtk.Label(label="Não disponível", xalign=0)
+            lbl_val.get_style_context().add_class("osd-unavailable")
+        else:
+            lbl_val = Gtk.Label(label=value_text, xalign=0)
+            lbl_val.get_style_context().add_class(
+                "osd-muted" if is_muted else "osd-value")
+        col.pack_start(lbl_val, False, False, 0)
+
+        # Barra de progresso (apenas quando há valor real)
+        if fraction >= 0 and not unavailable:
             bar = Gtk.ProgressBar()
             bar.set_fraction(max(0.0, min(1.0, fraction)))
             if is_muted:
                 bar.get_style_context().add_class("osd-muted-bar")
             outer.pack_start(bar, False, False, 0)
 
-        GLib.timeout_add(OSD_TIMEOUT_MS, self._dismiss)
+        self.set_default_size(self.OSD_WIDTH, 1)
 
-    def _dismiss(self):
-        self.destroy()
-        Gtk.main_quit()
-        return False
+    def show_centered(self):
+        """Posiciona no centro-inferior e inicia animação de entrada."""
+        self.show_all()
+        self.set_opacity(0.0)
 
+        display = Gdk.Display.get_default()
+        monitor  = display.get_primary_monitor() or display.get_monitor(0)
+        geo      = monitor.get_geometry()
 
-def show_osd(label, value, fraction=-1.0, is_muted=False):
-    osd = ShellOSD(label, value, fraction=fraction, is_muted=is_muted)
-    osd.show_all()
-    Gtk.main()
+        x = geo.x + (geo.width - self.OSD_WIDTH) // 2
+        y = geo.y + geo.height - TASKBAR_H - self.OFFSET_Y
 
+        self._set_base_position(x, y)
+        self._begin_fade_in()
+
+# ─── FlavosToast — Canal de feedback da shell Flavos OS ──────────────────────
+
+class FlavosToast(AnimatedOSDBase):
+    """
+    Toast leve para eventos internos da shell Flavos OS.
+
+    ESCOPO CLARO: este canal é exclusivo para eventos gerados pela própria
+    shell (ex: "Wi-Fi conectado", "Bluetooth ativo", ações de sistema).
+    Notificações de aplicativos de terceiros continuam via dunst.
+
+    Posição: canto inferior direito, respeitando geometria da taskbar.
+    A altura real é calculada via GLib.idle_add após o primeiro layout GTK,
+    evitando posicionamento incorreto por estimativa.
+    """
+
+    TOAST_W  = 280
+    MARGIN   = 12  # px de margem lateral e acima da taskbar
+
+    def __init__(self, title, body=""):
+        super().__init__("FlavosToast", TOAST_TIMEOUT_MS)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        outer.get_style_context().add_class("toast-box")
+        self.add(outer)
+
+        lbl_title = Gtk.Label(label=title, xalign=0)
+        lbl_title.get_style_context().add_class("toast-title")
+        lbl_title.set_line_wrap(True)
+        lbl_title.set_max_width_chars(30)
+        outer.pack_start(lbl_title, False, False, 0)
+
+        if body:
+            lbl_body = Gtk.Label(label=body, xalign=0)
+            lbl_body.get_style_context().add_class("toast-body")
+            lbl_body.set_line_wrap(True)
+            lbl_body.set_max_width_chars(30)
+            outer.pack_start(lbl_body, False, False, 0)
+
+        self.set_default_size(self.TOAST_W, 1)
+
+    def show_bottom_right(self):
+        """
+        Exibe no canto inferior direito acima da taskbar.
+        Usa GLib.idle_add para posicionar após o GTK calcular a altura real
+        do widget — evita posicionamento incorreto por estimativa hardcoded.
+        A opacidade fica em 0.0 até o posicionamento estar correto.
+        """
+        self.show_all()
+        self.set_opacity(0.0)
+        # idle_add: roda após o primeiro ciclo de layout do GTK
+        GLib.idle_add(self._position_and_animate)
+
+    def _position_and_animate(self):
+        """Posiciona com altura real e inicia animação. Chamado via idle_add."""
+        alloc   = self.get_allocation()
+        toast_h = alloc.height if alloc.height > 1 else 72  # fallback conservador
+
+        display = Gdk.Display.get_default()
+        monitor  = display.get_primary_monitor() or display.get_monitor(0)
+        geo      = monitor.get_geometry()
+
+        # x: borda direita da tela - largura do toast - margem
+        # y: topo da taskbar - altura do toast - margem
+        x = geo.x + geo.width  - self.TOAST_W - self.MARGIN
+        y = geo.y + geo.height - TASKBAR_H    - self.MARGIN - toast_h
+
+        self._set_base_position(x, y)
+        self._begin_fade_in()
+        return False  # GLib.SOURCE_REMOVE
+
+# ─── Helpers de exibição ──────────────────────────────────────────────────────
+
+def _volume_icon(vol, muted):
+    if muted or vol == 0:
+        return "audio-volume-muted-symbolic"
+    if vol < 34:
+        return "audio-volume-low-symbolic"
+    if vol < 67:
+        return "audio-volume-medium-symbolic"
+    return "audio-volume-high-symbolic"
 
 def show_volume_osd():
     vol, muted = get_volume()
+    icon = _volume_icon(vol if vol >= 0 else 0, muted)
     if vol < 0:
-        show_osd("Volume", "—")
+        osd = FlavosOSD("Volume", "—", icon, unavailable=True)
     elif muted:
-        show_osd("Volume", "Mudo", fraction=vol / 100.0, is_muted=True)
+        osd = FlavosOSD("Volume", "Mudo", icon,
+                        fraction=vol / 100.0, is_muted=True)
     else:
-        show_osd("Volume", f"{vol}%", fraction=vol / 100.0)
+        osd = FlavosOSD("Volume", f"{vol}%", icon, fraction=vol / 100.0)
+    osd.show_centered()
+    Gtk.main()
 
+def show_brightness_osd():
+    level, available = get_brightness()
+    icon = "display-brightness-symbolic"
+    if not available:
+        # Honesto: sem backlight — não finge ajuste funcional
+        osd = FlavosOSD("Brilho", "—", icon, unavailable=True)
+    else:
+        osd = FlavosOSD("Brilho", f"{level}%", icon, fraction=level / 100.0)
+    osd.show_centered()
+    Gtk.main()
+
+def show_toast(title, body=""):
+    toast = FlavosToast(title, body)
+    toast.show_bottom_right()
+    Gtk.main()
+
+# ─── Entrypoint ───────────────────────────────────────────────────────────────
 
 def main():
     if len(sys.argv) < 2:
-        print("Uso: flavos-osd {volume|volume-up|volume-down|volume-mute}")
+        print(
+            "Uso: flavos-osd <comando>\n"
+            "\n"
+            "Comandos OSD (hardware):\n"
+            "  volume               Mostra OSD com nível atual\n"
+            "  volume-up            +5% e mostra OSD\n"
+            "  volume-down          -5% e mostra OSD\n"
+            "  volume-mute          Toggle mudo e mostra OSD\n"
+            "  brightness           Mostra OSD com nível atual\n"
+            "  brightness-up        +10% e mostra OSD\n"
+            "  brightness-down      -10% e mostra OSD\n"
+            "\n"
+            "Comandos Toast (shell Flavos):\n"
+            "  notify <título> [mensagem]   Toast no canto inferior direito\n"
+            "\n"
+            "Nota: 'notify' é um canal interno da shell Flavos OS.\n"
+            "Para notificações de aplicativos, use dunst/libnotify."
+        )
         sys.exit(1)
 
     cmd = sys.argv[1]
+
+    # Singleton: mata instância anterior antes de abrir nova
+    # Garante que disparos rápidos não acumulem janelas concorrentes
+    _kill_previous_osd()
+    _write_osd_pid()
+    atexit.register(_remove_osd_pid)
+
     if cmd == "volume":
         show_volume_osd()
     elif cmd == "volume-up":
@@ -265,9 +651,19 @@ def main():
         set_volume(toggle_mute=True)
         show_volume_osd()
     elif cmd == "brightness":
-        show_osd("Brilho", "—")
+        show_brightness_osd()
+    elif cmd == "brightness-up":
+        set_brightness(delta=10)
+        show_brightness_osd()
+    elif cmd == "brightness-down":
+        set_brightness(delta=-10)
+        show_brightness_osd()
+    elif cmd == "notify":
+        title = sys.argv[2] if len(sys.argv) > 2 else "Flavos OS"
+        body  = sys.argv[3] if len(sys.argv) > 3 else ""
+        show_toast(title, body)
     else:
-        print(f"Comando desconhecido: {cmd}")
+        print(f"Erro: comando desconhecido '{cmd}'", file=sys.stderr)
         sys.exit(1)
 
 

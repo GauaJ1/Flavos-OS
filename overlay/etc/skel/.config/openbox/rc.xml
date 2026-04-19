@@ -80,6 +80,14 @@
     <keybind key="XF86AudioMute">
       <action name="Execute"><command>/usr/local/bin/flavos-osd volume-mute</command></action>
     </keybind>
+    <!-- Brilho (Etapa 11D) -->
+    <keybind key="XF86MonBrightnessUp">
+      <action name="Execute"><command>/usr/local/bin/flavos-osd brightness-up</command></action>
+    </keybind>
+    <keybind key="XF86MonBrightnessDown">
+      <action name="Execute"><command>/usr/local/bin/flavos-osd brightness-down</command></action>
+    </keybind>
+
     <!-- Power Menu (Etapa 10B) -->
     <keybind key="C-A-Delete">
       <action name="Execute"><command>/usr/local/bin/flavos-power</command></action>

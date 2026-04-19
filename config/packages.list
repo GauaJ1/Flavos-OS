@@ -109,3 +109,6 @@ xcape
 
 # Clipboard X11
 xclip
+
+# Controle de brilho (Etapa 11D — opcional, fallback para /sys/class/backlight)
+brightnessctl
