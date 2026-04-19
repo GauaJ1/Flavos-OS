@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PulseAudio Sound System
+Comment=Start the PulseAudio Sound System
+Exec=pulseaudio --start --log-target=syslog
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-AutoRestart=false

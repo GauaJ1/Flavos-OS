@@ -80,6 +80,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 INPUT_FLAGS=""  # populado apenas no modo --gui
+AUDIO_FLAGS="" # populado apenas no modo --gui
 case "$DISPLAY_MODE" in
     --serial)
         DISPLAY_FLAGS="-nographic -serial mon:stdio"
@@ -88,7 +89,10 @@ case "$DISPLAY_MODE" in
     --gui)
         DISPLAY_FLAGS="-display gtk -serial stdio"
         INPUT_FLAGS="-device usb-ehci,id=ehci -device usb-tablet,bus=ehci.0"
+        # Áudio: Intel HDA virtual → PulseAudio do host
+        AUDIO_FLAGS="-audiodev pa,id=snd0 -device intel-hda -device hda-duplex,audiodev=snd0"
         echo "Display:   GUI (GTK) com usb-tablet"
+        echo "Audio:     Intel HDA (PulseAudio)"
         ;;
 esac
 
@@ -163,4 +167,5 @@ qemu-system-x86_64 \
     $NET_FLAG \
     -vga std \
     $INPUT_FLAGS \
+    $AUDIO_FLAGS \
     $DISPLAY_FLAGS
