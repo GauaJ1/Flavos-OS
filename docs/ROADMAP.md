@@ -15,6 +15,7 @@
 | 9 | Update/Recovery/Logging | Estratégia de atualização e fallback | ✅ Completa |
 | 10 | Refinamento V1 | Documentação final, testes, limpeza | ✅ Completa |
 | 11 | Flavos Shell Preview | Shell UI nativa funcional (Basis) | ✅ Completa |
+| 12 | Core Apps & Usability | Navegador, integração de apps, fluxos e refinamento | 🔄 Em Progresso |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -73,6 +74,11 @@
 - **11C:** Launcher confiável — PID File, motion enter/exit, focus guard.
 - **11D:** OSD Visual Feedback — Singleton, glass, motion translateY, volume/brilho.
 - **11E:** Preview Consolidação — Freeze feature-set, documentation "Basis", estabilidade garantida.
+
+### Etapa 12 — Core Apps & Daily Usability 🔄
+- **12A — Navegador Padrão e Web Experience:** ✅ Firefox ESR integrado como app de primeira classe via pacote apt nativo, com regras Openbox de decor e keybind global (C-A-b).
+- **12B — Core Apps Integration:** ✅ Conjunto core consolidado (Terminal/Kitty, Arquivos/Nemo, Editor/Mousepad, Navegador/Firefox, Imagens/Viewnior, Settings e Power). Resolvidos bugs críticos e substituição do PCManFM visual pelo Nemo.
+  - *Nota Documental Importante:* A Etapa 12B introduziu defaults mínimos necessários para os apps core, mas isto NÃO substitui a Etapa 12C, que continuará responsável por consolidar e auditar de forma mais profunda e sistêmica os fluxos de abertura, associações MIME e comportamento final do `xdg-open`.
 
 ## Decisões Fixas (Base)
 

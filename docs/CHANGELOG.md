@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Etapa 12 — Core Apps & Daily Usability (2026-04-19)
+#### Adicionado
+- **12A / Navegador Padrão:** Integrou o Firefox ESR como aplicativo de primeira classe, fornecendo uma experiência web madura com `xdg-open` configurado e atalho global `Ctrl+Alt+B`.
+- **12B / Core Apps Integration:** Conjunto de aplicativos centrais estabelecido e organizado no Desktop. Adotou-se o Nemo como Gerenciador de Arquivos padrão com suporte moderno a dark theme substituindo visualmente o PCManFM, enquanto este permanece focado para `--desktop`.
+- Novos defaults documentados, mantendo o aviso restrito para consolidação final e sistemática na Etapa 12C.
+
+#### Corrigido
+- `flavos-settings`: Resolvido crash silencioso ao clicar "Escolher..." no menu de aparência (função de estilo do dialog GTK não estava implementada).
+- `flavos-settings`: Componente NTP não funcionava devido ao serviço `systemd-timesyncd` nunca ser ativado por padrão.
+- Sudo helpers: Scripts helper como hostname e NTP do setting tiveram bit de execução (`+x`) corrigido no repo. Regras do `sudoers` reajustadas para contemplar a aba de sessão e aplicar as devidas permissões via chroot.
+- Áudio: Som resolvido via QEMU para VM, atribuindo a placa `Intel HDA` e o autostart do `PulseAudio` via desktop entry.
+
 ### Flavos Shell Preview 0.1 "Basis" (2026-04-19)
 #### Adicionado
 - **Shell UI:** Primeira preview estável da shell nativa com painel superior, taskbar inferior, launcher rápido e OSD via GTK3 e Python.
