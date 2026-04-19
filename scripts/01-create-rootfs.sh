@@ -162,6 +162,9 @@ if [[ -d "$OVERLAY" ]]; then
         chroot "$ROOTFS" chmod 0440 /etc/sudoers.d/flavos-power 2>/dev/null || true
         chroot "$ROOTFS" chmod 0440 /etc/sudoers.d/flavos-settings 2>/dev/null || true
     fi
+
+    echo "  Compilando gschemas (wallpaper defaults)..."
+    chroot "$ROOTFS" glib-compile-schemas /usr/share/glib-2.0/schemas/ 2>/dev/null || true
 fi
 
 # --- Re-sincronizar dotfiles do skel para o home do usuário ---

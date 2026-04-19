@@ -1,0 +1,7 @@
+[org.cinnamon.desktop.background]
+picture-uri='file:///usr/share/flavos/wallpaper.jpeg'
+picture-options='zoom'
+
+[org.gnome.desktop.background]
+picture-uri='file:///usr/share/flavos/wallpaper.jpeg'
+picture-options='zoom'
