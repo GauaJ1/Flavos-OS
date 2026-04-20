@@ -2,7 +2,7 @@
 Name=Menu de Aplicativos
 Comment=Launcher do Flavos OS
 Exec=jgmenu_run
-Icon=start-here
+Icon=flavos-logo
 Terminal=false
 Type=Application
 Categories=System;

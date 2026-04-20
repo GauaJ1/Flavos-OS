@@ -202,6 +202,23 @@ echo "  Compilando dconf database do sistema..."
 chroot "$ROOTFS" dconf update 2>/dev/null || \
     echo "  AVISO: dconf update falhou (dconf pode nao estar instalado — instalar via packages.list)"
 
+# --- Atualizar databases de MIME e ícones ---
+# Sem esses comandos:
+#   - xdg-mime query filetype *.jpg falha (xdg-open abre no Firefox)
+#   - flavos-logo nao e encontrado pelo GTK (icone desconhecido)
+#   - mimeinfo.cache desatualizado (xdg-mime query default retorna errado)
+echo "  Atualizando desktop database (mimeinfo.cache)..."
+chroot "$ROOTFS" update-desktop-database /usr/share/applications 2>/dev/null || \
+    echo "  AVISO: update-desktop-database falhou"
+
+echo "  Atualizando MIME database (shared-mime-info)..."
+chroot "$ROOTFS" update-mime-database /usr/share/mime 2>/dev/null || \
+    echo "  AVISO: update-mime-database falhou"
+
+echo "  Atualizando cache de icones GTK (hicolor)..."
+chroot "$ROOTFS" gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || \
+    echo "  AVISO: gtk-update-icon-cache falhou (icones podem nao aparecer imediatamente)"
+
 echo "[6/6] Gerando initramfs..."
 # O initramfs precisa incluir módulos virtio para boot em QEMU
 cat > "${ROOTFS}/etc/initramfs-tools/modules" <<EOF

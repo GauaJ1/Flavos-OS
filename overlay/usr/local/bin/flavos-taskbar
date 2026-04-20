@@ -372,7 +372,7 @@ class FlavosTaskbar(Gtk.Window):
         # 1. Botão de menu (ícone, abre launcher via shellctl)
         btn_menu = Gtk.Button()
         btn_menu.get_style_context().add_class("menu-btn")
-        menu_icon = Gtk.Image.new_from_icon_name("start-here-symbolic", Gtk.IconSize.BUTTON)
+        menu_icon = Gtk.Image.new_from_icon_name("flavos-logo", Gtk.IconSize.BUTTON)
         btn_menu.add(menu_icon)
         btn_menu.set_tooltip_text("Menu (Super)")
         btn_menu.connect("clicked", lambda _: spawn_app(

@@ -48,6 +48,7 @@ grep
 sed
 gawk
 findutils
+file
 mount
 
 # Suporte a hardware legad e QA (Etapa 7)
