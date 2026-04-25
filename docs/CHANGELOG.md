@@ -3,7 +3,7 @@
 ## Flavos Desktop Preview 0.1 "Daily" (2026-04-25)
 
 > Milestone: primeiro desktop funcional para uso diário básico.
-> Tag: `desktop-preview-0.1-daily` | Etapas: 12A → 12E
+> Tag: `desktop-preview-0.1-daily` | Etapas: 12A → 12F
 
 ---
 
