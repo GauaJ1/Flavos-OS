@@ -3,9 +3,20 @@
 ## Flavos Desktop Preview 0.1 "Daily" (2026-04-25)
 
 > Milestone: primeiro desktop funcional para uso diário básico.
-> Tag: `desktop-preview-0.1-daily` | Etapas: 12A → 12F
+> Tag: `desktop-preview-0.1-daily` | Etapas: 12A → 12F.1
 
 ---
+
+### Etapa 12F.1 — Performance Adaptation Fixes & Settings UI (2026-04-25)
+#### Adicionado
+- **Tab Desempenho no `flavos-settings`:** nova interface para monitorar e alternar perfis de performance.
+- **Detecção de Fallback GLX:** a aba Desempenho exibe um banner de aviso caso o hardware não suporte aceleração GLX, mostrando o compositor efetivo usado (Balanced/xrender em vez de Full/glx).
+- **Controle de Otimizações na UI:** botões e status para `zram` e `Firefox Light` com confirmação.
+- **Detecção `glxinfo`:** script `flavos-performance-profile` agora verifica dinamicamente a presença de `glxinfo` e suporte real OpenGL >= 2.0 antes de forçar o backend `glx`.
+- **`mesa-utils`:** adicionado ao `packages.list` para prover `glxinfo`.
+
+#### Corrigido
+- **Tela preta no perfil Full:** prevenido crash-loop do Picom em máquinas virtuais (QEMU/KVM sem virgl) fazendo fallback seguro e silencioso para o backend `xrender` se OpenGL não for detectado.
 
 ### Etapa 12F — Performance Adaptation & Resource Profiles (2026-04-25)
 #### Adicionado

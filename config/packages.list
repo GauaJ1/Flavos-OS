@@ -137,3 +137,6 @@ celluloid
 #   flavos-performance-profile set light --with-zram   (requer sudo)
 # Docs: /etc/flavos/performance-profile + docs/PERFORMANCE_PROFILES.md
 systemd-zram-generator
+# mesa-utils: contém glxinfo, usado pelo flavos-performance-profile para
+# detectar suporte GLX real antes de ativar backend glx no Picom (perfil Full).
+mesa-utils

@@ -172,6 +172,26 @@ separator {
     background-color: #1A2030;
     min-height: 1px;
 }
+.badge-info {
+    font-size: 11px;
+    color: #4B8BF5;
+    font-weight: 700;
+}
+.banner-warn {
+    background-color: #2A2010;
+    border: 1px solid #5A4020;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+}
+.banner-warn-text {
+    font-size: 12px;
+    color: #F5A623;
+}
+combobox button {
+    min-height: 30px;
+    padding: 4px 12px;
+}
 """
 
 
@@ -282,6 +302,104 @@ def read_power_info():
         "acpi":     acpi or "Sem bateria detectada",
         "has_battery": has_battery,
     }
+
+
+def read_performance_info():
+    """Lê estado do perfil de performance a partir dos JSONs escritos
+    por flavos-performance-profile. Apenas leitura — nunca edita configs."""
+    info = {
+        "profile": "balanced",
+        "source": "padrão",
+        "effective_compositor": "balanced",
+        "fallback_reason": "",
+        "picom_backend": "xrender",
+        "panel_style": "solid",
+        "zram_active": False,
+        "firefox_light": False,
+    }
+
+    # Perfil ativo do usuário
+    user_prof = os.path.expanduser("~/.config/flavos/performance.json")
+    sys_prof = "/etc/flavos/performance-profile"
+    if os.path.isfile(user_prof):
+        try:
+            with open(user_prof) as f:
+                data = json.load(f)
+            p = data.get("profile", "").strip().lower()
+            if p in ("light", "balanced", "full"):
+                info["profile"] = p
+                info["source"] = "usuário"
+        except Exception:
+            pass
+    elif os.path.isfile(sys_prof):
+        try:
+            with open(sys_prof) as f:
+                p = f.read().strip().lower()
+            if p in ("light", "balanced", "full"):
+                info["profile"] = p
+                info["source"] = "sistema"
+        except Exception:
+            pass
+
+    # Estado efetivo (compositor, fallback)
+    state_file = os.path.expanduser("~/.config/flavos/performance-state.json")
+    if os.path.isfile(state_file):
+        try:
+            with open(state_file) as f:
+                state = json.load(f)
+            info["effective_compositor"] = state.get("effective_compositor_profile", info["profile"])
+            info["fallback_reason"] = state.get("reason", "")
+        except Exception:
+            pass
+
+    # Backend Picom efetivo (ler do picom.conf ativo)
+    picom_conf = os.path.expanduser("~/.config/picom/picom.conf")
+    if os.path.isfile(picom_conf):
+        try:
+            with open(picom_conf) as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("backend"):
+                        if "glx" in line:
+                            info["picom_backend"] = "glx"
+                        else:
+                            info["picom_backend"] = "xrender"
+                        break
+        except Exception:
+            pass
+
+    # Panel style
+    panel_json = os.path.expanduser("~/.config/flavos/panel.json")
+    if os.path.isfile(panel_json):
+        try:
+            with open(panel_json) as f:
+                pdata = json.load(f)
+            info["panel_style"] = pdata.get("style", "solid")
+        except Exception:
+            pass
+
+    # zram
+    zram_conf = "/etc/systemd/zram-generator.conf"
+    zram_dev = "/dev/zram0"
+    info["zram_active"] = os.path.isfile(zram_conf) or os.path.exists(zram_dev)
+
+    # Firefox light (user.js com fingerprint)
+    firefox_dir = os.path.expanduser("~/.mozilla/firefox")
+    if os.path.isdir(firefox_dir):
+        import glob
+        profiles = glob.glob(os.path.join(firefox_dir, "*.default*"))
+        for prof_dir in profiles:
+            userjs = os.path.join(prof_dir, "user.js")
+            if os.path.isfile(userjs):
+                try:
+                    with open(userjs) as f:
+                        content = f.read(512)
+                    if "flavos" in content.lower() or "light" in content.lower():
+                        info["firefox_light"] = True
+                except Exception:
+                    pass
+
+    return info
 
 
 # ---------------------------------------------------------------------------
@@ -1008,6 +1126,218 @@ class PanelPage:
         _popen(["/usr/local/bin/flavos-shellctl", "shell", "restart"])
 
 
+class PerformancePage:
+    name = "performance"
+    title = "Desempenho"
+
+    PROFILE_LABELS = {
+        "light":    "Light — Economia de recursos",
+        "balanced": "Balanced — Padrão",
+        "full":     "Full — Efeitos completos",
+    }
+
+    def build(self, win):
+        self._win = win
+        self._info = read_performance_info()
+        scroll, vbox = _page_scroll()
+
+        vbox.pack_start(
+            _section_header("Desempenho", "Perfil de performance e otimizações do sistema"),
+            False, False, 0,
+        )
+
+        # === Banner de fallback GLX ===
+        if self._info["fallback_reason"] == "glx_unavailable":
+            banner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            banner.get_style_context().add_class("banner-warn")
+            warn_lbl = Gtk.Label(
+                label="⚠  Perfil Full solicitado, mas GLX não está disponível neste hardware."
+                      " O compositor está usando a config Balanced (xrender) como fallback.",
+                xalign=0,
+            )
+            warn_lbl.set_line_wrap(True)
+            warn_lbl.set_max_width_chars(60)
+            warn_lbl.get_style_context().add_class("banner-warn-text")
+            banner.pack_start(warn_lbl, False, False, 0)
+            vbox.pack_start(banner, False, False, 0)
+
+        # === Card: Perfil ativo ===
+        card = _card()
+
+        # Seletor de perfil
+        prof_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        prof_row.get_style_context().add_class("row-item")
+        prof_lbl = Gtk.Label(label="Perfil de desempenho", xalign=0)
+        prof_lbl.get_style_context().add_class("row-label")
+        prof_row.pack_start(prof_lbl, True, True, 0)
+
+        self._prof_combo = Gtk.ComboBoxText()
+        for pid, plbl in self.PROFILE_LABELS.items():
+            self._prof_combo.append(pid, plbl)
+        self._prof_combo.set_active_id(self._info["profile"])
+        prof_row.pack_end(self._prof_combo, False, False, 0)
+        card.pack_start(prof_row, False, False, 0)
+
+        # Compositor efetivo
+        eff = self._info["effective_compositor"]
+        eff_label = eff.capitalize()
+        if self._info["profile"] != eff:
+            eff_label += " (fallback)"
+        card.pack_start(
+            _row("Compositor efetivo", eff_label,
+                 badge=("\u25cf " + self._info["picom_backend"].upper(), "badge-info")),
+            False, False, 0,
+        )
+
+        # Estilo do painel
+        style_map = {"solid": "Sólido", "glass": "Glass (transparente)"}
+        card.pack_start(
+            _row("Estilo do painel", style_map.get(self._info["panel_style"], self._info["panel_style"])),
+            False, False, 0,
+        )
+
+        # Animações
+        anim_map = {"light": "Reduzidas", "balanced": "Padrão", "full": "Ricas"}
+        card.pack_start(
+            _row("Animações", anim_map.get(self._info["profile"], "Padrão")),
+            False, False, 0,
+        )
+
+        vbox.pack_start(card, False, False, 0)
+
+        # === Botão Aplicar perfil ===
+        card_apply = _card()
+        apply_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        apply_row.get_style_context().add_class("row-item")
+        apply_lbl = Gtk.Label(label="Aplicar perfil e reiniciar shell", xalign=0)
+        apply_lbl.get_style_context().add_class("row-label")
+        apply_row.pack_start(apply_lbl, True, True, 0)
+        self._btn_apply = Gtk.Button(label="Aplicar")
+        self._btn_apply.get_style_context().add_class("suggested-action")
+        self._btn_apply.connect("clicked", self._on_apply_profile)
+        apply_row.pack_end(self._btn_apply, False, False, 0)
+        card_apply.pack_start(apply_row, False, False, 0)
+        vbox.pack_start(card_apply, False, False, 0)
+
+        # === Card: Otimizações ===
+        card2 = _card()
+
+        # zram
+        zram_badge = ("\u25cf Ativo", "badge-ok") if self._info["zram_active"] else ("\u25cf Inativo", "badge-placeholder")
+        card2.pack_start(_row("zram (swap comprimida)", badge=zram_badge), False, False, 0)
+
+        # Firefox Light
+        ff_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        ff_row.get_style_context().add_class("row-item")
+        ff_lbl = Gtk.Label(label="Firefox Light (low RAM)", xalign=0)
+        ff_lbl.get_style_context().add_class("row-label")
+        ff_row.pack_start(ff_lbl, True, True, 0)
+
+        if self._info["firefox_light"]:
+            ff_badge = Gtk.Label(label="\u25cf Aplicado")
+            ff_badge.get_style_context().add_class("badge-ok")
+            ff_row.pack_end(ff_badge, False, False, 0)
+        else:
+            self._btn_firefox = Gtk.Button(label="Aplicar")
+            # Desabilita se perfil != light
+            if self._info["profile"] != "light":
+                self._btn_firefox.set_sensitive(False)
+                self._btn_firefox.set_tooltip_text("Disponível apenas no perfil Light")
+            self._btn_firefox.connect("clicked", self._on_apply_firefox)
+            ff_row.pack_end(self._btn_firefox, False, False, 0)
+
+        card2.pack_start(ff_row, False, False, 0)
+        vbox.pack_start(card2, False, False, 0)
+
+        # === Informação de fonte ===
+        card3 = _card()
+        card3.pack_start(
+            _row("Fonte do perfil", self._info["source"].capitalize()),
+            False, False, 0,
+        )
+        vbox.pack_start(card3, False, False, 0)
+
+        return scroll
+
+    def _on_apply_profile(self, btn):
+        """Aplica perfil via contrato CLI. Usa Popen para não bloquear a UI."""
+        selected = self._prof_combo.get_active_id()
+        if not selected:
+            return
+
+        # Confirmação se Full em ambiente sem GLX
+        if selected == "full" and self._info.get("fallback_reason") == "glx_unavailable":
+            dialog = Gtk.MessageDialog(
+                transient_for=self._win,
+                flags=0,
+                message_type=Gtk.MessageType.WARNING,
+                buttons=Gtk.ButtonsType.YES_NO,
+                text="GLX não disponível",
+            )
+            dialog.format_secondary_text(
+                "Este hardware não possui aceleração GLX adequada. "
+                "O perfil Full será aplicado, mas o compositor usará "
+                "a configuração Balanced (xrender) como fallback.\n\n"
+                "Deseja continuar?"
+            )
+            response = dialog.run()
+            dialog.destroy()
+            if response != Gtk.ResponseType.YES:
+                return
+
+        # Aplica via contrato CLI (Popen = não bloqueante)
+        btn.set_sensitive(False)
+        btn.set_label("Aplicando...")
+        _popen(["/usr/local/bin/flavos-performance-profile", "set", selected])
+
+        # OSD feedback
+        profile_names = {"light": "Light", "balanced": "Balanced", "full": "Full"}
+        _popen([
+            "/usr/local/bin/flavos-osd", "notify",
+            f"Perfil {profile_names.get(selected, selected)} aplicado",
+        ])
+
+        # Re-habilitar botão após delay (shell restart leva ~2s)
+        GLib.timeout_add(3000, self._refresh_after_apply)
+
+    def _on_apply_firefox(self, btn):
+        """Aplica Firefox light via contrato CLI com confirmação."""
+        dialog = Gtk.MessageDialog(
+            transient_for=self._win,
+            flags=0,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text="Aplicar Firefox Light?",
+        )
+        dialog.format_secondary_text(
+            "Isso substituirá o user.js do Firefox com configurações otimizadas "
+            "para baixo consumo de RAM. Um backup do user.js atual será criado.\n\n"
+            "Reinicie o Firefox após a aplicação."
+        )
+        response = dialog.run()
+        dialog.destroy()
+        if response != Gtk.ResponseType.YES:
+            return
+
+        _popen([
+            "/usr/local/bin/flavos-performance-profile",
+            "set", "light", "--apply-firefox-light",
+        ])
+        btn.set_sensitive(False)
+        btn.set_label("Aplicado")
+        _popen([
+            "/usr/local/bin/flavos-osd", "notify",
+            "Firefox Light aplicado — reinicie o navegador",
+        ])
+
+    def _refresh_after_apply(self):
+        """Callback GLib.timeout: atualiza estado após aplicar perfil."""
+        self._info = read_performance_info()
+        self._btn_apply.set_sensitive(True)
+        self._btn_apply.set_label("Aplicar")
+        return False  # não repetir
+
+
 # ---------------------------------------------------------------------------
 # Janela principal
 # ---------------------------------------------------------------------------
@@ -1015,6 +1345,7 @@ PAGES = [
     AboutPage(),
     AppearancePage(),
     PanelPage(),
+    PerformancePage(),
     SessionPage(),
     NetworkPage(),
     HostnamePage(),

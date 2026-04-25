@@ -26,6 +26,7 @@
 
 import sys
 import os
+import re
 import json
 import shutil
 import subprocess
@@ -97,6 +98,74 @@ def read_active_profile() -> str:
             return p
     return "balanced"
 
+# ─── Detecção de GLX ──────────────────────────────────────────────────────────
+
+# Renderers de software conhecidos — se glxinfo reportar qualquer um destes,
+# o contexto GLX não é acelerado por hardware real.
+_SOFTWARE_RENDERERS = [
+    "llvmpipe",
+    "swrast",
+    "softpipe",
+    "software rasterizer",
+]
+
+
+def check_glx_support() -> bool:
+    """Verifica se o sistema expõe aceleração GLX real (não software renderer).
+
+    Etapas conservadoras:
+      1. Verifica se 'glxinfo' existe no PATH
+      2. Verifica se $DISPLAY está definido
+      3. Roda 'glxinfo -B' e analisa saída
+      4. Rejeita renderer de software (llvmpipe, swrast, softpipe)
+      5. Verifica OpenGL version >= 2.0
+
+    Retorna True apenas se todas as etapas passarem.
+    """
+    # 1. glxinfo disponível?
+    if shutil.which("glxinfo") is None:
+        log("  [GLX] glxinfo não encontrado (mesa-utils não instalado?).")
+        return False
+
+    # 2. DISPLAY definido?
+    if not os.environ.get("DISPLAY"):
+        log("  [GLX] $DISPLAY não definido — impossível testar GLX.")
+        return False
+
+    # 3. Rodar glxinfo -B
+    try:
+        result = subprocess.run(
+            ["glxinfo", "-B"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            log(f"  [GLX] glxinfo retornou código {result.returncode}.")
+            return False
+        output = result.stdout.lower()
+    except Exception as e:
+        log(f"  [GLX] Falha ao executar glxinfo: {e}")
+        return False
+
+    # 4. Rejeitar software renderers
+    for renderer in _SOFTWARE_RENDERERS:
+        if renderer in output:
+            log(f"  [GLX] Renderer de software detectado: '{renderer}' — GLX indisponível.")
+            return False
+
+    # 5. Verificar OpenGL >= 2.0
+    match = re.search(r"opengl version string.*?(\d+)\.(\d+)", output)
+    if not match:
+        log("  [GLX] Não foi possível determinar versão OpenGL.")
+        return False
+    major, minor = int(match.group(1)), int(match.group(2))
+    if major < 2:
+        log(f"  [GLX] OpenGL {major}.{minor} < 2.0 — insuficiente para glx backend.")
+        return False
+
+    log(f"  [GLX] Aceleração GLX confirmada (OpenGL {major}.{minor}).")
+    return True
+
+
 # ─── Operações atômicas ───────────────────────────────────────────────────────
 
 def backup_file(path: Path) -> Path | None:
@@ -108,17 +177,48 @@ def backup_file(path: Path) -> Path | None:
     shutil.copy2(path, backup)
     return backup
 
-def apply_picom_conf(profile: str) -> None:
-    src = PICOM_CONF_SRC_DIR / f"picom-{profile}.conf"
+
+def apply_picom_conf(profile: str) -> str:
+    """Aplica config Picom para o perfil solicitado.
+
+    Para o perfil 'full': verifica suporte GLX real. Se indisponível,
+    faz fallback para picom-balanced.conf sem alterar picom-full.conf.
+
+    Retorna o perfil efetivamente aplicado ao compositor ('light', 'balanced', 'full').
+    """
+    effective = profile
+
+    if profile == "full" and not check_glx_support():
+        log("  [FALLBACK] Perfil solicitado: full → compositor efetivo: balanced")
+        log("             Razão: glx_unavailable (GPU virtual ou sem aceleração GLX)")
+        log("             picom-full.conf preservado intacto.")
+        effective = "balanced"
+
+    src = PICOM_CONF_SRC_DIR / f"picom-{effective}.conf"
     if not src.exists():
         log(f"  [WARN] Config Picom não encontrada: {src} — compositor inalterado.")
-        return
+        return effective
     PICOM_USER_CONF.parent.mkdir(parents=True, exist_ok=True)
     bak = backup_file(PICOM_USER_CONF)
     if bak:
         log(f"  Backup do picom.conf → {bak}")
     shutil.copy2(src, PICOM_USER_CONF)
-    log(f"  picom.conf → {profile} ({src.name})")
+    log(f"  picom.conf → {effective} ({src.name})")
+    return effective
+
+
+def _write_effective_profile_state(requested: str, effective_compositor: str) -> None:
+    """Salva estado efetivo para consumo pelo Settings UI e status."""
+    state_file = Path.home() / ".config/flavos/performance-state.json"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "requested_profile": requested,
+        "effective_compositor_profile": effective_compositor,
+    }
+    if requested != effective_compositor:
+        data["reason"] = "glx_unavailable"
+    state_file.write_text(json.dumps(data, indent=2))
+    log(f"  performance-state.json → requested={requested}, effective={effective_compositor}")
 
 def apply_panel_json(profile: str) -> None:
     PANEL_JSON.parent.mkdir(parents=True, exist_ok=True)
@@ -334,17 +434,33 @@ def cmd_status(_args) -> None:
     print(f"Log:               {LOG_FILE}")
     zram_conf = Path("/etc/systemd/zram-generator.conf")
     print(f"zram config:       {'ATIVO' if zram_conf.exists() else 'não configurado'}")
+    # Estado efetivo
+    state_file = Path.home() / ".config/flavos/performance-state.json"
+    if state_file.exists():
+        try:
+            state = json.loads(state_file.read_text())
+            eff = state.get("effective_compositor_profile", profile)
+            reason = state.get("reason", "")
+            print(f"Compositor efetivo: {eff}")
+            if reason:
+                print(f"Razão fallback:    {reason}")
+        except Exception:
+            pass
+    # GLX probe (informativo, não muda nada)
+    glx = check_glx_support()
+    print(f"GLX real:          {'disponível' if glx else 'indisponível'}")
 
 def cmd_apply(args) -> None:
     profile = read_active_profile()
     log(f"=== Aplicando perfil '{profile}' ===")
-    apply_picom_conf(profile)
+    effective = apply_picom_conf(profile)
+    _write_effective_profile_state(profile, effective)
     apply_panel_json(profile)
     apply_launcher_profile(profile)
     apply_osd_profile(profile)
     apply_nemo_desktop(profile)
     restart_shell()
-    log(f"=== Perfil '{profile}' aplicado. ===")
+    log(f"=== Perfil '{profile}' aplicado (compositor: {effective}). ===")
 
 def cmd_set(args) -> None:
     profile = args.profile
@@ -361,8 +477,9 @@ def cmd_set(args) -> None:
         write_user_profile(profile)
         log(f"  Perfil do usuário → {profile} ({USER_PROFILE_FILE})")
 
-    # 2. Picom
-    apply_picom_conf(profile)
+    # 2. Picom (com fallback GLX automático para full)
+    effective_compositor = apply_picom_conf(profile)
+    _write_effective_profile_state(profile, effective_compositor)
 
     # 3. Panel + Launcher + OSD
     apply_panel_json(profile)
@@ -396,7 +513,7 @@ def cmd_set(args) -> None:
 
     # 8. Restart shell
     restart_shell()
-    log(f"=== Perfil '{profile}' definido e aplicado. ===")
+    log(f"=== Perfil '{profile}' definido e aplicado (compositor: {effective_compositor}). ===")
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
