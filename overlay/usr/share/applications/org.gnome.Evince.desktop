@@ -1,0 +1,7 @@
+[Desktop Entry]
+# Stub: suprime a entrada original do pacote evince no menu/launcher.
+# O Flavos OS usa flavos-pdf.desktop como handler de PDF.
+# Fonte: packages.debian.org/bookworm/evince → org.gnome.Evince.desktop
+Name=Evince
+NoDisplay=true
+Type=Application

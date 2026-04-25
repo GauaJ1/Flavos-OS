@@ -2,7 +2,7 @@
 Name=Flavos PDF
 GenericName=Document Viewer
 Comment=Visualizador de documentos do Flavos OS
-Exec=xreader %U
+Exec=evince %U
 Icon=accessories-document-viewer
 Terminal=false
 Type=Application

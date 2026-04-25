@@ -1,0 +1,6 @@
+[Desktop Entry]
+# Stub: suprime o previewer do evince no menu/launcher.
+# Fonte: packages.debian.org/bookworm/evince → org.gnome.Evince-previewer.desktop
+Name=Evince Previewer
+NoDisplay=true
+Type=Application

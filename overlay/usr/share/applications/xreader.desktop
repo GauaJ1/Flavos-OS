@@ -1,7 +1,0 @@
-[Desktop Entry]
-# Stub: suprime a entrada original do pacote xreader no menu/launcher.
-# O Flavos OS usa flavos-pdf.desktop como handler de PDF.
-# Fonte: dpkg -L xreader → /usr/share/applications/xreader.desktop
-Name=xreader
-NoDisplay=true
-Type=Application

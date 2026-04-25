@@ -122,8 +122,9 @@ brightnessctl
 firefox-esr
 
 # ─── Etapa 12D — Media, Playback & Daily Usability Polish ─────────────────────
-# PDF: xreader (GTK3, stack Cinnamon/Nemo, poppler backend)
-xreader
+# PDF: evince (GTK3, poppler backend, disponível no Debian Bookworm)
+# Nota: xreader NÃO está nos repos Bookworm (exclusivo Linux Mint)
+evince
 # Media: Celluloid (frontend GTK3 para mpv — puxa mpv como dep automaticamente)
 # Cobre video/mp4, video/webm, video/mkv, audio/mpeg, audio/flac, etc.
 celluloid
