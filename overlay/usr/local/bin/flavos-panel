@@ -10,7 +10,8 @@ import json
 from datetime import datetime
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, Gdk, GLib, GdkPixbuf
 
 CONFIG_PATH = os.path.expanduser("~/.config/flavos/panel.json")
 
@@ -170,10 +171,26 @@ class FlavosPanel(Gtk.Window):
         main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         self.add(main_box)
 
-        # Esquerda: Branding (label puro, não botão)
+        # Esquerda: Branding — logo SVG renderizado via GdkPixbuf
         left_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        lbl_branding = Gtk.Label(label="FLAVOS")
-        lbl_branding.get_style_context().add_class("launcher")
+        _LOGO_PATHS = [
+            "/usr/share/flavos/logo.svg",
+            "/usr/share/icons/hicolor/scalable/apps/flavos-logo.svg",
+        ]
+        branding_widget = None
+        for _p in _LOGO_PATHS:
+            if os.path.exists(_p):
+                try:
+                    pb = GdkPixbuf.Pixbuf.new_from_file_at_size(_p, 22, 22)
+                    branding_widget = Gtk.Image.new_from_pixbuf(pb)
+                    branding_widget.set_margin_start(10)
+                    branding_widget.set_margin_end(6)
+                    break
+                except Exception:
+                    pass
+        if branding_widget is None:
+            branding_widget = Gtk.Label(label="FLAVOS")
+            branding_widget.get_style_context().add_class("launcher")
 
         # Centro: Relógio informacional (data + hora)
         center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -181,9 +198,9 @@ class FlavosPanel(Gtk.Window):
         self.lbl_clock.get_style_context().add_class("clock")
 
         if align == "center":
-            center_box.pack_start(lbl_branding, False, False, 0)
+            center_box.pack_start(branding_widget, False, False, 0)
         else:
-            left_box.pack_start(lbl_branding, False, False, 0)
+            left_box.pack_start(branding_widget, False, False, 0)
             main_box.pack_start(left_box, False, False, 0)
 
         center_box.pack_start(self.lbl_clock, True, True, 0)

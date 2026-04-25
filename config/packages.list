@@ -73,6 +73,7 @@ mousepad
 viewnior
 xdg-utils
 shared-mime-info
+librsvg2-common
 
 lxpolkit
 libpam-systemd
@@ -128,3 +129,11 @@ evince
 # Media: Celluloid (frontend GTK3 para mpv — puxa mpv como dep automaticamente)
 # Cobre video/mp4, video/webm, video/mkv, audio/mpeg, audio/flac, etc.
 celluloid
+
+# ─── Etapa 12F — Performance Adaptation & Resource Profiles ─────────────────
+# systemd-zram-generator: suporte a swap comprimida em RAM (zstd)
+# Disponível no Debian Bookworm. Instalado para disponibilidade.
+# NÃO ativo por padrão. Ativar com:
+#   flavos-performance-profile set light --with-zram   (requer sudo)
+# Docs: /etc/flavos/performance-profile + docs/PERFORMANCE_PROFILES.md
+systemd-zram-generator

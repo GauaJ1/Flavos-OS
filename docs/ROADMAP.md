@@ -15,7 +15,7 @@
 | 9 | Update/Recovery/Logging | Estratégia de atualização e fallback | ✅ Completa |
 | 10 | Refinamento V1 | Documentação final, testes, limpeza | ✅ Completa |
 | 11 | Flavos Shell Preview | Shell UI nativa funcional (Basis) | ✅ Completa |
-| 12 | Core Apps & Usability | Navegador, integração de apps, fluxos e refinamento | 🔄 Em Progresso |
+| 12 | Core Apps & Usability | Navegador, integração de apps, fluxos e refinamento | ✅ Completa |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -75,11 +75,23 @@
 - **11D:** OSD Visual Feedback — Singleton, glass, motion translateY, volume/brilho.
 - **11E:** Preview Consolidação — Freeze feature-set, documentation "Basis", estabilidade garantida.
 
-### Etapa 12 — Core Apps & Daily Usability 🔄
+### Etapa 12 — Core Apps & Daily Usability ✅
+
+> **Milestone:** Flavos Desktop Preview 0.1 "Daily" — `desktop-preview-0.1-daily`
+
 - **12A — Navegador Padrão e Web Experience:** ✅ Firefox ESR integrado como app de primeira classe via pacote apt nativo, com regras Openbox de decor e keybind global (C-A-b).
-- **12B — Core Apps Integration:** ✅ Conjunto core consolidado (Terminal/Kitty, Arquivos/Nemo, Editor/Mousepad, Navegador/Firefox, Imagens/Viewnior, Settings e Power). Resolvidos bugs críticos e substituição do PCManFM visual pelo Nemo.
-- **12C — Defaults, MIME & Open Flows:** ✅ Consolidação sistêmica via `/etc/xdg/mimeapps.list`. Corrigido `xdg-open` (pacote `file`) e branding do logo (SVG nativo). Fluxos de abertura auditados e previsíveis.
-- **12D — Media & Playback:** 🔄 Em Progresso. Integração de media player (mpv), associações de áudio/vídeo e refinamento final da usabilidade core.
+- **12B — Core Apps Integration:** ✅ Conjunto core consolidado (Terminal/Kitty, Arquivos/Nemo, Editor/Mousepad, Navegador/Firefox, Imagens/Viewnior, Settings e Power). PCManFM removido visualmente; Nemo com dark theme.
+- **12C — Defaults, MIME & Open Flows:** ✅ Hierarquia MIME via `/etc/xdg/mimeapps.list`. Pacote `file` corrigindo `xdg-open`. Logo Flavos via SVG. 27 tipos mapeados.
+- **12D — Media & Playback:** ✅ Evince (PDF) e Celluloid/mpv (vídeo/áudio) integrados. Stubs NoDisplay eliminam duplicatas. xreader substituído por evince (incompatível com Bookworm).
+- **12E — Desktop Usability Preview:** ✅ Consolidação como milestone oficial. Auditoria de consistência, documentação completa (`docs/DESKTOP_PREVIEW_0.1_DAILY.md`), checklist de validação, tag `desktop-preview-0.1-daily`.
+
+### Etapa 12F — Performance Adaptation & Resource Profiles ✅
+- **Sistema de 3 perfis:** Light (2 GB/LGA775), Balanced (padrão), Full (hardware moderno). Configs Picom separadas por perfil.
+- **Script `flavos-performance-profile`:** controle reversível de perfil (picom, panel, launcher, OSD, nemo-desktop, serviços).
+- **Correção Picom:** `use-damage = false` → `use-damage = true` em todos os perfis.
+- **zram:** `systemd-zram-generator` instalado; ativação opcional via `--with-zram` (perfil light).
+- **Firefox Light:** `firefox-light.js` criado; aplica com `--apply-firefox-light` (com backup automático).
+- **Docs:** `docs/PERFORMANCE_PROFILES.md` — viabilidade real em 2 GB, rollback, limitações honestas.
 
 ## Decisões Fixas (Base)
 

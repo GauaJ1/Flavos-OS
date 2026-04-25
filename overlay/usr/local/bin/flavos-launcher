@@ -12,19 +12,37 @@
 import gi
 import os
 import sys
+import json
 import signal
 import atexit
 import subprocess
+from pathlib import Path
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GLib, Gio, Pango
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, Gdk, GLib, Gio, Pango, GdkPixbuf
 
 # ─── Constantes de sistema ────────────────────────────────────────────────────
 PID_FILE       = "/tmp/flavos-launcher.pid"
 FOCUS_GUARD_MS = 300   # Janela de proteção contra focus-out transitório do X11
-FADE_IN_MS     = 120   # Motion skill: entrada 120ms ease-out
-FADE_OUT_MS    = 80    # Motion skill: saída 80ms ease-in
 FADE_TICK_MS   = 16    # ~60fps (não bloqueante, via GLib.timeout_add)
+
+
+def _load_fade_timing() -> tuple[int, int]:
+    """
+    Lê timing de fade do perfil de performance atual.
+    Fallback: balanced (120ms entrada / 80ms saída).
+    Escrito por: flavos-performance-profile set <perfil>
+    """
+    conf = Path.home() / ".config/flavos/launcher.json"
+    try:
+        data = json.loads(conf.read_text())
+        return int(data.get("fade_in_ms", 120)), int(data.get("fade_out_ms", 80))
+    except Exception:
+        return 120, 80
+
+
+FADE_IN_MS, FADE_OUT_MS = _load_fade_timing()
 
 # ─── CSS — Design System Flavos OS ────────────────────────────────────────────
 CSS = """
@@ -199,9 +217,25 @@ class FlavosLauncher(Gtk.Window):
         main_box.set_margin_end(32)
         self.add(main_box)
 
-        # 1. Barra de busca
-        search_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        # 1. Barra de busca (com logo à esquerda)
+        search_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         main_box.pack_start(search_hbox, False, False, 0)
+
+        # Logo no header do launcher
+        _LOGO_PATHS = [
+            "/usr/share/flavos/logo.svg",
+            "/usr/share/icons/hicolor/scalable/apps/flavos-logo.svg",
+        ]
+        for _p in _LOGO_PATHS:
+            if os.path.exists(_p):
+                try:
+                    pb = GdkPixbuf.Pixbuf.new_from_file_at_size(_p, 24, 24)
+                    logo_img = Gtk.Image.new_from_pixbuf(pb)
+                    logo_img.set_margin_end(4)
+                    search_hbox.pack_start(logo_img, False, False, 0)
+                    break
+                except Exception:
+                    pass
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_name("SearchEntry")

@@ -24,10 +24,12 @@
 import gi
 import sys
 import os
+import json
 import re
 import signal
 import atexit
 import subprocess
+from pathlib import Path
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
@@ -41,7 +43,26 @@ TOAST_TIMEOUT_MS = 3000  # Auto-dismiss para Toast de shell
 ENTER_MS  = 120   # Entrada: ease-out
 EXIT_MS   = 100   # Saída: ease-in (mais decisiva, menos teatral)
 TICK_MS   = 16    # ~60fps — GLib.timeout_add, não bloqueante
-SLIDE_Y   = 8     # px de deslocamento vertical (discreto, não dramático)
+
+
+def _load_osd_slide_y() -> int:
+    """
+    Lê modo de animação do perfil de performance.
+    Se pure_fade=true (perfil light), desativa slide Y (SLIDE_Y=0).
+    Escrito por: flavos-performance-profile set <perfil>
+    Fallback: SLIDE_Y=8 (balanced/full).
+    """
+    conf = Path.home() / ".config/flavos/osd.json"
+    try:
+        data = json.loads(conf.read_text())
+        if data.get("pure_fade", False):
+            return 0
+    except Exception:
+        pass
+    return 8
+
+
+SLIDE_Y   = _load_osd_slide_y()  # px de deslocamento vertical (0 no perfil Light)
 
 # Geometria da shell (espelha rc.xml margins)
 TASKBAR_H = 36    # Taskbar inferior

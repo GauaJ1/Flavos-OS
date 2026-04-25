@@ -24,7 +24,8 @@ if os.environ.get("XDG_SESSION_TYPE", "x11") != "x11":
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Wnck', '3.0')
-from gi.repository import Gtk, Gdk, Wnck, GLib
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, Gdk, Wnck, GLib, GdkPixbuf
 
 # Obrigatório: anunciar como PAGER antes de qualquer uso do Wnck
 Wnck.set_client_type(Wnck.ClientType.PAGER)
@@ -372,11 +373,19 @@ class FlavosTaskbar(Gtk.Window):
         # 1. Botão de menu (ícone, abre launcher via shellctl)
         btn_menu = Gtk.Button()
         btn_menu.get_style_context().add_class("menu-btn")
-        _LOGO_SVG = "/usr/share/icons/hicolor/scalable/apps/flavos-logo.svg"
-        if os.path.exists(_LOGO_SVG):
-            menu_icon = Gtk.Image.new_from_file(_LOGO_SVG)
-            menu_icon.set_pixel_size(20)
-        else:
+        _LOGO_SVG = "/usr/share/flavos/logo.svg"
+        _LOGO_FALLBACK = "/usr/share/icons/hicolor/scalable/apps/flavos-logo.svg"
+        _logo_loaded = False
+        for _svg_path in (_LOGO_SVG, _LOGO_FALLBACK):
+            if os.path.exists(_svg_path):
+                try:
+                    pb = GdkPixbuf.Pixbuf.new_from_file_at_size(_svg_path, 20, 20)
+                    menu_icon = Gtk.Image.new_from_pixbuf(pb)
+                    _logo_loaded = True
+                    break
+                except Exception:
+                    pass
+        if not _logo_loaded:
             menu_icon = Gtk.Image.new_from_icon_name("start-here-symbolic", Gtk.IconSize.BUTTON)
         btn_menu.add(menu_icon)
         btn_menu.set_tooltip_text("Menu (Super)")

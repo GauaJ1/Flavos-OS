@@ -1,6 +1,6 @@
 # Flavos OS
 
-> **Milestone atual:** Flavos Shell Preview 0.1 "Basis"
+> **Milestone atual:** Flavos Desktop Preview 0.1 "Daily" + Performance Profiles (12F)
 > **Base do sistema:** 0.1.0-rc1 (Ignition)
 
 Sistema operacional construído do zero com foco em **idempotência**, **segurança** e **simplicidade**, evoluindo para uma experiência desktop nativa e coerente.
@@ -9,19 +9,26 @@ Sistema operacional construído do zero com foco em **idempotência**, **seguran
 
 ## Status
 
-### Shell Nativa — Flavos Shell Preview 0.1 "Basis" _(milestone atual)_
+### Desktop Preview 0.1 "Daily" + 12F _(milestone atual)_
 
-A primeira preview oficial da shell nativa do Flavos OS. Congela as etapas 11A→11E com uma interface funcional, estável e com design system estabelecido. O sistema já se comporta como um OS com identidade própria.
+Primeiro desktop funcional para uso diário básico (12A→12E) com sistema formal de perfis de desempenho (12F). Três perfis: Light (2 GB/LGA775), Balanced (padrão), Full (hardware moderno). O sistema serve para tarefas cotidianas sem configuração manual.
 
 - **Veredito:** `EXPERIMENTAL ESTÁVEL`
-- **Congelada em:** 2026-04-19
-- **Commit de referência:** `b9bf43f`
+- **Congelada em:** 2026-04-25
+- **Tag:** `desktop-preview-0.1-daily`
+- **Documentação desktop:** [docs/DESKTOP_PREVIEW_0.1_DAILY.md](docs/DESKTOP_PREVIEW_0.1_DAILY.md)
+- **Documentação performance:** [docs/PERFORMANCE_PROFILES.md](docs/PERFORMANCE_PROFILES.md)
+
+### Shell Preview 0.1 "Basis" _(milestone anterior)_
+
+Primeira preview da shell nativa (painel, taskbar, launcher, OSD). Congela as etapas 11A→11E com interface funcional e design system estabelecido.
+
 - **Tag:** `shell-preview-0.1-basis`
 - **Documentação:** [docs/SHELL_PREVIEW_0.1_BASIS.md](docs/SHELL_PREVIEW_0.1_BASIS.md)
 
-### Base do Sistema — 0.1.0-rc1 (Ignition) _(fase anterior)_
+### Base do Sistema — 0.1.0-rc1 (Ignition) _(fase base)_
 
-Console V1 consolidada. Sistema maduro, seguro e bootável em QEMU e infraestrutura lab. Release Candidate 1 da base console, sobre a qual a shell nativa foi construída.
+Console V1 consolidada. Sistema maduro, seguro e bootável em QEMU e infraestrutura lab.
 
 - **Tag:** `v0.1.0-rc1`
 - **Release Notes:** [docs/RELEASE_NOTES_0.1.0-rc1.md](docs/RELEASE_NOTES_0.1.0-rc1.md)
@@ -112,7 +119,8 @@ FlavosOS/
 
 ## Documentação
 
-### Milestone Atual
+### Milestones
+- [Flavos Desktop Preview 0.1 "Daily"](docs/DESKTOP_PREVIEW_0.1_DAILY.md)
 - [Flavos Shell Preview 0.1 "Basis"](docs/SHELL_PREVIEW_0.1_BASIS.md)
 - [Requisitos do Sistema](docs/REQUIREMENTS.md)
 

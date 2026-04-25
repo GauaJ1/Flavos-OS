@@ -1,18 +1,67 @@
 # Changelog — Flavos OS
 
-## [Unreleased]
+## Flavos Desktop Preview 0.1 "Daily" (2026-04-25)
 
-### Etapa 12 — Core Apps & Daily Usability (2026-04-19)
+> Milestone: primeiro desktop funcional para uso diário básico.
+> Tag: `desktop-preview-0.1-daily` | Etapas: 12A → 12E
+
+---
+
+### Etapa 12F — Performance Adaptation & Resource Profiles (2026-04-25)
 #### Adicionado
-- **12A / Navegador Padrão:** Integrou o Firefox ESR como aplicativo de primeira classe, fornecendo uma experiência web madura com `xdg-open` configurado e atalho global `Ctrl+Alt+B`.
-- **12B / Core Apps Integration:** Conjunto de aplicativos centrais estabelecido e organizado no Desktop. Adotou-se o Nemo como Gerenciador de Arquivos padrão com suporte moderno a dark theme substituindo visualmente o PCManFM, enquanto este permanece focado para `--desktop`.
-- Novos defaults documentados, mantendo o aviso restrito para consolidação final e sistemática na Etapa 12C.
+- **Sistema de perfis de desempenho:** três perfis (`light`, `balanced`, `full`) com configs separadas de Picom, shell e serviços. Perfil padrão: `balanced`.
+- **`/etc/flavos/`:** novo diretório de configurações do sistema Flavos. Contém configs Picom por perfil, perfil ativo, firefox-light.js.
+- **`picom-light.conf`:** xrender, sem fading, shadow radius 6, corner-radius 0, use-damage=true. Alvo: 2 GB RAM, LGA775.
+- **`picom-balanced.conf`:** xrender, fading ativo, shadow 14, corner-radius 10, use-damage=true. Padrão atual (corrige use-damage=false).
+- **`picom-full.conf`:** glx (experimental, requer OpenGL 2.0), shadow 18, corner-radius 12. Validação em hardware real prevista na Etapa 14.
+- **`/etc/flavos/performance-profile`:** arquivo de perfil global (texto simples: "balanced").
+- **Script `flavos-performance-profile`:** gerenciador de perfis em Python. Flags: `set`, `current`, `status`, `apply`, `--system`, `--with-zram`, `--apply-firefox-light`.
+- **`/etc/flavos/firefox-light.js`:** user.js Firefox para 2 GB RAM. Aplica com `--apply-firefox-light`. Backup automático antes de sobrescrever.
+- **`systemd-zram-generator`:** adicionado a packages.list. Não ativo por padrão. Ativar com `--with-zram` (requer sudo).
+- **`~/.config/flavos/launcher.json`:** lido pelo launcher para timing de fade por perfil (Light: 60ms/40ms; Balanced/Full: 120ms/80ms).
+- **`~/.config/flavos/osd.json`:** lido pelo OSD para modo de animação (Light: fade puro; Balanced/Full: slide+fade).
+- **`~/.config/flavos/desktop-mode.json`:** controla `nemo_desktop` por perfil. Light: false (wallpaper via feh mantido).
+- **`docs/PERFORMANCE_PROFILES.md`:** documentação oficial dos perfis, viabilidade real em 2 GB, rollback, zram, Firefox-light.
 
 #### Corrigido
-- `flavos-settings`: Resolvido crash silencioso ao clicar "Escolher..." no menu de aparência (função de estilo do dialog GTK não estava implementada).
-- `flavos-settings`: Componente NTP não funcionava devido ao serviço `systemd-timesyncd` nunca ser ativado por padrão.
-- Sudo helpers: Scripts helper como hostname e NTP do setting tiveram bit de execução (`+x`) corrigido no repo. Regras do `sudoers` reajustadas para contemplar a aba de sessão e aplicar as devidas permissões via chroot.
-- Áudio: Som resolvido via QEMU para VM, atribuindo a placa `Intel HDA` e o autostart do `PulseAudio` via desktop entry.
+- **`picom.conf` (balanced):** `use-damage = false` → `use-damage = true`. Corrige redesenho total da tela a cada frame.
+- **picom-full.conf:** corrigido requisito do backend glx: OpenGL **2.0** (não 3.3). Driver Intel/AMD no Debian Bookworm atende.
+- Documentação: alinhamento completo com `evince` (não xreader). xreader nunca existiu nos repos Bookworm.
+
+#### Mascaramento de serviços (apenas `--system` + sudo)
+- `NetworkManager-wait-online`, `ModemManager`, `bluetooth`, `avahi-daemon` mascarados no perfil Light.
+- Script verifica existência de unit antes de mascarar. Não desmascara units mascaradas externamente pelo admin.
+
+---
+
+### Etapa 12E — Desktop Usability Preview (2026-04-25)
+#### Adicionado
+- **Documento oficial da preview:** `docs/DESKTOP_PREVIEW_0.1_DAILY.md` — baseline completo com apps, MIME, checklist de validação, limitações honestas e veredito técnico.
+- **README:** atualizado para refletir milestone `Desktop Preview 0.1 "Daily"` como estado atual.
+- **ROADMAP:** 12D e 12E marcadas como concluídas; 12F adicionada.
+
+#### Auditado e confirmado
+- Consistência total: `evince` em packages.list, flavos-pdf.desktop e stubs. Zero referências a `xreader` em qualquer arquivo.
+- **27 tipos MIME** mapeados (contagem real: `grep "^[^#\[]" /etc/xdg/mimeapps.list | wc -l`). Corrigido de 28 para 27.
+- **8 handlers ativos** no launcher, **7 stubs** NoDisplay, zero duplicatas.
+
+---
+
+### Etapa 12 — Core Apps & Daily Usability (2026-04-25)
+#### Adicionado
+- **12A / Navegador Padrão:** Firefox ESR como app de primeira classe; `xdg-open` configurado; atalho global `Ctrl+Alt+B`.
+- **12B / Core Apps Integration:** Apps core estabelecidos (Terminal/Kitty, Arquivos/Nemo, Editor/Mousepad, Imagens/Viewnior, Settings, Power). PCManFM removido visualmente; Nemo com dark theme.
+- **12C / Defaults, MIME & Open Flows:** Hierarquia MIME via `/etc/xdg/mimeapps.list`. Pacote `file` adicionado para `xdg-open` correto. Logo Flavos via SVG direto. Fluxos auditados.
+- **12D / Media & Playback:** Evince (PDF) e Celluloid/mpv (vídeo/áudio) integrados. 27 tipos MIME mapeados. Stubs NoDisplay para evitar duplicatas. Nota: xreader não está disponível no Debian Bookworm; substituído por evince.
+
+#### Corrigido
+- `flavos-settings`: Crash silencioso ao clicar "Escolher..." no menu de aparência.
+- `flavos-settings`: NTP não ativava `systemd-timesyncd`.
+- Sudo helpers: bit `+x` nos scripts e regras sudoers ajustadas.
+- Áudio: placa Intel HDA no QEMU e autostart PulseAudio via desktop entry.
+- `xreader` → `evince` em packages.list e flavos-pdf.desktop (xreader não existe no Debian Bookworm).
+- Wallpaper: 3 camadas (feh imediato + gsettings + feh delay 4s) para garantir persistência.
+- Logo Flavos: carregamento via `new_from_file()` para evitar cache GTK.
 
 ### Flavos Shell Preview 0.1 "Basis" (2026-04-19)
 #### Adicionado

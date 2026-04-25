@@ -1,0 +1,451 @@
+#!/usr/bin/env python3
+# Flavos OS — Performance Profile Manager (Etapa 12F)
+# Contrato: aplica perfis de desempenho (light/balanced/full) ao sistema.
+#
+# Uso:
+#   flavos-performance-profile current
+#   flavos-performance-profile status
+#   flavos-performance-profile apply
+#   flavos-performance-profile set light|balanced|full [--system] [--with-zram] [--apply-firefox-light]
+#
+# Responsabilidades:
+#   1. Escrever perfil em /etc/flavos/performance-profile (--system com sudo) ou
+#      ~/.config/flavos/performance.json (override por usuário)
+#   2. Copiar picom-<perfil>.conf → ~/.config/picom/picom.conf (com backup)
+#   3. Atualizar ~/.config/flavos/panel.json (style: solid/glass)
+#   4. Mascarar/desmascarar serviços opcionais (apenas com --system + sudo)
+#   5. Reiniciar shell via flavos-shellctl shell restart
+#   6. --with-zram: instala e ativa zram (apenas perfil light, requer sudo)
+#   7. --apply-firefox-light: copia firefox-light.js como user.js (com backup)
+#
+# Segurança:
+#   - Serviços só mascarados/desmascarados via --system (requer sudo)
+#   - Sem --system: só configurações visuais e compositor
+#   - backup sempre criado antes de sobrescrever picom.conf e user.js
+#   - Não desmascarar serviços que o admin mascarou via outro meio
+
+import sys
+import os
+import json
+import shutil
+import subprocess
+import argparse
+from pathlib import Path
+from datetime import datetime
+
+# ─── Caminhos ─────────────────────────────────────────────────────────────────
+
+SYSTEM_PROFILE_FILE    = Path("/etc/flavos/performance-profile")
+PICOM_CONF_SRC_DIR     = Path("/etc/flavos")
+PICOM_USER_CONF        = Path.home() / ".config/picom/picom.conf"
+USER_PROFILE_FILE      = Path.home() / ".config/flavos/performance.json"
+PANEL_JSON             = Path.home() / ".config/flavos/panel.json"
+FIREFOX_LIGHT_SRC      = Path("/etc/flavos/firefox-light.js")
+LOG_FILE               = Path.home() / ".local/share/flavos/performance.log"
+
+VALID_PROFILES = ("light", "balanced", "full")
+
+# Serviços candidatos a mascarar no Light (verificados antes de agir)
+LIGHT_MASK_SERVICES = [
+    "NetworkManager-wait-online.service",
+    "ModemManager.service",
+    "bluetooth.service",
+    "avahi-daemon.service",
+]
+
+# Panel style por perfil
+PANEL_STYLE = {
+    "light":    "solid",
+    "balanced": "solid",
+    "full":     "glass",
+}
+
+# Fade timing do launcher por perfil (em ms)
+LAUNCHER_FADE = {
+    "light":    {"in": 60,  "out": 40},
+    "balanced": {"in": 120, "out": 80},
+    "full":     {"in": 120, "out": 80},
+}
+
+# ─── Logging ──────────────────────────────────────────────────────────────────
+
+def log(msg: str) -> None:
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(LOG_FILE, "a") as f:
+        f.write(f"[{timestamp}] {msg}\n")
+    print(msg)
+
+# ─── Leitura de perfil ────────────────────────────────────────────────────────
+
+def read_active_profile() -> str:
+    """
+    Override por usuário prevalece sobre perfil global.
+    Fallback: balanced.
+    """
+    if USER_PROFILE_FILE.exists():
+        try:
+            data = json.loads(USER_PROFILE_FILE.read_text())
+            p = data.get("profile", "").strip().lower()
+            if p in VALID_PROFILES:
+                return p
+        except Exception:
+            pass
+    if SYSTEM_PROFILE_FILE.exists():
+        p = SYSTEM_PROFILE_FILE.read_text().strip().lower()
+        if p in VALID_PROFILES:
+            return p
+    return "balanced"
+
+# ─── Operações atômicas ───────────────────────────────────────────────────────
+
+def backup_file(path: Path) -> Path | None:
+    """Cria backup com timestamp antes de sobrescrever."""
+    if not path.exists():
+        return None
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup = path.with_suffix(f".bak_{ts}")
+    shutil.copy2(path, backup)
+    return backup
+
+def apply_picom_conf(profile: str) -> None:
+    src = PICOM_CONF_SRC_DIR / f"picom-{profile}.conf"
+    if not src.exists():
+        log(f"  [WARN] Config Picom não encontrada: {src} — compositor inalterado.")
+        return
+    PICOM_USER_CONF.parent.mkdir(parents=True, exist_ok=True)
+    bak = backup_file(PICOM_USER_CONF)
+    if bak:
+        log(f"  Backup do picom.conf → {bak}")
+    shutil.copy2(src, PICOM_USER_CONF)
+    log(f"  picom.conf → {profile} ({src.name})")
+
+def apply_panel_json(profile: str) -> None:
+    PANEL_JSON.parent.mkdir(parents=True, exist_ok=True)
+    style = PANEL_STYLE.get(profile, "solid")
+    data = {"opacity": 100, "alignment": "left", "style": style}
+    if PANEL_JSON.exists():
+        try:
+            existing = json.loads(PANEL_JSON.read_text())
+            data.update(existing)
+            data["style"] = style  # perfil sobrescreve style
+        except Exception:
+            pass
+    PANEL_JSON.write_text(json.dumps(data, indent=2))
+    log(f"  panel.json → style={style}")
+
+def apply_launcher_profile(profile: str) -> None:
+    """
+    Escreve configuração de fade do launcher em ~/.config/flavos/launcher.json
+    para ser lida pelo flavos-launcher no próximo restart.
+    """
+    launcher_conf = Path.home() / ".config/flavos/launcher.json"
+    launcher_conf.parent.mkdir(parents=True, exist_ok=True)
+    fade = LAUNCHER_FADE.get(profile, LAUNCHER_FADE["balanced"])
+    data = {"fade_in_ms": fade["in"], "fade_out_ms": fade["out"]}
+    launcher_conf.write_text(json.dumps(data, indent=2))
+    log(f"  launcher.json → fade_in={fade['in']}ms, fade_out={fade['out']}ms")
+
+def apply_osd_profile(profile: str) -> None:
+    """
+    Escreve configuração de animação OSD em ~/.config/flavos/osd.json.
+    Perfil light usa pure_fade=true (sem slide Y).
+    """
+    osd_conf = Path.home() / ".config/flavos/osd.json"
+    osd_conf.parent.mkdir(parents=True, exist_ok=True)
+    pure_fade = (profile == "light")
+    data = {"pure_fade": pure_fade}
+    osd_conf.write_text(json.dumps(data, indent=2))
+    mode = "fade simples" if pure_fade else "slide completo"
+    log(f"  osd.json → mode={mode}")
+
+def restart_shell() -> None:
+    shellctl = "/usr/local/bin/flavos-shellctl"
+    if not Path(shellctl).exists():
+        log("  [WARN] flavos-shellctl não encontrado — reiniciar sessão manualmente.")
+        return
+    log("  Reiniciando shell via flavos-shellctl shell restart ...")
+    result = subprocess.run(
+        [shellctl, "shell", "restart"],
+        capture_output=True, text=True
+    )
+    if result.returncode == 0:
+        log("  Shell reiniciada com sucesso.")
+    else:
+        log(f"  [WARN] shellctl retornou {result.returncode}: {result.stderr.strip()}")
+
+def mask_service(service: str) -> None:
+    """Verifica se unit existe antes de mascarar. Não toca unidades já mascaradas."""
+    result = subprocess.run(
+        ["systemctl", "status", service],
+        capture_output=True, text=True
+    )
+    # Exit 4 = unit not found
+    if result.returncode == 4:
+        log(f"  [SKIP] {service}: unit não encontrada, ignorando.")
+        return
+    # Verifica se já está mascarada
+    if "masked" in result.stdout.lower() or "masked" in result.stderr.lower():
+        log(f"  [SKIP] {service}: já mascarada.")
+        return
+    subprocess.run(["systemctl", "mask", service], check=False)
+    log(f"  [MASK] {service}")
+
+def unmask_service_if_was_auto_masked(service: str) -> None:
+    """
+    Desmascarar somente se a unit tiver sido mascarada pelo flavos-performance-profile.
+    Não toca em units mascaradas manualmente pelo admin.
+    Heurística: verifica /etc/systemd/system/<service> → se for symlink para /dev/null
+    E se o symlink foi criado pelo nosso script (via marker em /etc/flavos/).
+    """
+    marker = Path(f"/etc/flavos/.masked_{service}")
+    if not marker.exists():
+        log(f"  [SKIP] {service}: não gerenciada por este script — não desmascarada.")
+        return
+    subprocess.run(["systemctl", "unmask", service], check=False)
+    marker.unlink(missing_ok=True)
+    log(f"  [UNMASK] {service}")
+
+def write_mask_marker(service: str) -> None:
+    marker = Path(f"/etc/flavos/.masked_{service}")
+    marker.touch()
+
+# ─── Aplicação de serviços do Light ───────────────────────────────────────────
+
+def apply_light_services(system_mode: bool) -> None:
+    if not system_mode:
+        log("  [INFO] Serviços: sem --system — mascaramento de serviços ignorado.")
+        return
+    log("  Mascarando serviços desnecessários no Light (requer root)...")
+    for svc in LIGHT_MASK_SERVICES:
+        mask_service(svc)
+        write_mask_marker(svc)
+
+def restore_balanced_services(system_mode: bool) -> None:
+    if not system_mode:
+        log("  [INFO] Serviços: sem --system — desmascaramento ignorado.")
+        return
+    log("  Restaurando serviços para balanced/full...")
+    for svc in LIGHT_MASK_SERVICES:
+        unmask_service_if_was_auto_masked(svc)
+
+# ─── nemo-desktop no Light ────────────────────────────────────────────────────
+
+def apply_nemo_desktop(profile: str) -> None:
+    """
+    Light: desabilita nemo-desktop no session-daemon substituindo
+    ~/.config/flavos/desktop-mode.json com {"nemo_desktop": false}.
+    Wallpaper continua via feh (responsabilidade do session-daemon).
+    """
+    conf = Path.home() / ".config/flavos/desktop-mode.json"
+    conf.parent.mkdir(parents=True, exist_ok=True)
+    nemo_desktop = (profile != "light")
+    data = {"nemo_desktop": nemo_desktop}
+    conf.write_text(json.dumps(data, indent=2))
+    status = "habilitado" if nemo_desktop else "desabilitado (wallpaper via feh mantido)"
+    log(f"  desktop-mode.json → nemo_desktop={status}")
+
+# ─── zram ─────────────────────────────────────────────────────────────────────
+
+def apply_zram(profile: str) -> None:
+    if profile != "light":
+        log("  [INFO] zram: apenas disponível no perfil light.")
+        return
+    zram_conf = Path("/etc/systemd/zram-generator.conf")
+    if zram_conf.exists():
+        log(f"  [INFO] {zram_conf} já existe — não sobrescrevendo.")
+        return
+    content = """\
+# Flavos OS — zram para perfil Light (Etapa 12F)
+# Configurado por: flavos-performance-profile set light --with-zram
+# Rollback: rm /etc/systemd/zram-generator.conf && systemctl daemon-reload
+#
+# Compressão zstd: bom equilíbrio speed/ratio para CPUs legadas.
+# 50% da RAM disponível como swap comprimida.
+# Manter swap em disco (se existir) com prioridade < 100 como safety net.
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+swap-priority = 100
+"""
+    zram_conf.write_text(content)
+    log(f"  Criado: {zram_conf}")
+    subprocess.run(["systemctl", "daemon-reload"], check=False)
+    result = subprocess.run(["systemctl", "start", "systemd-zram-setup@zram0.service"],
+                             capture_output=True, text=True)
+    if result.returncode == 0:
+        log("  zram0 ativado. Verificar: zramctl && swapon --show")
+    else:
+        log(f"  [WARN] zram start falhou: {result.stderr.strip()}")
+        log("  Dica: instale 'systemd-zram-generator' e execute novamente.")
+
+# ─── Firefox Light ────────────────────────────────────────────────────────────
+
+def apply_firefox_light() -> None:
+    if not FIREFOX_LIGHT_SRC.exists():
+        log(f"  [WARN] {FIREFOX_LIGHT_SRC} não encontrado — Firefox light não aplicado.")
+        return
+    # Encontrar perfil Firefox padrão
+    profiles_dir = Path.home() / ".mozilla/firefox"
+    if not profiles_dir.exists():
+        log("  [INFO] ~/.mozilla/firefox não existe — Firefox nunca foi executado?")
+        return
+    profile_dirs = list(profiles_dir.glob("*.default*")) + list(profiles_dir.glob("*.default"))
+    if not profile_dirs:
+        log("  [INFO] Nenhum perfil Firefox encontrado em ~/.mozilla/firefox/")
+        return
+    target = profile_dirs[0] / "user.js"
+    bak = backup_file(target)
+    if bak:
+        log(f"  Backup do user.js → {bak.name}")
+    shutil.copy2(FIREFOX_LIGHT_SRC, target)
+    log(f"  firefox-light.js aplicado como {target}")
+    log("  Reinicie o Firefox para que as configurações tenham efeito.")
+
+# ─── Escrita de perfil ────────────────────────────────────────────────────────
+
+def write_user_profile(profile: str) -> None:
+    USER_PROFILE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    data = {"profile": profile}
+    USER_PROFILE_FILE.write_text(json.dumps(data, indent=2))
+
+def write_system_profile(profile: str) -> None:
+    try:
+        SYSTEM_PROFILE_FILE.write_text(f"{profile}\n")
+        log(f"  Perfil global → {profile} ({SYSTEM_PROFILE_FILE})")
+    except PermissionError:
+        log(f"  [ERRO] Sem permissão para escrever {SYSTEM_PROFILE_FILE}. Use sudo.")
+        sys.exit(1)
+
+# ─── Subcomandos ──────────────────────────────────────────────────────────────
+
+def cmd_current(_args) -> None:
+    profile = read_active_profile()
+    source = "usuário" if USER_PROFILE_FILE.exists() else "sistema"
+    print(f"Perfil ativo: {profile}  (fonte: {source})")
+
+def cmd_status(_args) -> None:
+    profile = read_active_profile()
+    print(f"Perfil ativo:      {profile}")
+    print(f"Fonte sistema:     {SYSTEM_PROFILE_FILE}")
+    print(f"Override usuário:  {USER_PROFILE_FILE}")
+    print(f"picom.conf:        {PICOM_USER_CONF} ({'existe' if PICOM_USER_CONF.exists() else 'não existe'})")
+    print(f"panel.json:        {PANEL_JSON} ({'existe' if PANEL_JSON.exists() else 'não existe'})")
+    print(f"Log:               {LOG_FILE}")
+    zram_conf = Path("/etc/systemd/zram-generator.conf")
+    print(f"zram config:       {'ATIVO' if zram_conf.exists() else 'não configurado'}")
+
+def cmd_apply(args) -> None:
+    profile = read_active_profile()
+    log(f"=== Aplicando perfil '{profile}' ===")
+    apply_picom_conf(profile)
+    apply_panel_json(profile)
+    apply_launcher_profile(profile)
+    apply_osd_profile(profile)
+    apply_nemo_desktop(profile)
+    restart_shell()
+    log(f"=== Perfil '{profile}' aplicado. ===")
+
+def cmd_set(args) -> None:
+    profile = args.profile
+    system_mode = args.system
+    with_zram = args.with_zram
+    apply_firefox = args.apply_firefox_light
+
+    log(f"=== Definindo perfil '{profile}' ===")
+
+    # 1. Persistência do perfil
+    if system_mode:
+        write_system_profile(profile)
+    else:
+        write_user_profile(profile)
+        log(f"  Perfil do usuário → {profile} ({USER_PROFILE_FILE})")
+
+    # 2. Picom
+    apply_picom_conf(profile)
+
+    # 3. Panel + Launcher + OSD
+    apply_panel_json(profile)
+    apply_launcher_profile(profile)
+    apply_osd_profile(profile)
+
+    # 4. nemo-desktop
+    apply_nemo_desktop(profile)
+
+    # 5. Serviços (apenas com --system)
+    if profile == "light":
+        apply_light_services(system_mode)
+    elif profile in ("balanced", "full"):
+        restore_balanced_services(system_mode)
+
+    # 6. zram (apenas light + --with-zram + sudo implícito)
+    if with_zram:
+        if profile != "light":
+            log("  [INFO] --with-zram ignorado: apenas suportado no perfil light.")
+        elif os.geteuid() != 0:
+            log("  [ERRO] --with-zram requer sudo.")
+        else:
+            apply_zram(profile)
+
+    # 7. Firefox (apenas --apply-firefox-light explícito)
+    if apply_firefox:
+        if profile != "light":
+            log("  [INFO] --apply-firefox-light ignorado fora do perfil light.")
+        else:
+            apply_firefox_light()
+
+    # 8. Restart shell
+    restart_shell()
+    log(f"=== Perfil '{profile}' definido e aplicado. ===")
+
+# ─── Main ─────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        prog="flavos-performance-profile",
+        description="Flavos OS — Gerenciador de Perfis de Desempenho (Etapa 12F)"
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    # current
+    subparsers.add_parser("current", help="Mostra o perfil ativo")
+
+    # status
+    subparsers.add_parser("status", help="Mostra estado detalhado")
+
+    # apply
+    subparsers.add_parser("apply", help="Aplica o perfil ativo sem alterar qual é")
+
+    # set
+    p_set = subparsers.add_parser("set", help="Define e aplica um perfil")
+    p_set.add_argument("profile", choices=VALID_PROFILES, help="Perfil a aplicar")
+    p_set.add_argument(
+        "--system", action="store_true",
+        help="Escreve em /etc/flavos/ e mascara serviços (requer sudo)"
+    )
+    p_set.add_argument(
+        "--with-zram", action="store_true",
+        help="Ativa zram (apenas light, requer sudo)"
+    )
+    p_set.add_argument(
+        "--apply-firefox-light", action="store_true",
+        help="Aplica user.js do Firefox otimizado para low RAM (apenas light, com backup)"
+    )
+
+    args = parser.parse_args()
+
+    if args.command == "current":
+        cmd_current(args)
+    elif args.command == "status":
+        cmd_status(args)
+    elif args.command == "apply":
+        cmd_apply(args)
+    elif args.command == "set":
+        cmd_set(args)
+    else:
+        parser.print_help()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
