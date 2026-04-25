@@ -78,7 +78,8 @@
 ### Etapa 12 — Core Apps & Daily Usability 🔄
 - **12A — Navegador Padrão e Web Experience:** ✅ Firefox ESR integrado como app de primeira classe via pacote apt nativo, com regras Openbox de decor e keybind global (C-A-b).
 - **12B — Core Apps Integration:** ✅ Conjunto core consolidado (Terminal/Kitty, Arquivos/Nemo, Editor/Mousepad, Navegador/Firefox, Imagens/Viewnior, Settings e Power). Resolvidos bugs críticos e substituição do PCManFM visual pelo Nemo.
-  - *Nota Documental Importante:* A Etapa 12B introduziu defaults mínimos necessários para os apps core, mas isto NÃO substitui a Etapa 12C, que continuará responsável por consolidar e auditar de forma mais profunda e sistêmica os fluxos de abertura, associações MIME e comportamento final do `xdg-open`.
+- **12C — Defaults, MIME & Open Flows:** ✅ Consolidação sistêmica via `/etc/xdg/mimeapps.list`. Corrigido `xdg-open` (pacote `file`) e branding do logo (SVG nativo). Fluxos de abertura auditados e previsíveis.
+- **12D — Media & Playback:** 🔄 Em Progresso. Integração de media player (mpv), associações de áudio/vídeo e refinamento final da usabilidade core.
 
 ## Decisões Fixas (Base)
 

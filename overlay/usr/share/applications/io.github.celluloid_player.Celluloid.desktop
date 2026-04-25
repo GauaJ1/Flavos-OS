@@ -1,0 +1,7 @@
+[Desktop Entry]
+# Stub: suprime a entrada original do pacote celluloid no menu/launcher.
+# O Flavos OS usa flavos-media.desktop como handler de media.
+# Fonte: dpkg -L celluloid → /usr/share/applications/io.github.celluloid_player.Celluloid.desktop
+Name=Celluloid
+NoDisplay=true
+Type=Application

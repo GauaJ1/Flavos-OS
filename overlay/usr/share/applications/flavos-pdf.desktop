@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Flavos PDF
+GenericName=Document Viewer
+Comment=Visualizador de documentos do Flavos OS
+Exec=xreader %U
+Icon=accessories-document-viewer
+Terminal=false
+Type=Application
+Categories=GTK;Office;Viewer;
+MimeType=application/pdf;
+StartupNotify=true

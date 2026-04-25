@@ -37,3 +37,23 @@ image/gif=flavos-image.desktop
 image/svg+xml=flavos-image.desktop
 image/bmp=flavos-image.desktop
 image/tiff=flavos-image.desktop
+
+# --- PDF (Etapa 12D) ---
+application/pdf=flavos-pdf.desktop
+
+# --- Video (Etapa 12D) ---
+video/mp4=flavos-media.desktop
+video/webm=flavos-media.desktop
+video/x-matroska=flavos-media.desktop
+video/x-msvideo=flavos-media.desktop
+video/ogg=flavos-media.desktop
+video/quicktime=flavos-media.desktop
+
+# --- Audio (Etapa 12D) ---
+audio/mpeg=flavos-media.desktop
+audio/flac=flavos-media.desktop
+audio/ogg=flavos-media.desktop
+audio/wav=flavos-media.desktop
+audio/x-vorbis+ogg=flavos-media.desktop
+audio/aac=flavos-media.desktop
+audio/mp4=flavos-media.desktop

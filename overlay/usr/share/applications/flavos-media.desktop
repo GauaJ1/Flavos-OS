@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Flavos Media
+GenericName=Media Player
+Comment=Reprodutor de mídia do Flavos OS
+Exec=celluloid %U
+Icon=applications-multimedia
+Terminal=false
+Type=Application
+Categories=GTK;AudioVideo;Audio;Video;Player;
+MimeType=video/mp4;video/webm;video/x-matroska;video/x-msvideo;video/ogg;video/quicktime;audio/mpeg;audio/flac;audio/ogg;audio/wav;audio/x-vorbis+ogg;audio/aac;audio/mp4;
+StartupNotify=true
