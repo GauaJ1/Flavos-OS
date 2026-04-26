@@ -14,7 +14,13 @@ gi.require_version('Gdk', '3.0')
 gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
 
-import cairo
+import math
+try:
+    import cairo
+    _HAS_CAIRO = True
+except ImportError:
+    _HAS_CAIRO = False
+    cairo = None
 import os
 import sys
 import subprocess
@@ -52,6 +58,11 @@ CSS = b"""
     color: rgba(232,236,244,0.75);
     font-size: 12pt;
     font-weight: 500;
+}
+.lock-avatar-letter {
+    color: rgba(232,236,244,0.95);
+    font-size: 22pt;
+    font-weight: 700;
 }
 .lock-entry {
     background: rgba(255,255,255,0.07);
@@ -92,30 +103,39 @@ def _capture_background():
         return None
 
 
-# ── Avatar (Cairo DrawingArea) ────────────────────────────────────────────────
-class _Avatar(Gtk.DrawingArea):
+# ── Avatar (circle via Cairo DrawingArea + letter via Gtk.Label) ─────────────
+# Nota: evitamos propositalmente cairo.FONT_* e cr.show_text().
+# A letra é um Gtk.Label sobrepostro via Gtk.Overlay — mais robusto e
+# independente da API de fonte do pycairo.
+class _Avatar(Gtk.Overlay):
     SZ = 72
 
     def __init__(self, letter):
         super().__init__()
         self._l = (letter or 'F')[0].upper()
         self.set_size_request(self.SZ, self.SZ)
-        self.connect('draw', self._draw)
 
-    def _draw(self, w, cr):
+        # Círculo (DrawingArea — só usa cr.arc + fill/stroke, sem fonte)
+        da = Gtk.DrawingArea()
+        da.set_size_request(self.SZ, self.SZ)
+        da.connect('draw', self._draw_circle)
+        self.add(da)
+
+        # Letra centralizada como GTK Label
+        lbl = Gtk.Label(label=self._l)
+        lbl.get_style_context().add_class('lock-avatar-letter')
+        lbl.set_halign(Gtk.Align.CENTER)
+        lbl.set_valign(Gtk.Align.CENTER)
+        self.add_overlay(lbl)
+
+    def _draw_circle(self, w, cr):
         r = self.SZ / 2
-        cr.arc(r, r, r - 1, 0, 6.2832)
+        cr.arc(r, r, r - 1, 0, 2 * math.pi)
         cr.set_source_rgba(*_SURFACE, 1.0)
         cr.fill_preserve()
         cr.set_source_rgba(*_ACCENT, 0.70)
         cr.set_line_width(1.5)
         cr.stroke()
-        cr.set_source_rgba(*_TEXT, 1.0)
-        cr.select_font_face('Inter', cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-        cr.set_font_size(26)
-        ext = cr.text_extents(self._l)
-        cr.move_to(r - ext.width/2 - ext.x_bearing, r - ext.height/2 - ext.y_bearing)
-        cr.show_text(self._l)
 
 
 # ── Background (Cairo DrawingArea) ────────────────────────────────────────────
@@ -145,10 +165,13 @@ class _Background(Gtk.DrawingArea):
             cr.rectangle(0, 0, W, H)
             cr.fill()
         # dark vignette overlay
-        g = cairo.LinearGradient(0, 0, 0, H)
-        g.add_color_stop_rgba(0.0, *_BG, 0.52)
-        g.add_color_stop_rgba(1.0, *_BG, 0.82)
-        cr.set_source(g)
+        if _HAS_CAIRO and cairo is not None:
+            g = cairo.LinearGradient(0, 0, 0, H)
+            g.add_color_stop_rgba(0.0, *_BG, 0.52)
+            g.add_color_stop_rgba(1.0, *_BG, 0.82)
+            cr.set_source(g)
+        else:
+            cr.set_source_rgba(*_BG, 0.68)
         cr.rectangle(0, 0, W, H)
         cr.fill()
 
