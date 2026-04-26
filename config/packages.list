@@ -175,3 +175,4 @@ libxkbcommon-x11-0 # X11 keymap bridge
 libfontconfig1    # font discovery (Inter)
 libjpeg62-turbo   # suporte a imagem JPEG (fundo)
 libpam0g          # PAM auth (runtime, já presente no sistema)
+libxcb-xrm0       # xrm resources (X11)
