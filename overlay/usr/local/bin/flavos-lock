@@ -1,8 +1,13 @@
 #!/bin/bash
 # flavos-lock — Wrapper central de bloqueio de sessão (Etapa 13C.3)
 #
-# Rota canônica: flavos-shellctl → flavos-lock → flavos-lockscreen (→ i3lock fallback)
-# NÃO chame i3lock ou flavos-lockscreen diretamente de outros componentes.
+# Rota canônica: flavos-shellctl → flavos-lock → i3lock-color
+# NÃO chame i3lock diretamente de outros componentes.
+#
+# Visual: i3lock-color com tokens do Flavos OS Design System v3.
+# Fundo: screenshot desfocada (scrot + blur nativo do i3lock-color).
+# Clock: relógio + data centralizado, Inter 72pt/16pt.
+# Indicator: anel com feedback visual de keypress.
 
 set -u
 
@@ -21,22 +26,129 @@ if [ -z "${XAUTHORITY:-}" ] && [ -f "${HOME:-/root}/.Xauthority" ]; then
 fi
 
 # ── Prevenção de duplicata ────────────────────────────────────────────────────
-if pgrep -x i3lock >/dev/null 2>&1 || pgrep -x flavos-lockscreen >/dev/null 2>&1; then
+if pgrep -x i3lock >/dev/null 2>&1; then
     echo "$(date -Is) INFO: locker já ativo." >> "$LOG"
     exit 0
 fi
 
-# ── Tentar lock screen premium ────────────────────────────────────────────────
-if command -v python3 >/dev/null 2>&1 && [ -x /usr/local/bin/flavos-lockscreen ]; then
-    echo "$(date -Is) INFO: Iniciando flavos-lockscreen." >> "$LOG"
-    exec python3 /usr/local/bin/flavos-lockscreen
+# ── Verificar binário ─────────────────────────────────────────────────────────
+if ! command -v i3lock >/dev/null 2>&1; then
+    echo "$(date -Is) ERRO: i3lock não encontrado." >> "$LOG"
+    exit 1
 fi
 
-# ── Fallback: i3lock ──────────────────────────────────────────────────────────
-if command -v i3lock >/dev/null 2>&1; then
-    echo "$(date -Is) WARN: flavos-lockscreen indisponível — usando i3lock." >> "$LOG"
-    exec i3lock -n -c 0D1017
+# ── Screenshot para fundo ─────────────────────────────────────────────────────
+BG_IMG="/tmp/flavos-lock-bg.png"
+if command -v scrot >/dev/null 2>&1; then
+    scrot -z -o "$BG_IMG" 2>/dev/null || true
 fi
 
-echo "$(date -Is) ERRO: nenhum locker disponível." >> "$LOG"
-exit 1
+# ── Design tokens (Flavos OS Design System v3) ────────────────────────────────
+# Formato: rrggbbaa (8 hex, último par = alpha)
+# Canvas:     #0D1017   Surface: #151921   Elevated: #1C2030
+# Accent:     #4B8BF5   FG:      #E8ECF4   FG dim:   #8891A5
+# Warning:    #FBBF24   Border:  #272D3D
+
+CLR_INSIDE="15192100"      # surface, transparente (mostra blur)
+CLR_INSIDE_VER="1C203080"  # elevated, semi-opaco durante verificação
+CLR_INSIDE_WRONG="F8717130" # error, flash sutil
+CLR_INSIDE_CLEAR="1C203060" # elevated, ao limpar
+
+CLR_RING="272D3Dcc"        # border.subtle
+CLR_RING_VER="4B8BF5ee"    # accent (verificando)
+CLR_RING_WRONG="F87171ee"  # error
+CLR_RING_CLEAR="8891A5aa"  # fg.secondary
+
+CLR_LINE="00000000"        # sem separador
+CLR_KEYHL="4B8BF5ff"       # accent: keypress highlight
+CLR_BSHL="F87171ff"        # error: backspace highlight
+CLR_SEPARATOR="00000000"   # sem separador
+
+CLR_TEXT="E8ECF4ee"        # fg.primary
+CLR_TEXT_VER="E8ECF4ee"    # fg.primary
+CLR_TEXT_WRONG="F87171ee"  # error
+CLR_TEXT_CLEAR="8891A5cc"  # fg.secondary
+
+CLR_TIME="E8ECF4f0"        # fg.primary, quase opaco
+CLR_DATE="8891A5cc"        # fg.secondary
+CLR_LAYOUT="00000000"      # esconder layout de teclado
+CLR_GREETER="8891A5aa"     # fg.secondary, sutil
+
+# ── Executar i3lock-color ─────────────────────────────────────────────────────
+echo "$(date -Is) INFO: Iniciando i3lock-color." >> "$LOG"
+
+LOCK_ARGS=(
+    --nofork
+
+    # ── Fundo ──────────────────────────────────────────────────────────────
+    --color=0D1017ff          # fallback se scrot falhar
+    --blur=12                 # blur nativo sobre screenshot
+
+    # ── Clock ──────────────────────────────────────────────────────────────
+    --clock
+    --force-clock
+    --timestr="%H:%M"
+    --datestr="%A, %-d de %B"
+    --time-font="Inter"
+    --date-font="Inter"
+    --time-size=72
+    --date-size=16
+    --timecolor="$CLR_TIME"
+    --datecolor="$CLR_DATE"
+    --time-align=0            # center
+    --date-align=0            # center
+
+    # ── Indicator ring ─────────────────────────────────────────────────────
+    --indicator
+    --radius=90
+    --ring-width=6
+
+    --insidecolor="$CLR_INSIDE"
+    --insidevercolor="$CLR_INSIDE_VER"
+    --insidewrongcolor="$CLR_INSIDE_WRONG"
+    --insideclearcolor="$CLR_INSIDE_CLEAR"
+
+    --ringcolor="$CLR_RING"
+    --ringvercolor="$CLR_RING_VER"
+    --ringwrongcolor="$CLR_RING_WRONG"
+    --ringclearcolor="$CLR_RING_CLEAR"
+
+    --linecolor="$CLR_LINE"
+    --separatorcolor="$CLR_SEPARATOR"
+    --keyhlcolor="$CLR_KEYHL"
+    --bshlcolor="$CLR_BSHL"
+
+    # ── Text ───────────────────────────────────────────────────────────────
+    --veriftext="Verificando…"
+    --wrongtext="Senha incorreta"
+    --noinputtext=""
+    --locktext="Bloqueando…"
+    --lockfailedtext="Falha ao bloquear"
+    --greetertext="$USER"
+    --verifcolor="$CLR_TEXT_VER"
+    --wrongcolor="$CLR_TEXT_WRONG"
+    --layoutcolor="$CLR_LAYOUT"
+    --greetercolor="$CLR_GREETER"
+    --greetersize=14
+    --greeter-font="Inter"
+    --verif-font="Inter"
+    --wrong-font="Inter"
+
+    # ── Posição ────────────────────────────────────────────────────────────
+    --ind-pos="x+w/2:y+h/2+60"
+    --time-pos="x+w/2:y+h/2-120"
+    --date-pos="tx:ty+36"
+    --greeter-pos="ix:iy+120"
+
+    # ── Extras ─────────────────────────────────────────────────────────────
+    --pass-media-keys
+    --pass-screen-keys
+    --no-modkey-text
+)
+
+# Usar screenshot como fundo se disponível
+if [ -f "$BG_IMG" ]; then
+    LOCK_ARGS+=(--image="$BG_IMG" --blur=12)
+fi
+
+exec i3lock "${LOCK_ARGS[@]}" >> "$LOG" 2>&1

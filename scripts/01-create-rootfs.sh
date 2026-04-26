@@ -81,6 +81,18 @@ echo "[2.5/6] Instalando pacotes pesados no ambiente formatado..."
 chroot "$ROOTFS" apt-get update
 chroot "$ROOTFS" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PACKAGES_APT
 
+# --- Compilar i3lock-color (não disponível no Debian repos) ---
+echo "[2.7/6] Compilando i3lock-color no chroot..."
+I3LOCK_BUILD="${SCRIPT_DIR}/build-i3lock-color.sh"
+if [[ -f "$I3LOCK_BUILD" ]]; then
+    cp "$I3LOCK_BUILD" "${ROOTFS}/tmp/build-i3lock-color.sh"
+    chmod +x "${ROOTFS}/tmp/build-i3lock-color.sh"
+    chroot "$ROOTFS" env DEBIAN_FRONTEND=noninteractive bash /tmp/build-i3lock-color.sh
+    rm -f "${ROOTFS}/tmp/build-i3lock-color.sh"
+else
+    echo "  AVISO: build-i3lock-color.sh não encontrado — usando i3lock padrão como fallback."
+fi
+
 # --- Configuração básica dentro do chroot ---
 echo "[3/6] Configurando sistema base..."
 

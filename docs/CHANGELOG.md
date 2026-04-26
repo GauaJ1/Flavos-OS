@@ -7,23 +7,30 @@
 
 ---
 
-### Etapa 13C.3b — Premium Lock Screen & Keybind Auto-Sync (2026-04-26)
-#### Adicionado
-- **`/usr/local/bin/flavos-lockscreen`:** Lock screen premium em Python/GTK.
-  - Fundo: captura de tela desfocada (scrot + imagemagick) com overlay escuro gradiente.
-  - Layout: relógio 88pt centralizado, data, avatar circular (inicial do usuário), campo de senha pill.
-  - Autenticação: PAM via `python3-pam` em thread separada (não trava a UI).
-  - Grab de input: `Gdk.Seat.grab()` — captura teclado + ponteiro ao nível X11.
-  - Animação: shake horizontal no campo ao digitar senha incorreta.
-  - Fallback: se grab falhar, encerra com exit 1 → `flavos-lock` usa i3lock.
-- **`packages.list`:** Adicionados `python3-pam`, `scrot`, `imagemagick`.
+### Etapa 13C.3c — Migração para i3lock-color (2026-04-26)
+#### Migração
+- **flavos-lockscreen (Python/GTK) → i3lock-color:** Python lockscreen abandonado por cadeia de
+  dependências frágeis (python3-cairo, python3-gi-cairo, python3-pam com API instável).
+  i3lock-color oferece visual premium (relógio, indicador ring, cores customizadas, blur) via
+  flags CLI, sem nenhum código custom necessário.
+- **`/usr/local/bin/flavos-lock`:** Reescrito como wrapper shell puro com todos os design tokens
+  do Flavos OS Design System v3 (palette, tipografia Inter, espaçamento).
+- **`scripts/build-i3lock-color.sh`:** Script de compilação dentro do chroot (i3lock-color não
+  disponível nos repos Debian). Build deps removidas após compilação.
+- **`scripts/01-create-rootfs.sh`:** Novo passo [2.7/6] integra compilação do i3lock-color.
 
-#### Corrigido
-- **Keybinds Super+L / Ctrl+Alt+L em VMs buildadas antes do 13C.2:**
-  `flavos-session-daemon` agora verifica se `~/.config/openbox/rc.xml` contém `W-l`;
-  se ausente, copia do `/etc/skel` e chama `openbox --reconfigure` automaticamente no boot.
-- **`/usr/local/bin/flavos-lock`:** Atualizado para tentar `flavos-lockscreen` primeiro,
-  com fallback para `i3lock -n -c 0D1017` se `python3-pam` ou `flavos-lockscreen` indisponíveis.
+#### Removido
+- `/usr/local/bin/flavos-lockscreen` (Python/GTK) — substituído por i3lock-color.
+- `python3-pam`, `python3-cairo`, `imagemagick` do `packages.list`.
+- `i3lock` padrão do `packages.list` (substituído pelo binário compilado).
+
+#### Visual do lock screen
+- Fundo: screenshot desfocada (scrot + blur nativo do i3lock-color).
+- Relógio: Inter 72px, branco 95% opacity, centrado acima do indicador.
+- Data: Inter 16px, `#8891A5`, abaixo do relógio.
+- Indicador: ring 90px, borda `#272D3D`, accent `#4B8BF5` ao verificar.
+- Greeter: nome do usuário abaixo do indicador, Inter 14px.
+- Feedback: keypress = accent azul, backspace = vermelho, erro = ring vermelho.
 
 ### Etapa 13C.3 — Lock Reliability, Openbox Keybind Fix & Backend Decision (2026-04-26)
 #### Migração de backend
