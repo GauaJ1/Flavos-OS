@@ -50,6 +50,12 @@
     <names><name>Desktop</name></names>
   </desktops>
   <keyboard>
+    <!-- Lock Screen -->
+    <keybind key="W-l">
+      <action name="Execute">
+        <command>flavos-shellctl session lock</command>
+      </action>
+    </keybind>
     <!-- Terminal -->
     <keybind key="C-A-t">
       <action name="Execute"><command>kitty</command></action>

@@ -57,3 +57,16 @@ audio/wav=flavos-media.desktop
 audio/x-vorbis+ogg=flavos-media.desktop
 audio/aac=flavos-media.desktop
 audio/mp4=flavos-media.desktop
+
+# --- Arquivos Compactados (Etapa 13A) ---
+application/zip=flavos-archive.desktop
+application/x-7z-compressed=flavos-archive.desktop
+application/x-tar=flavos-archive.desktop
+application/gzip=flavos-archive.desktop
+application/x-xz=flavos-archive.desktop
+application/x-compressed-tar=flavos-archive.desktop
+application/x-xz-compressed-tar=flavos-archive.desktop
+application/x-bzip2-compressed-tar=flavos-archive.desktop
+application/vnd.rar=flavos-archive.desktop
+application/x-rar=flavos-archive.desktop
+application/x-rar-compressed=flavos-archive.desktop

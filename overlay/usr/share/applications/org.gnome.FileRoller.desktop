@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=File Roller
+Exec=file-roller %U
+Icon=archive-manager
+Terminal=false
+Type=Application
+NoDisplay=true

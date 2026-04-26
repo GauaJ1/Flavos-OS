@@ -7,6 +7,15 @@
 
 ---
 
+### Etapa 13A — Archive & Compression Support (2026-04-26)
+#### Adicionado
+- **Suporte nativo a arquivos compactados:** Integração profunda ao Nemo e ao desktop via `file-roller` e `nemo-fileroller`.
+- **Ações de Contexto:** Menus "Extrair Aqui", "Extrair para..." e "Comprimir..." disponíveis com clique direito no Nemo.
+- **Flavos Archives:** Stub `.desktop` personalizado (`flavos-archive.desktop`) ocultando a identidade original do GNOME no launcher.
+- **Suporte de Backend CLI:** Adicionados `zip`, `unzip`, `p7zip-full` e `unrar-free` ao `packages.list` garantindo amplo suporte (zip, 7z, tar, gzip, xz, rar leitura limitada).
+- **Integração MIME:** Mapeamentos padrão para arquivos compactados associados ao Flavos Archives, tanto na camada global (`/etc/xdg/mimeapps.list`) quanto no diretório do usuário (`/etc/skel/.config/mimeapps.list`).
+
+
 ### Etapa 12F.1 — Performance Adaptation Fixes & Settings UI (2026-04-25)
 #### Adicionado
 - **Tab Desempenho no `flavos-settings`:** nova interface para monitorar e alternar perfis de performance.

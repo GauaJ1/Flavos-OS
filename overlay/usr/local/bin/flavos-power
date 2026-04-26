@@ -6,6 +6,7 @@
 import gi
 import os
 import subprocess
+import shlex
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
@@ -107,8 +108,9 @@ separator {
 
 
 def run_async(cmd):
-    """Executa comando assíncrono sem bloquear o loop GTK."""
-    subprocess.Popen(cmd, shell=True)
+    """Executa comando assíncrono sem bloquear o loop GTK.
+    Usa shlex.split para evitar shell=True (segurança)."""
+    subprocess.Popen(shlex.split(cmd))
 
 
 class PowerMenu(Gtk.Window):
@@ -147,6 +149,7 @@ class PowerMenu(Gtk.Window):
         vbox.pack_start(heading, False, False, 0)
 
         actions = [
+            ("Bloquear",        None,     "flavos-shellctl session lock"),
             ("Desligar",        "danger", "flavos-shellctl session poweroff"),
             ("Reiniciar",       None,     "flavos-shellctl session reboot"),
             ("Suspender",       None,     "systemctl suspend"),

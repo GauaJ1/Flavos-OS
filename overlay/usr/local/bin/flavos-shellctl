@@ -15,6 +15,7 @@ usage() {
     echo "Uso: flavos-shellctl <ação> <sub-ação> [parâmetros]"
     echo ""
     echo "Sessão:"
+    echo "  session lock     Bloqueia a tela da sessão local (xsecurelock)"
     echo "  session logout   Encerra efetivamente toda a sessão visual (loginctl/pkill)"
     echo "  session reboot   Reinicia o sistema via systemd"
     echo "  session poweroff Desliga o sistema via systemd"
@@ -42,10 +43,56 @@ if [ "$ACTION" = "session" ]; then
         if [ "$XDG_SESSION_TYPE" = "x11" ]; then
             openbox --exit 2>/dev/null || killall openbox 2>/dev/null || true
         else
-            # Placeholder genérico pra derrubar shell Wayland primária no futuro
+            # Logout sem DBus: matar sessão atual encerando os processos X11 do usuário
             kill -TERM -1 2>/dev/null || true 
         fi
         exit 0
+
+    elif [ "$SUB_ACTION" = "lock" ]; then
+        if [ "${XDG_SESSION_TYPE:-x11}" != "x11" ]; then
+            echo "Erro: lock via xsecurelock só está implementado para X11 nesta fase."
+            exit 1
+        fi
+
+        if ! command -v xsecurelock >/dev/null 2>&1; then
+            echo "Erro: xsecurelock não está instalado."
+            exit 1
+        fi
+
+        if pgrep -x xsecurelock >/dev/null 2>&1; then
+            echo "Lock screen já está ativo."
+            exit 0
+        fi
+
+        export DISPLAY="${DISPLAY:-:0}"
+
+        if [ -z "${XAUTHORITY:-}" ] && [ -f "$HOME/.Xauthority" ]; then
+            export XAUTHORITY="$HOME/.Xauthority"
+        fi
+
+        export XSECURELOCK_PASSWORD_PROMPT=asterisks
+        export XSECURELOCK_SAVER=saver_blank
+
+        # Flavos OS Design System — cores e tipografia
+        export XSECURELOCK_BACKGROUND_COLOR="#0D1017"
+        export XSECURELOCK_AUTH_BACKGROUND_COLOR="#0D1017"
+        export XSECURELOCK_AUTH_FOREGROUND_COLOR="#E8ECF4"
+        export XSECURELOCK_AUTH_WARNING_COLOR="#F87171"
+        export XSECURELOCK_FONT="Inter:size=14"
+        export XSECURELOCK_SHOW_USERNAME=1
+        export XSECURELOCK_SHOW_HOSTNAME=0
+        export XSECURELOCK_SHOW_DATETIME=1
+        export XSECURELOCK_DATETIME_FORMAT="%H:%M"
+
+        ( umask 077; xsecurelock >/tmp/flavos-xsecurelock.log 2>&1 ) &
+        sleep 0.3
+
+        if pgrep -x xsecurelock >/dev/null 2>&1; then
+            exit 0
+        else
+            echo "Erro: xsecurelock falhou ao iniciar. Veja /tmp/flavos-xsecurelock.log"
+            exit 1
+        fi
 
     elif [ "$SUB_ACTION" = "reboot" ]; then
         systemctl reboot
@@ -112,6 +159,9 @@ if [ "$ACTION" = "wallpaper" ] && [ "$SUB_ACTION" = "apply" ]; then
         echo "Erro: Caminho para imagem de wallpaper inválido."
         exit 1
     fi
+
+    # Sanitiza o path para evitar injeção via metacaracteres
+    PARAM="$(realpath -- "$PARAM" 2>/dev/null)" || { echo "Erro: path inválido."; exit 1; }
     
     # Salva o contrato em cache para reloads futuros
     mkdir -p "$HOME/.config/flavos"

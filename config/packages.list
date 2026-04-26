@@ -74,6 +74,8 @@ viewnior
 xdg-utils
 shared-mime-info
 librsvg2-common
+libglib2.0-bin
+neofetch
 
 lxpolkit
 libpam-systemd
@@ -140,3 +142,21 @@ systemd-zram-generator
 # mesa-utils: contém glxinfo, usado pelo flavos-performance-profile para
 # detectar suporte GLX real antes de ativar backend glx no Picom (perfil Full).
 mesa-utils
+
+# ─── Etapa 13A — Archive & Compression Support ──────────────────────────────
+# Suporte integrado ao desktop usando ferramentas maduras Linux/GTK.
+# Integrado ao Nemo para menus "Extrair Aqui" e "Comprimir...".
+file-roller
+nemo-fileroller
+zip
+unzip
+p7zip-full
+unrar-free
+
+# ─── Etapa 13B — User Directories & Download Flow ───────────────────────────
+# Padronização de diretórios XDG do usuário (Desktop, Downloads, etc).
+# NÃO incluir xdg-user-dirs-gtk para evitar traduções indesejadas dos caminhos.
+xdg-user-dirs
+
+# ─── Etapa 13C — Lock Screen & Session Security ──────────────────────────────
+xsecurelock

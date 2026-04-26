@@ -30,3 +30,9 @@ font='Inter 10'
 [org/nemo/preferences]
 show-hidden-files=false
 default-folder-viewer='icon-view'
+executable-text-activation='ask'
+
+# --- Terminal padrão para o Nemo e outros componentes GTK ---
+[org/cinnamon/desktop/default-applications/terminal]
+exec='kitty'
+exec-arg='-e'
