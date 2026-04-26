@@ -98,8 +98,21 @@ if __name__ == "__main__":
     #    O delay da taskbar já garante ~1.5s. xcape precisa do WM para capturar.
     for ff_name in FIRE_AND_FORGET:
         spawn_fire_and_forget(ff_name)
+
+    # 4. Recarregar keybinds do Openbox uma vez na inicialização.
+    #    Garante que os bindings do rc.xml (Super+L, Ctrl+Alt+L) estejam ativos
+    #    sem depender de o usuário rodar `openbox --reconfigure` manualmente.
+    if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
+        try:
+            subprocess.Popen(
+                ["openbox", "--reconfigure"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+        except FileNotFoundError:
+            pass  # Openbox pode não estar no PATH ainda; não é fatal
     
-    # 4. Watchdog loop — só supervisiona COMMANDS, não fire-and-forget
+    # 5. Watchdog loop — só supervisiona COMMANDS, não fire-and-forget
     while True:
         try:
             time.sleep(2)

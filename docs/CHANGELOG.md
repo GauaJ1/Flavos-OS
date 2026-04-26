@@ -7,6 +7,23 @@
 
 ---
 
+### Etapa 13C.2 — Lock Screen UX, Design & Action Routing (2026-04-26)
+#### Adicionado
+- **`/usr/local/bin/flavos-lock`:** Wrapper central e único ponto de entrada para o xsecurelock. Todos os callers (shellctl, launcher, power menu, keybinds) delegam para este wrapper.
+- **Keybind `Ctrl+Alt+L`:** Fallback confiável de bloqueio no `rc.xml`, sem dependência do xcape.
+- **`openbox --reconfigure` automático:** Chamado pelo `flavos-session-daemon` na inicialização X11 e pelo `flavos-shellctl shell restart`, garantindo que keybinds do `rc.xml` estejam ativos desde o primeiro boot.
+
+#### Corrigido
+- **Fundo branco / INCOMPATIBLE COMPOSITOR:** Adicionado `XSECURELOCK_COMPOSITE_OBSCURER=0` ao `flavos-lock`, corrigindo incompatibilidade documentada entre xsecurelock e Picom.
+- **Prompt de senha inseguro:** Substituído `asterisks` por `cursor` — o modo `asterisks` expõe o tamanho da senha.
+- **Lógica duplicada em `flavos-shellctl`:** Seção `session lock` simplificada para `exec /usr/local/bin/flavos-lock`, sem duplicação de variáveis de ambiente.
+
+#### Alterado
+- **`XSECURELOCK_AUTH_BACKGROUND_COLOR`:** Atualizado de `#0D1017` para `#111620` para criar profundidade visual no diálogo de autenticação.
+- **`XSECURELOCK_AUTH_WARNING_COLOR`:** Atualizado de `#F87171` (red) para `#F5A623` (amber) — alinhado à paleta de aviso do Design System Flavos.
+- **Log path:** Migrado de `/tmp/...` fixo para `${XDG_RUNTIME_DIR:-/tmp}/flavos-xsecurelock.log`.
+- **Documentação `SESSION_LOCK_AND_SECURITY.md`:** Reescrita completa — arquitetura de delegação, tabela de tokens visuais, roadmap de lock screen futura, hardening aplicado.
+
 ### Etapa 13A — Archive & Compression Support (2026-04-26)
 #### Adicionado
 - **Suporte nativo a arquivos compactados:** Integração profunda ao Nemo e ao desktop via `file-roller` e `nemo-fileroller`.
