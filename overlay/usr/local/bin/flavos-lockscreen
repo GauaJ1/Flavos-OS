@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+# flavos-lockscreen — Flavos OS Premium Lock Screen (Etapa 13C.3)
+#
+# Visual: fundo desfocado + overlay escuro + relógio grande + campo de senha.
+# Auth:   python3-pam (PAM do sistema).
+# Grab:   Gdk.Seat.grab() — captura teclado e ponteiro ao nível do X11.
+# Fallback: se grab falhar ou pam indisponível, retorna exit 1 → caller usa i3lock.
+#
+# Dependências: python3-gi python3-pam scrot imagemagick
+
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
+
+import cairo
+import os
+import sys
+import subprocess
+import threading
+import datetime
+
+# ── PAM ───────────────────────────────────────────────────────────────────────
+try:
+    import pam as _pam_module
+    _PAM_OK = True
+except ImportError:
+    _PAM_OK = False
+
+# ── Design tokens (Flavos OS Design System) ───────────────────────────────────
+_BG        = (0.051, 0.063, 0.090)   # #0D1017
+_SURFACE   = (0.067, 0.086, 0.125)   # #111620
+_TEXT      = (0.910, 0.925, 0.957)   # #E8ECF4
+_TEXT_DIM  = (0.910, 0.925, 0.957, 0.55)
+_ACCENT    = (0.239, 0.737, 0.643)   # #3DBBA4 teal
+_WARN      = (0.961, 0.651, 0.137)   # #F5A623
+
+CSS = b"""
+* { font-family: Inter, Cantarell, "Noto Sans", sans-serif; }
+.lock-clock {
+    color: rgba(232,236,244,0.95);
+    font-size: 88pt;
+    font-weight: 700;
+}
+.lock-date {
+    color: rgba(232,236,244,0.52);
+    font-size: 13pt;
+    letter-spacing: 1px;
+}
+.lock-user {
+    color: rgba(232,236,244,0.75);
+    font-size: 12pt;
+    font-weight: 500;
+}
+.lock-entry {
+    background: rgba(255,255,255,0.07);
+    color: rgba(232,236,244,0.95);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 999px;
+    padding: 10px 28px;
+    font-size: 14pt;
+    min-width: 260px;
+}
+.lock-entry:focus {
+    border: 1px solid rgba(61,187,164,0.75);
+}
+.lock-hint {
+    color: rgba(232,236,244,0.28);
+    font-size: 10pt;
+}
+.lock-error {
+    color: rgba(245,166,35,0.90);
+    font-size: 10pt;
+}
+"""
+
+# ── Screenshot + blur ─────────────────────────────────────────────────────────
+def _capture_background():
+    tmp = '/tmp/flavos-lock-bg.png'
+    try:
+        r = subprocess.run(['scrot', '-z', tmp], timeout=4,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if r.returncode != 0:
+            return None
+        subprocess.run(
+            ['convert', tmp, '-blur', '0x18', '-brightness-contrast', '-15x0', tmp],
+            timeout=6, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        return GdkPixbuf.Pixbuf.new_from_file(tmp)
+    except Exception:
+        return None
+
+
+# ── Avatar (Cairo DrawingArea) ────────────────────────────────────────────────
+class _Avatar(Gtk.DrawingArea):
+    SZ = 72
+
+    def __init__(self, letter):
+        super().__init__()
+        self._l = (letter or 'F')[0].upper()
+        self.set_size_request(self.SZ, self.SZ)
+        self.connect('draw', self._draw)
+
+    def _draw(self, w, cr):
+        r = self.SZ / 2
+        cr.arc(r, r, r - 1, 0, 6.2832)
+        cr.set_source_rgba(*_SURFACE, 1.0)
+        cr.fill_preserve()
+        cr.set_source_rgba(*_ACCENT, 0.70)
+        cr.set_line_width(1.5)
+        cr.stroke()
+        cr.set_source_rgba(*_TEXT, 1.0)
+        cr.select_font_face('Inter', cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        cr.set_font_size(26)
+        ext = cr.text_extents(self._l)
+        cr.move_to(r - ext.width/2 - ext.x_bearing, r - ext.height/2 - ext.y_bearing)
+        cr.show_text(self._l)
+
+
+# ── Background (Cairo DrawingArea) ────────────────────────────────────────────
+class _Background(Gtk.DrawingArea):
+    def __init__(self, pixbuf):
+        super().__init__()
+        self._pb = pixbuf
+        self._cache = None
+        self.set_hexpand(True)
+        self.set_vexpand(True)
+        self.connect('draw', self._draw)
+        self.connect('size-allocate', lambda *_: self._bust())
+
+    def _bust(self):
+        self._cache = None
+
+    def _draw(self, w, cr):
+        a = w.get_allocation()
+        W, H = a.width, a.height
+        if self._pb:
+            if self._cache is None:
+                self._cache = self._pb.scale_simple(W, H, GdkPixbuf.InterpType.BILINEAR)
+            Gdk.cairo_set_source_pixbuf(cr, self._cache, 0, 0)
+            cr.paint()
+        else:
+            cr.set_source_rgb(*_BG)
+            cr.rectangle(0, 0, W, H)
+            cr.fill()
+        # dark vignette overlay
+        g = cairo.LinearGradient(0, 0, 0, H)
+        g.add_color_stop_rgba(0.0, *_BG, 0.52)
+        g.add_color_stop_rgba(1.0, *_BG, 0.82)
+        cr.set_source(g)
+        cr.rectangle(0, 0, W, H)
+        cr.fill()
+
+
+# ── Main window ───────────────────────────────────────────────────────────────
+class FlavosLockScreen(Gtk.Window):
+
+    def __init__(self, pixbuf):
+        super().__init__()
+        self._user = os.environ.get('USER', 'flavos')
+        self._pam  = _pam_module.pam() if _PAM_OK else None
+        self._busy = False
+
+        # Apply CSS
+        p = Gtk.CssProvider()
+        p.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(
+            Gdk.Screen.get_default(), p,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        # Window config
+        self.set_title('flavos-lockscreen')
+        self.set_decorated(False)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_keep_above(True)
+        self.set_type_hint(Gdk.WindowTypeHint.SPLASHSCREEN)
+        self.fullscreen()
+
+        # Build UI
+        overlay = Gtk.Overlay()
+        self.add(overlay)
+
+        overlay.add(_Background(pixbuf))
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        content.set_halign(Gtk.Align.CENTER)
+        content.set_valign(Gtk.Align.CENTER)
+        overlay.add_overlay(content)
+
+        # Clock
+        self._clock = Gtk.Label()
+        self._clock.get_style_context().add_class('lock-clock')
+        content.pack_start(self._clock, False, False, 0)
+
+        self._date = Gtk.Label()
+        self._date.get_style_context().add_class('lock-date')
+        content.pack_start(self._date, False, False, 6)
+
+        content.pack_start(Gtk.Box(height_request=52), False, False, 0)
+
+        # Auth block
+        auth = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        auth.set_halign(Gtk.Align.CENTER)
+        content.pack_start(auth, False, False, 0)
+
+        avatar_wrap = Gtk.Box()
+        avatar_wrap.set_halign(Gtk.Align.CENTER)
+        avatar_wrap.pack_start(_Avatar(self._user), False, False, 0)
+        auth.pack_start(avatar_wrap, False, False, 0)
+
+        lbl = Gtk.Label(label=self._user)
+        lbl.get_style_context().add_class('lock-user')
+        auth.pack_start(lbl, False, False, 0)
+
+        self._entry = Gtk.Entry()
+        self._entry.set_visibility(False)
+        self._entry.set_placeholder_text('Senha…')
+        self._entry.set_alignment(0.5)
+        self._entry.get_style_context().add_class('lock-entry')
+        self._entry.connect('activate', self._on_activate)
+        auth.pack_start(self._entry, False, False, 0)
+
+        self._status = Gtk.Label(label='')
+        self._status.get_style_context().add_class('lock-hint')
+        auth.pack_start(self._status, False, False, 0)
+
+        content.pack_start(Gtk.Box(height_request=40), False, False, 0)
+
+        # Signals
+        self.connect('destroy', Gtk.main_quit)
+        self.connect('realize', self._on_realize)
+        self._update_clock()
+        GLib.timeout_add(1000, self._update_clock)
+
+    # ── Clock ──────────────────────────────────────────────────────────────
+
+    def _update_clock(self):
+        now = datetime.datetime.now()
+        self._clock.set_text(now.strftime('%H:%M'))
+        self._date.set_text(now.strftime('%A, %-d de %B de %Y'))
+        return True
+
+    # ── Grab ───────────────────────────────────────────────────────────────
+
+    def _on_realize(self, *_):
+        GLib.timeout_add(120, self._do_grab)
+
+    def _do_grab(self):
+        gdk_win = self.get_window()
+        if gdk_win is None:
+            return False
+        seat = self.get_display().get_default_seat()
+        status = seat.grab(
+            gdk_win,
+            Gdk.SeatCapabilities.ALL,
+            True, None, None, None, None
+        )
+        if status != Gdk.GrabStatus.SUCCESS:
+            sys.stderr.write(f'flavos-lockscreen: grab failed ({status}) — aborting\n')
+            sys.stderr.flush()
+            Gtk.main_quit()
+            sys.exit(1)
+        self._entry.grab_focus()
+        return False
+
+    # ── Auth ───────────────────────────────────────────────────────────────
+
+    def _on_activate(self, entry):
+        if self._busy:
+            return
+        password = entry.get_text()
+        if not password:
+            return
+        self._busy = True
+        self._set_status('Verificando…', 'lock-hint')
+        entry.set_sensitive(False)
+        threading.Thread(target=self._auth, args=(password,), daemon=True).start()
+
+    def _auth(self, password):
+        ok = self._pam.authenticate(self._user, password) if self._pam else False
+        GLib.idle_add(self._auth_done, ok)
+
+    def _auth_done(self, ok):
+        if ok:
+            Gtk.main_quit()
+        else:
+            self._set_status('Senha incorreta.', 'lock-error')
+            self._entry.set_text('')
+            self._entry.set_sensitive(True)
+            self._entry.grab_focus()
+            self._shake()
+        self._busy = False
+
+    def _set_status(self, text, css_class):
+        ctx = self._status.get_style_context()
+        for c in ('lock-hint', 'lock-error'):
+            ctx.remove_class(c)
+        ctx.add_class(css_class)
+        self._status.set_text(text)
+
+    def _shake(self):
+        """Animação de shake horizontal no campo de senha."""
+        offsets = [10, -10, 8, -8, 4, -4, 0]
+        entry = self._entry
+
+        def _step(offs):
+            entry.set_margin_start(max(0, offs))
+            entry.set_margin_end(max(0, -offs))
+
+        delay = 0
+        for o in offsets:
+            GLib.timeout_add(delay, lambda v=o: (_step(v), False)[1])
+            delay += 40
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+def main():
+    if not _PAM_OK:
+        sys.stderr.write('flavos-lockscreen: python3-pam não encontrado\n')
+        sys.exit(1)
+
+    # Capturar screenshot ANTES de mostrar a janela
+    pixbuf = _capture_background()
+
+    win = FlavosLockScreen(pixbuf)
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == '__main__':
+    main()

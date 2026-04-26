@@ -8,6 +8,7 @@ import time
 import signal
 import sys
 import os
+import shutil
 
 processes = {}
 
@@ -99,18 +100,29 @@ if __name__ == "__main__":
     for ff_name in FIRE_AND_FORGET:
         spawn_fire_and_forget(ff_name)
 
-    # 4. Recarregar keybinds do Openbox uma vez na inicialização.
-    #    Garante que os bindings do rc.xml (Super+L, Ctrl+Alt+L) estejam ativos
-    #    sem depender de o usuário rodar `openbox --reconfigure` manualmente.
+    # 4. Garantir keybinds de lock ativos no Openbox.
+    #    Se ~/.config/openbox/rc.xml não contiver W-l (Super+L), copia do /etc/skel
+    #    (que tem os keybinds atualizados) e então reconfigura o Openbox.
+    #    Necessário quando a VM foi buildada antes da 13C.2/13C.3.
     if os.environ.get("XDG_SESSION_TYPE", "x11") == "x11":
+        _skel_rc = "/etc/skel/.config/openbox/rc.xml"
+        _user_rc = os.path.expanduser("~/.config/openbox/rc.xml")
+        try:
+            if os.path.exists(_skel_rc) and os.path.exists(_user_rc):
+                with open(_user_rc) as _f:
+                    if "W-l" not in _f.read():
+                        shutil.copy2(_skel_rc, _user_rc)
+                        print("[flavos-shell] rc.xml: keybinds de lock ausentes — sincronizado do skel.", flush=True)
+        except Exception as _e:
+            print(f"[flavos-shell] rc.xml sync falhou (não fatal): {_e}", flush=True)
         try:
             subprocess.Popen(
                 ["openbox", "--reconfigure"],
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.DEVNULL,
             )
         except FileNotFoundError:
-            pass  # Openbox pode não estar no PATH ainda; não é fatal
+            pass
     
     # 5. Watchdog loop — só supervisiona COMMANDS, não fire-and-forget
     while True:

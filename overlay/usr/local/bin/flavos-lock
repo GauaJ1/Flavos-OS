@@ -1,52 +1,42 @@
 #!/bin/bash
-# Flavos OS — flavos-lock
-# Wrapper central de bloqueio de sessão. Único ponto de entrada para o locker.
+# flavos-lock — Wrapper central de bloqueio de sessão (Etapa 13C.3)
 #
-# Backend: i3lock (13C.3)
-# Migração de xsecurelock → i3lock justificada em docs/SESSION_LOCK_AND_SECURITY.md:
-# o xsecurelock com COMPOSITE_OBSCURER=0 vaza o desktop por trás (falha de privacidade
-# visual); com COMPOSITE_OBSCURER=1 gera "INCOMPATIBLE COMPOSITOR" com Picom.
-# i3lock cobre a tela completamente sem conflito com Picom.
-#
-# NÃO chame i3lock diretamente de outros componentes.
-# Todos os caminhos passam por: shellctl → flavos-lock → i3lock
+# Rota canônica: flavos-shellctl → flavos-lock → flavos-lockscreen (→ i3lock fallback)
+# NÃO chame i3lock ou flavos-lockscreen diretamente de outros componentes.
 
 set -u
 
-# ── Log de diagnóstico (permissão restrita) ───────────────────────────────────
 LOG="${XDG_RUNTIME_DIR:-/tmp}/flavos-lock.log"
 ( umask 077; : >> "$LOG" ) 2>/dev/null || true
 
 # ── Validação: sessão X11 ─────────────────────────────────────────────────────
 if [ "${XDG_SESSION_TYPE:-x11}" != "x11" ]; then
-    echo "$(date -Is) ERRO: lock via i3lock só está implementado para X11." >> "$LOG"
+    echo "$(date -Is) ERRO: lock só implementado para X11." >> "$LOG"
     exit 1
 fi
 
-# ── Validação: binário presente ───────────────────────────────────────────────
-if ! command -v i3lock >/dev/null 2>&1; then
-    echo "$(date -Is) ERRO: i3lock não está instalado." >> "$LOG"
-    exit 1
-fi
-
-# ── Prevenção de instância duplicada ─────────────────────────────────────────
-if pgrep -x i3lock >/dev/null 2>&1; then
-    echo "$(date -Is) INFO: i3lock já está ativo. Ignorando." >> "$LOG"
-    exit 0
-fi
-
-# ── Ambiente X11 ─────────────────────────────────────────────────────────────
 export DISPLAY="${DISPLAY:-:0}"
-
 if [ -z "${XAUTHORITY:-}" ] && [ -f "${HOME:-/root}/.Xauthority" ]; then
     export XAUTHORITY="${HOME}/.Xauthority"
 fi
 
-# ── Iniciar i3lock ────────────────────────────────────────────────────────────
-# -n / --nofork: bloqueia em foreground até o unlock (necessário para o exec)
-# -c 0D1017:     fundo escuro alinhado ao Design System Flavos (sem #)
-#
-# NOTA SEGURANÇA: exec substitui o processo do wrapper pelo i3lock.
-# O i3lock retorna apenas após o desbloqueio bem-sucedido.
-echo "$(date -Is) INFO: Iniciando i3lock." >> "$LOG"
-exec i3lock -n -c 0D1017
+# ── Prevenção de duplicata ────────────────────────────────────────────────────
+if pgrep -x i3lock >/dev/null 2>&1 || pgrep -x flavos-lockscreen >/dev/null 2>&1; then
+    echo "$(date -Is) INFO: locker já ativo." >> "$LOG"
+    exit 0
+fi
+
+# ── Tentar lock screen premium ────────────────────────────────────────────────
+if command -v python3 >/dev/null 2>&1 && [ -x /usr/local/bin/flavos-lockscreen ]; then
+    echo "$(date -Is) INFO: Iniciando flavos-lockscreen." >> "$LOG"
+    exec python3 /usr/local/bin/flavos-lockscreen
+fi
+
+# ── Fallback: i3lock ──────────────────────────────────────────────────────────
+if command -v i3lock >/dev/null 2>&1; then
+    echo "$(date -Is) WARN: flavos-lockscreen indisponível — usando i3lock." >> "$LOG"
+    exec i3lock -n -c 0D1017
+fi
+
+echo "$(date -Is) ERRO: nenhum locker disponível." >> "$LOG"
+exit 1
