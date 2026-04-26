@@ -7,6 +7,24 @@
 
 ---
 
+### Etapa 13C.3b — Premium Lock Screen & Keybind Auto-Sync (2026-04-26)
+#### Adicionado
+- **`/usr/local/bin/flavos-lockscreen`:** Lock screen premium em Python/GTK.
+  - Fundo: captura de tela desfocada (scrot + imagemagick) com overlay escuro gradiente.
+  - Layout: relógio 88pt centralizado, data, avatar circular (inicial do usuário), campo de senha pill.
+  - Autenticação: PAM via `python3-pam` em thread separada (não trava a UI).
+  - Grab de input: `Gdk.Seat.grab()` — captura teclado + ponteiro ao nível X11.
+  - Animação: shake horizontal no campo ao digitar senha incorreta.
+  - Fallback: se grab falhar, encerra com exit 1 → `flavos-lock` usa i3lock.
+- **`packages.list`:** Adicionados `python3-pam`, `scrot`, `imagemagick`.
+
+#### Corrigido
+- **Keybinds Super+L / Ctrl+Alt+L em VMs buildadas antes do 13C.2:**
+  `flavos-session-daemon` agora verifica se `~/.config/openbox/rc.xml` contém `W-l`;
+  se ausente, copia do `/etc/skel` e chama `openbox --reconfigure` automaticamente no boot.
+- **`/usr/local/bin/flavos-lock`:** Atualizado para tentar `flavos-lockscreen` primeiro,
+  com fallback para `i3lock -n -c 0D1017` se `python3-pam` ou `flavos-lockscreen` indisponíveis.
+
 ### Etapa 13C.3 — Lock Reliability, Openbox Keybind Fix & Backend Decision (2026-04-26)
 #### Migração de backend
 - **xsecurelock → i3lock:** xsecurelock com `COMPOSITE_OBSCURER=0` (necessário para Picom) vaza o desktop por trás da tela de lock. i3lock cobre a tela completamente sem conflito com Picom. Decisão documentada em `docs/SESSION_LOCK_AND_SECURITY.md`.
