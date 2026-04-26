@@ -165,6 +165,5 @@ xdg-user-dirs
 i3lock
 # flavos-lockscreen deps:
 python3-pam     # autenticação PAM no lock screen customizado
-python3-cairo   # Cairo para GTK3 draw callbacks (Recommends do python3-gi, mas excluído por --no-install-recommends)
 scrot           # captura de tela para fundo desfocado
 imagemagick     # blur da captura de tela
