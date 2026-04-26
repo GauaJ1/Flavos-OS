@@ -53,13 +53,13 @@
     <!-- Lock Screen — Super+L (primário) -->
     <keybind key="W-l">
       <action name="Execute">
-        <command>flavos-shellctl session lock</command>
+        <command>/usr/local/bin/flavos-shellctl session lock</command>
       </action>
     </keybind>
     <!-- Lock Screen — Ctrl+Alt+L (fallback confiável, sem dependência de xcape) -->
     <keybind key="C-A-l">
       <action name="Execute">
-        <command>flavos-shellctl session lock</command>
+        <command>/usr/local/bin/flavos-shellctl session lock</command>
       </action>
     </keybind>
     <!-- Terminal -->

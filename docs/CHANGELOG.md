@@ -7,6 +7,20 @@
 
 ---
 
+### Etapa 13C.3 — Lock Reliability, Openbox Keybind Fix & Backend Decision (2026-04-26)
+#### Migração de backend
+- **xsecurelock → i3lock:** xsecurelock com `COMPOSITE_OBSCURER=0` (necessário para Picom) vaza o desktop por trás da tela de lock. i3lock cobre a tela completamente sem conflito com Picom. Decisão documentada em `docs/SESSION_LOCK_AND_SECURITY.md`.
+- **`config/packages.list`:** Substituído `xsecurelock` por `i3lock` com comentário explicativo.
+
+#### Corrigido
+- **Desktop visível por trás do lock:** `COMPOSITE_OBSCURER=0` desabilitava a janela de cobertura do xsecurelock. Resolvido pela migração para i3lock.
+- **Launcher → Lock não funcionava (race condition):** Launcher escondia a janela enquanto mantinha grabs GTK; i3lock não conseguia adquirir seus próprios grabs. Corrigido com `hide()` → `GLib.timeout_add(150ms)` → spawn locker → `Gtk.main_quit()`.
+- **Paths relativos no rc.xml:** Keybinds `W-l` e `C-A-l` usavam `flavos-shellctl` sem path absoluto. Corrigido para `/usr/local/bin/flavos-shellctl session lock`.
+
+#### Alterado
+- **`/usr/local/bin/flavos-lock`:** Reescrito para usar `exec i3lock -n -c 0D1017`. Mantidas: validação de sessão X11, verificação de binário, prevenção de duplicata (`pgrep -x i3lock`), log restrito com `umask 077`.
+- **`docs/SESSION_LOCK_AND_SECURITY.md`:** Adicionada seção de histórico de backend, tabela comparativa xsecurelock vs i3lock, trade-off de segurança documentado.
+
 ### Etapa 13C.2 — Lock Screen UX, Design & Action Routing (2026-04-26)
 #### Adicionado
 - **`/usr/local/bin/flavos-lock`:** Wrapper central e único ponto de entrada para o xsecurelock. Todos os callers (shellctl, launcher, power menu, keybinds) delegam para este wrapper.

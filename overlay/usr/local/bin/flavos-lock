@@ -1,32 +1,37 @@
 #!/bin/bash
 # Flavos OS — flavos-lock
-# Wrapper central do xsecurelock. Ponto único de entrada para bloqueio de sessão.
+# Wrapper central de bloqueio de sessão. Único ponto de entrada para o locker.
 #
-# NÃO chame xsecurelock diretamente de outros componentes.
-# Todos os caminhos (shellctl, launcher, power menu, keybind) passam por este wrapper.
+# Backend: i3lock (13C.3)
+# Migração de xsecurelock → i3lock justificada em docs/SESSION_LOCK_AND_SECURITY.md:
+# o xsecurelock com COMPOSITE_OBSCURER=0 vaza o desktop por trás (falha de privacidade
+# visual); com COMPOSITE_OBSCURER=1 gera "INCOMPATIBLE COMPOSITOR" com Picom.
+# i3lock cobre a tela completamente sem conflito com Picom.
 #
-# Etapa: 13C.2 — Lock Screen UX, Design & Action Routing
-# Backend: xsecurelock (backend seguro temporário; lock screen nativa Flavos é etapa futura)
+# NÃO chame i3lock diretamente de outros componentes.
+# Todos os caminhos passam por: shellctl → flavos-lock → i3lock
 
 set -u
 
 # ── Log de diagnóstico (permissão restrita) ───────────────────────────────────
-LOG="${XDG_RUNTIME_DIR:-/tmp}/flavos-xsecurelock.log"
+LOG="${XDG_RUNTIME_DIR:-/tmp}/flavos-lock.log"
+( umask 077; : >> "$LOG" ) 2>/dev/null || true
 
 # ── Validação: sessão X11 ─────────────────────────────────────────────────────
 if [ "${XDG_SESSION_TYPE:-x11}" != "x11" ]; then
-    echo "Erro: Lock screen via xsecurelock só está implementado para X11 nesta fase." | tee "$LOG"
+    echo "$(date -Is) ERRO: lock via i3lock só está implementado para X11." >> "$LOG"
     exit 1
 fi
 
 # ── Validação: binário presente ───────────────────────────────────────────────
-if ! command -v xsecurelock >/dev/null 2>&1; then
-    echo "Erro: xsecurelock não está instalado." | tee "$LOG"
+if ! command -v i3lock >/dev/null 2>&1; then
+    echo "$(date -Is) ERRO: i3lock não está instalado." >> "$LOG"
     exit 1
 fi
 
 # ── Prevenção de instância duplicada ─────────────────────────────────────────
-if pgrep -x xsecurelock >/dev/null 2>&1; then
+if pgrep -x i3lock >/dev/null 2>&1; then
+    echo "$(date -Is) INFO: i3lock já está ativo. Ignorando." >> "$LOG"
     exit 0
 fi
 
@@ -37,48 +42,11 @@ if [ -z "${XAUTHORITY:-}" ] && [ -f "${HOME:-/root}/.Xauthority" ]; then
     export XAUTHORITY="${HOME}/.Xauthority"
 fi
 
-# ── Fix crítico: Picom — XSECURELOCK_COMPOSITE_OBSCURER=0 ───────────────────
-# O Picom remove janelas fora de ordem, causando tela branca ou
-# mensagem "INCOMPATIBLE COMPOSITOR, PLEASE FIX!". Este flag desativa
-# o mecanismo que conflita com o Picom.
-# Referência: https://github.com/google/xsecurelock#known-compatibility-issues
-export XSECURELOCK_COMPOSITE_OBSCURER=0
-
-# ── Saver ─────────────────────────────────────────────────────────────────────
-export XSECURELOCK_SAVER=saver_blank
-
-# ── Design System — Flavos OS (13C.2) ────────────────────────────────────────
-# Fundo principal da tela de lock
-export XSECURELOCK_BACKGROUND_COLOR="#0D1017"
-# Fundo do diálogo de autenticação
-export XSECURELOCK_AUTH_BACKGROUND_COLOR="#111620"
-# Texto principal (username, relógio, prompt)
-export XSECURELOCK_AUTH_FOREGROUND_COLOR="#E8ECF4"
-# Cor de aviso (senha errada)
-export XSECURELOCK_AUTH_WARNING_COLOR="#F5A623"
-# Tipografia alinhada ao Design System Flavos
-export XSECURELOCK_FONT="Inter:size=14"
-
-# ── UX — prompt e informações ─────────────────────────────────────────────────
-# cursor: não expõe o tamanho da senha (mais seguro que asterisks)
-export XSECURELOCK_PASSWORD_PROMPT=cursor
-export XSECURELOCK_SHOW_KEYBOARD_LAYOUT=0
-export XSECURELOCK_SHOW_HOSTNAME=0
-export XSECURELOCK_SHOW_USERNAME=1
-export XSECURELOCK_SHOW_DATETIME=1
-export XSECURELOCK_DATETIME_FORMAT="%H:%M"
-
-# Reverte ao saver se nenhuma interação em 30s
-export XSECURELOCK_AUTH_TIMEOUT=30
-
-# ── Iniciar xsecurelock com log restrito ──────────────────────────────────────
-( umask 077; xsecurelock >"$LOG" 2>&1 ) &
-sleep 0.3
-
-# ── Verificação pós-spawn ─────────────────────────────────────────────────────
-if pgrep -x xsecurelock >/dev/null 2>&1; then
-    exit 0
-fi
-
-echo "Erro: xsecurelock falhou ao iniciar. Veja $LOG"
-exit 1
+# ── Iniciar i3lock ────────────────────────────────────────────────────────────
+# -n / --nofork: bloqueia em foreground até o unlock (necessário para o exec)
+# -c 0D1017:     fundo escuro alinhado ao Design System Flavos (sem #)
+#
+# NOTA SEGURANÇA: exec substitui o processo do wrapper pelo i3lock.
+# O i3lock retorna apenas após o desbloqueio bem-sucedido.
+echo "$(date -Is) INFO: Iniciando i3lock." >> "$LOG"
+exec i3lock -n -c 0D1017

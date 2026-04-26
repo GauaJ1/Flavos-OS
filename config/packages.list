@@ -159,4 +159,10 @@ unrar-free
 xdg-user-dirs
 
 # ─── Etapa 13C — Lock Screen & Session Security ──────────────────────────────
-xsecurelock
+# Backend atual: i3lock (13C.3)
+# xsecurelock foi testado em 13C.1/13C.2 e abandonado: com COMPOSITE_OBSCURER=0
+# (necessário para suprimir o erro "INCOMPATIBLE COMPOSITOR" do Picom), o desktop
+# vaza por trás da tela de lock — falha de privacidade visual inaceitável.
+# i3lock cobre a tela completamente sem conflito com Picom.
+# Ref: docs/SESSION_LOCK_AND_SECURITY.md
+i3lock
