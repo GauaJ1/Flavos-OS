@@ -28,8 +28,9 @@ import threading
 import datetime
 
 # ── PAM ───────────────────────────────────────────────────────────────────────
+# Debian python3-pam expõe o módulo como "PAM" (maiúsculo), não "pam".
 try:
-    import pam as _pam_module
+    import PAM as _PAM_module
     _PAM_OK = True
 except ImportError:
     _PAM_OK = False
@@ -182,7 +183,6 @@ class FlavosLockScreen(Gtk.Window):
     def __init__(self, pixbuf):
         super().__init__()
         self._user = os.environ.get('USER', 'flavos')
-        self._pam  = _pam_module.pam() if _PAM_OK else None
         self._busy = False
 
         # Apply CSS
@@ -303,7 +303,30 @@ class FlavosLockScreen(Gtk.Window):
         threading.Thread(target=self._auth, args=(password,), daemon=True).start()
 
     def _auth(self, password):
-        ok = self._pam.authenticate(self._user, password) if self._pam else False
+        """Autentica via PAM (Debian python3-pam: módulo PAM)."""
+        ok = False
+        if _PAM_OK:
+            try:
+                def _conv(auth, query_list, userData):
+                    resp = []
+                    for query, qtype in query_list:
+                        if qtype in (_PAM_module.PAM_PROMPT_ECHO_OFF,
+                                     _PAM_module.PAM_PROMPT_ECHO_ON):
+                            resp.append((password, 0))
+                        else:
+                            resp.append(('', 0))
+                    return resp
+                p = _PAM_module.pam()
+                p.start('login')
+                p.set_item(_PAM_module.PAM_USER, self._user)
+                p.set_item(_PAM_module.PAM_CONV, _conv)
+                p.authenticate()
+                p.acct_mgmt()
+                ok = True
+            except _PAM_module.error:
+                ok = False
+            except Exception:
+                ok = False
         GLib.idle_add(self._auth_done, ok)
 
     def _auth_done(self, ok):
