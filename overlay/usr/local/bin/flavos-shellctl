@@ -15,7 +15,7 @@ usage() {
     echo "Uso: flavos-shellctl <ação> <sub-ação> [parâmetros]"
     echo ""
     echo "Sessão:"
-    echo "  session lock     Bloqueia a tela da sessão local (xsecurelock)"
+    echo "  session lock     Bloqueia a tela da sessão local (i3lock)"
     echo "  session logout   Encerra efetivamente toda a sessão visual (loginctl/pkill)"
     echo "  session reboot   Reinicia o sistema via systemd"
     echo "  session poweroff Desliga o sistema via systemd"

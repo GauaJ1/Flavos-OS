@@ -56,8 +56,18 @@
         <command>/usr/local/bin/flavos-shellctl session lock</command>
       </action>
     </keybind>
+    <keybind key="W-L">
+      <action name="Execute">
+        <command>/usr/local/bin/flavos-shellctl session lock</command>
+      </action>
+    </keybind>
     <!-- Lock Screen — Ctrl+Alt+L (fallback confiável, sem dependência de xcape) -->
     <keybind key="C-A-l">
+      <action name="Execute">
+        <command>/usr/local/bin/flavos-shellctl session lock</command>
+      </action>
+    </keybind>
+    <keybind key="C-A-L">
       <action name="Execute">
         <command>/usr/local/bin/flavos-shellctl session lock</command>
       </action>

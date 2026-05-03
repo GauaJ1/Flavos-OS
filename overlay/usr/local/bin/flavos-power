@@ -149,7 +149,7 @@ class PowerMenu(Gtk.Window):
         vbox.pack_start(heading, False, False, 0)
 
         actions = [
-            ("Bloquear",        None,     "flavos-shellctl session lock"),
+            ("Bloquear",        None,     "/usr/local/bin/flavos-shellctl session lock"),
             ("Desligar",        "danger", "flavos-shellctl session poweroff"),
             ("Reiniciar",       None,     "flavos-shellctl session reboot"),
             ("Suspender",       None,     "systemctl suspend"),

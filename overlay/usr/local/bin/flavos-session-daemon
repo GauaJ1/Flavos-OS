@@ -24,8 +24,10 @@ COMMANDS = {
 # Processos "fire-and-forget": sobem uma vez, fazem fork interno, não são supervisionados.
 # O xcape faz fork() e o pai retorna exit 0 imediatamente — isso é comportamento normal,
 # não crash. Tentar revivê-lo causa loop infinito de respawn.
+# mate-screensaver needs to run in the background to handle D-Bus commands from mate-screensaver-command.
 FIRE_AND_FORGET = {
     "xcape": ["xcape", "-e", "Super_L=Alt_L|F1"],
+    "mate_screensaver": ["mate-screensaver"],
 }
 
 def spawn(name):
@@ -110,9 +112,9 @@ if __name__ == "__main__":
         try:
             if os.path.exists(_skel_rc) and os.path.exists(_user_rc):
                 with open(_user_rc) as _f:
-                    if "W-l" not in _f.read():
+                    if "W-L" not in _f.read():
                         shutil.copy2(_skel_rc, _user_rc)
-                        print("[flavos-shell] rc.xml: keybinds de lock ausentes — sincronizado do skel.", flush=True)
+                        print("[flavos-shell] rc.xml: keybinds de lock atualizados — sincronizado do skel.", flush=True)
         except Exception as _e:
             print(f"[flavos-shell] rc.xml sync falhou (não fatal): {_e}", flush=True)
         try:

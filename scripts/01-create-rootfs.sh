@@ -81,36 +81,6 @@ echo "[2.5/6] Instalando pacotes pesados no ambiente formatado..."
 chroot "$ROOTFS" apt-get update
 chroot "$ROOTFS" env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends $PACKAGES_APT
 
-# --- Compilar i3lock-color (não disponível no Debian repos) ---
-echo "[2.7/6] Compilando i3lock-color no chroot..."
-I3LOCK_BUILD="${SCRIPT_DIR}/build-i3lock-color.sh"
-if [[ -f "$I3LOCK_BUILD" ]]; then
-    # FIX: Após instalar systemd-resolved, /etc/resolv.conf vira symlink para
-    # /run/systemd/resolve/stub-resolv.conf que não existe no tmpfs /run.
-    # Forçar DNS do host para que apt/wget funcionem no build.
-    RESOLV_BACKUP=""
-    if [[ -L "${ROOTFS}/etc/resolv.conf" ]]; then
-        RESOLV_BACKUP="$(readlink "${ROOTFS}/etc/resolv.conf")"
-        rm -f "${ROOTFS}/etc/resolv.conf"
-    elif [[ -f "${ROOTFS}/etc/resolv.conf" ]]; then
-        cp "${ROOTFS}/etc/resolv.conf" "${ROOTFS}/etc/resolv.conf.bak"
-    fi
-    cp /etc/resolv.conf "${ROOTFS}/etc/resolv.conf"
-
-    cp "$I3LOCK_BUILD" "${ROOTFS}/tmp/build-i3lock-color.sh"
-    chmod +x "${ROOTFS}/tmp/build-i3lock-color.sh"
-    chroot "$ROOTFS" env DEBIAN_FRONTEND=noninteractive bash /tmp/build-i3lock-color.sh
-    rm -f "${ROOTFS}/tmp/build-i3lock-color.sh"
-
-    # Restaurar resolv.conf original
-    if [[ -n "${RESOLV_BACKUP:-}" ]]; then
-        ln -sf "$RESOLV_BACKUP" "${ROOTFS}/etc/resolv.conf"
-    elif [[ -f "${ROOTFS}/etc/resolv.conf.bak" ]]; then
-        mv "${ROOTFS}/etc/resolv.conf.bak" "${ROOTFS}/etc/resolv.conf"
-    fi
-else
-    echo "  AVISO: build-i3lock-color.sh não encontrado — usando i3lock padrão como fallback."
-fi
 
 # --- Configuração básica dentro do chroot ---
 echo "[3/6] Configurando sistema base..."

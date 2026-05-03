@@ -2,6 +2,33 @@
 # Flavos OS — Shell Visual (Etapa 9B)
 # Lançado pelo openbox-session. Inicializa os componentes visuais.
 
+# ─── Camada 0: D-Bus session daemon (DEVE ser o primeiro) ──────────────────────
+# A sessão Openbox não inicia o dbus-session-daemon automaticamente.
+# Usamos dbus-daemon diretamente em $XDG_RUNTIME_DIR/bus (caminho previsível,
+# sem guid) em vez de dbus-launch, para que test -S funcione de forma confiável.
+_DBUS_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus"
+if ! test -S "$_DBUS_SOCKET"; then
+    /usr/bin/dbus-daemon \
+        --session \
+        --nofork \
+        --nopidfile \
+        --address="unix:path=${_DBUS_SOCKET}" \
+        >>/tmp/flavos-openbox-dbus.log 2>&1 &
+    # Aguardar socket aparecer (máx 2s)
+    _i=0
+    while [ $_i -lt 20 ] && ! test -S "$_DBUS_SOCKET"; do
+        sleep 0.1; _i=$((_i + 1))
+    done
+    unset _i
+fi
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${_DBUS_SOCKET}"
+unset _DBUS_SOCKET
+
+# Propagar D-Bus e variáveis de display para o systemd user manager
+dbus-update-activation-environment --systemd \
+    DBUS_SESSION_BUS_ADDRESS DISPLAY XAUTHORITY \
+    XDG_SESSION_TYPE XDG_CURRENT_DESKTOP 2>/dev/null || true
+
 # 1. Delegação da Shell Visual (Native Core — Etapa 11)
 # picom, dunst, taskbar, painel e nemo-desktop nascem via systemd.
 
@@ -28,7 +55,7 @@ unset _WP_CACHE _WP_DEFAULT _WALLPAPER
   [ -f "$_W" ] || _W="/usr/share/flavos/wallpaper.jpeg"; \
   feh --no-fehbg --bg-fill "$_W" 2>/dev/null) &
 
-systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
+systemctl --user import-environment DBUS_SESSION_BUS_ADDRESS DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP
 systemctl --user start flavos-shell.service &
 
 # 2. Serviços de Infraestrutura X11 e Bandeja do Sistema

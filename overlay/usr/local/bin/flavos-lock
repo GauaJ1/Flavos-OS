@@ -1,154 +1,244 @@
-#!/bin/bash
-# flavos-lock — Wrapper central de bloqueio de sessão (Etapa 13C.3)
-#
-# Rota canônica: flavos-shellctl → flavos-lock → i3lock-color
-# NÃO chame i3lock diretamente de outros componentes.
-#
-# Visual: i3lock-color com tokens do Flavos OS Design System v3.
-# Fundo: screenshot desfocada (scrot + blur nativo do i3lock-color).
-# Clock: relógio + data centralizado, Inter 72pt/16pt.
-# Indicator: anel com feedback visual de keypress.
-
-set -u
+#!/usr/bin/env bash
+# flavos-lock v4.0 — definitivo, Etapa 13C
+# Correções: bug guid no socket path, dbus hierárquico, verify via dbus-send
+set -uo pipefail
+umask 077
 
 LOG="${XDG_RUNTIME_DIR:-/tmp}/flavos-lock.log"
-( umask 077; : >> "$LOG" ) 2>/dev/null || true
+LOCK_BG="/usr/share/flavos/lock/background.png"
 
-# ── Validação: sessão X11 ─────────────────────────────────────────────────────
-if [ "${XDG_SESSION_TYPE:-x11}" != "x11" ]; then
-    echo "$(date -Is) ERRO: lock só implementado para X11." >> "$LOG"
-    exit 1
-fi
+log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "$msg" >> "$LOG"
+    echo "$msg" >&2
+}
+die() { log "FATAL: $*"; exit 1; }
 
+log "════════════════════════════════════════"
+log "flavos-lock v4.0 iniciando"
+log "DISPLAY=${DISPLAY:-?}"
+log "DBUS=${DBUS_SESSION_BUS_ADDRESS:-NÃO DEFINIDO}"
+log "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-NÃO DEFINIDO}"
+
+# ── Validar X11 ──────────────────────────────────────────────────
 export DISPLAY="${DISPLAY:-:0}"
-if [ -z "${XAUTHORITY:-}" ] && [ -f "${HOME:-/root}/.Xauthority" ]; then
-    export XAUTHORITY="${HOME}/.Xauthority"
-fi
+command -v xset &>/dev/null || die "xset não encontrado (x11-xserver-utils)"
+xset q &>/dev/null 2>&1 || die "Não conectou ao X11: $DISPLAY"
+log "X11: OK"
 
-# ── Prevenção de duplicata ────────────────────────────────────────────────────
-if pgrep -x i3lock >/dev/null 2>&1; then
-    echo "$(date -Is) INFO: locker já ativo." >> "$LOG"
+# ── Verificar D-Bus via dbus-send (sem test -S, evita bug do guid) ──
+dbus_is_alive() {
+    dbus-send \
+        --session \
+        --dest=org.freedesktop.DBus \
+        --print-reply \
+        /org/freedesktop/DBus \
+        org.freedesktop.DBus.Peer.Ping \
+        &>/dev/null 2>&1
+}
+
+# ── Garantir D-Bus: 4 estratégias em cascata ─────────────────────
+ensure_dbus() {
+
+    # Estratégia 1: XDG_RUNTIME_DIR/bus (systemd --user ou criado por nós)
+    if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+        local xdg_socket="${XDG_RUNTIME_DIR}/bus"
+        if [[ -S "$xdg_socket" ]]; then
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=${xdg_socket}"
+            if dbus_is_alive; then
+                log "D-Bus [1/4] XDG socket OK: $DBUS_SESSION_BUS_ADDRESS"
+                return 0
+            fi
+            log "D-Bus [1/4] socket existe mas não responde"
+        fi
+    fi
+
+    # Estratégia 2: DBUS_SESSION_BUS_ADDRESS já definido
+    if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+        if dbus_is_alive; then
+            log "D-Bus [2/4] DBUS_SESSION_BUS_ADDRESS existente OK: $DBUS_SESSION_BUS_ADDRESS"
+            return 0
+        fi
+        log "D-Bus [2/4] definido mas não responde: $DBUS_SESSION_BUS_ADDRESS"
+    fi
+
+    # Estratégia 3: dbus-daemon manual em XDG_RUNTIME_DIR/bus
+    # Caminho previsível, sem guid — test -S 100% confiável
+    if [[ -n "${XDG_RUNTIME_DIR:-}" ]] && command -v dbus-daemon &>/dev/null; then
+        local target_socket="${XDG_RUNTIME_DIR}/bus"
+        log "D-Bus [3/4] iniciando dbus-daemon em $target_socket"
+
+        # Remover socket stale se houver
+        [[ -S "$target_socket" ]] && rm -f "$target_socket" 2>/dev/null || true
+
+        /usr/bin/dbus-daemon \
+            --session \
+            --nofork \
+            --nopidfile \
+            --address="unix:path=${target_socket}" \
+            >> /tmp/flavos-dbus-daemon.log 2>&1 &
+        local DBUS_DAEMON_PID=$!
+
+        # Aguardar socket aparecer (20 × 100ms = 2s)
+        local i=0
+        while [[ $i -lt 20 ]]; do
+            sleep 0.1
+            [[ -S "$target_socket" ]] && break
+            i=$((i + 1))
+        done
+
+        if [[ -S "$target_socket" ]]; then
+            export DBUS_SESSION_BUS_ADDRESS="unix:path=${target_socket}"
+            if dbus_is_alive; then
+                log "D-Bus [3/4] dbus-daemon manual OK (PID $DBUS_DAEMON_PID)"
+                return 0
+            fi
+            log "D-Bus [3/4] socket existe mas não responde"
+            kill "$DBUS_DAEMON_PID" 2>/dev/null || true
+        else
+            log "D-Bus [3/4] ERRO: socket não apareceu em 2s"
+            log "Stderr: $(tail -5 /tmp/flavos-dbus-daemon.log 2>/dev/null)"
+            kill "$DBUS_DAEMON_PID" 2>/dev/null || true
+        fi
+    fi
+
+    # Estratégia 4: dbus-launch (último recurso)
+    # Verifica via dbus-send, NÃO via test -S (evita bug do guid no path)
+    if command -v dbus-launch &>/dev/null; then
+        log "D-Bus [4/4] tentando dbus-launch --sh-syntax"
+        local launch_env
+        launch_env=$(dbus-launch --sh-syntax 2>/dev/null) || {
+            log "D-Bus [4/4] dbus-launch falhou"
+            return 1
+        }
+        eval "$launch_env"
+        export DBUS_SESSION_BUS_ADDRESS
+        export DBUS_SESSION_BUS_PID
+
+        # Verificar via dbus-send (não via test -S — path pode conter guid)
+        local attempt=0
+        while [[ $attempt -lt 15 ]]; do
+            sleep 0.2
+            dbus_is_alive && {
+                log "D-Bus [4/4] dbus-launch OK: $DBUS_SESSION_BUS_ADDRESS"
+                return 0
+            }
+            attempt=$((attempt + 1))
+        done
+        log "D-Bus [4/4] daemon não respondeu em 3s"
+        return 1
+    fi
+
+    log "D-Bus: todas as estratégias falharam"
+    return 1
+}
+
+# ── Detector de falha real no output ────────────────────────────
+output_is_failure() {
+    grep -qiE \
+        'Traceback|AttributeError|NoneType|Can.t connect|failed to connect|GDBus.Error|org\.freedesktop\.DBus\.Error|Exception:|Error:' \
+        <<< "$1" 2>/dev/null
+}
+
+# ── Backend: mate-screensaver ────────────────────────────────────
+lock_mate_screensaver() {
+    command -v mate-screensaver         &>/dev/null || { log "mate-screensaver: não instalado"; return 1; }
+    command -v mate-screensaver-command &>/dev/null || { log "mate-screensaver-command: não encontrado"; return 1; }
+
+    ensure_dbus || {
+        log "D-Bus indisponível — mate-screensaver abortado"
+        return 1
+    }
+
+    # Matar daemon stale (pode ter ficado de tentativa anterior)
+    pkill -u "$(id -u)" -x mate-screensaver 2>/dev/null || true
+    sleep 0.2
+
+    log "Iniciando mate-screensaver daemon (DBUS=$DBUS_SESSION_BUS_ADDRESS)"
+    DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
+        mate-screensaver --no-daemon \
+        >> /tmp/flavos-mate-screensaver.log 2>&1 &
+    local DAEMON_PID=$!
+
+    # Aguardar registro no D-Bus (15 × 300ms = 4.5s)
+    local n=0
+    local query_out=""
+    local registered=false
+    while [[ $n -lt 15 ]]; do
+        sleep 0.3
+        query_out=$(DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
+            mate-screensaver-command --query 2>&1 || true)
+        output_is_failure "$query_out" && {
+            log "ERRO D-Bus no daemon: $query_out"
+            log "Log daemon: $(tail -10 /tmp/flavos-mate-screensaver.log 2>/dev/null)"
+            kill "$DAEMON_PID" 2>/dev/null || true
+            return 1
+        }
+        echo "$query_out" | grep -qiE 'screensaver (is|está|is (in)?active|is not active)' && {
+            log "Daemon OK após $((n+1)) tentativa(s): $query_out"
+            registered=true
+            break
+        }
+        n=$((n + 1))
+    done
+
+    if [[ "$registered" = false ]]; then
+        log "TIMEOUT: daemon não registrou em 4.5s"
+        log "Log daemon: $(tail -10 /tmp/flavos-mate-screensaver.log 2>/dev/null)"
+        kill "$DAEMON_PID" 2>/dev/null || true
+        return 1
+    fi
+
+    # Enviar lock
+    local lock_out lock_exit=0
+    lock_out=$(DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
+        mate-screensaver-command --lock 2>&1) || lock_exit=$?
+
+    log "lock output: '$lock_out' (exit $lock_exit)"
+    output_is_failure "$lock_out" && {
+        log "FALHA real detectada no lock output"
+        kill "$DAEMON_PID" 2>/dev/null || true
+        return 1
+    }
+    [[ $lock_exit -ne 0 ]] && {
+        log "lock retornou exit $lock_exit"
+        kill "$DAEMON_PID" 2>/dev/null || true
+        return 1
+    }
+
+    # Confirmar via --query
+    sleep 0.5
+    local confirm
+    confirm=$(DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
+        mate-screensaver-command --query 2>&1 || true)
+    log "Confirmação: $confirm"
+    output_is_failure "$confirm" && {
+        log "FALHA na confirmação: $confirm"
+        return 1
+    }
+
+    log "✓ BACKEND USADO: mate-screensaver (daemon PID $DAEMON_PID)"
+    return 0
+}
+
+# ── Fallback: i3lock ─────────────────────────────────────────────
+lock_fallback_i3lock() {
+    log "══ FALLBACK: i3lock ══"
+    command -v i3lock &>/dev/null || die "i3lock não encontrado — sem fallback"
+    pgrep -x i3lock &>/dev/null && { log "i3lock já está ativo"; return 0; }
+    if [[ -f "$LOCK_BG" ]]; then
+        log "i3lock com background: $LOCK_BG"
+        exec i3lock -n -i "$LOCK_BG"
+    else
+        log "i3lock com cor sólida"
+        exec i3lock -n -c 0D1017
+    fi
+}
+
+# ── Main ─────────────────────────────────────────────────────────
+if lock_mate_screensaver; then
+    log "✓ Lock bem-sucedido via mate-screensaver"
     exit 0
 fi
-
-# ── Verificar binário ─────────────────────────────────────────────────────────
-if ! command -v i3lock >/dev/null 2>&1; then
-    echo "$(date -Is) ERRO: i3lock não encontrado." >> "$LOG"
-    exit 1
-fi
-
-# ── Screenshot para fundo ─────────────────────────────────────────────────────
-BG_IMG="/tmp/flavos-lock-bg.png"
-if command -v scrot >/dev/null 2>&1; then
-    scrot -z -o "$BG_IMG" 2>/dev/null || true
-fi
-
-# ── Design tokens (Flavos OS Design System v3) ────────────────────────────────
-# Formato: rrggbbaa (8 hex, último par = alpha)
-# Canvas:     #0D1017   Surface: #151921   Elevated: #1C2030
-# Accent:     #4B8BF5   FG:      #E8ECF4   FG dim:   #8891A5
-# Warning:    #FBBF24   Border:  #272D3D
-
-CLR_INSIDE="15192100"      # surface, transparente (mostra blur)
-CLR_INSIDE_VER="1C203080"  # elevated, semi-opaco durante verificação
-CLR_INSIDE_WRONG="F8717130" # error, flash sutil
-CLR_INSIDE_CLEAR="1C203060" # elevated, ao limpar
-
-CLR_RING="272D3Dcc"        # border.subtle
-CLR_RING_VER="4B8BF5ee"    # accent (verificando)
-CLR_RING_WRONG="F87171ee"  # error
-CLR_RING_CLEAR="8891A5aa"  # fg.secondary
-
-CLR_LINE="00000000"        # sem separador
-CLR_KEYHL="4B8BF5ff"       # accent: keypress highlight
-CLR_BSHL="F87171ff"        # error: backspace highlight
-CLR_SEPARATOR="00000000"   # sem separador
-
-CLR_TEXT="E8ECF4ee"        # fg.primary
-CLR_TEXT_VER="E8ECF4ee"    # fg.primary
-CLR_TEXT_WRONG="F87171ee"  # error
-CLR_TEXT_CLEAR="8891A5cc"  # fg.secondary
-
-CLR_TIME="E8ECF4f0"        # fg.primary, quase opaco
-CLR_DATE="8891A5cc"        # fg.secondary
-CLR_LAYOUT="00000000"      # esconder layout de teclado
-CLR_GREETER="8891A5aa"     # fg.secondary, sutil
-
-# ── Executar i3lock-color ─────────────────────────────────────────────────────
-echo "$(date -Is) INFO: Iniciando i3lock-color." >> "$LOG"
-
-LOCK_ARGS=(
-    --nofork
-
-    # ── Fundo ──────────────────────────────────────────────────────────────
-    --color=0D1017ff          # fallback se scrot falhar
-    --blur=12                 # blur nativo sobre screenshot
-
-    # ── Clock ──────────────────────────────────────────────────────────────
-    --clock
-    --force-clock
-    --timestr="%H:%M"
-    --datestr="%A, %-d de %B"
-    --time-font="Inter"
-    --date-font="Inter"
-    --time-size=72
-    --date-size=16
-    --timecolor="$CLR_TIME"
-    --datecolor="$CLR_DATE"
-    --time-align=0            # center
-    --date-align=0            # center
-
-    # ── Indicator ring ─────────────────────────────────────────────────────
-    --indicator
-    --radius=90
-    --ring-width=6
-
-    --insidecolor="$CLR_INSIDE"
-    --insidevercolor="$CLR_INSIDE_VER"
-    --insidewrongcolor="$CLR_INSIDE_WRONG"
-    --insideclearcolor="$CLR_INSIDE_CLEAR"
-
-    --ringcolor="$CLR_RING"
-    --ringvercolor="$CLR_RING_VER"
-    --ringwrongcolor="$CLR_RING_WRONG"
-    --ringclearcolor="$CLR_RING_CLEAR"
-
-    --linecolor="$CLR_LINE"
-    --separatorcolor="$CLR_SEPARATOR"
-    --keyhlcolor="$CLR_KEYHL"
-    --bshlcolor="$CLR_BSHL"
-
-    # ── Text ───────────────────────────────────────────────────────────────
-    --veriftext="Verificando…"
-    --wrongtext="Senha incorreta"
-    --noinputtext=""
-    --locktext="Bloqueando…"
-    --lockfailedtext="Falha ao bloquear"
-    --greetertext="$USER"
-    --verifcolor="$CLR_TEXT_VER"
-    --wrongcolor="$CLR_TEXT_WRONG"
-    --layoutcolor="$CLR_LAYOUT"
-    --greetercolor="$CLR_GREETER"
-    --greetersize=14
-    --greeter-font="Inter"
-    --verif-font="Inter"
-    --wrong-font="Inter"
-
-    # ── Posição ────────────────────────────────────────────────────────────
-    --ind-pos="x+w/2:y+h/2+60"
-    --time-pos="x+w/2:y+h/2-120"
-    --date-pos="tx:ty+36"
-    --greeter-pos="ix:iy+120"
-
-    # ── Extras ─────────────────────────────────────────────────────────────
-    --pass-media-keys
-    --pass-screen-keys
-    --no-modkey-text
-)
-
-# Usar screenshot como fundo se disponível
-if [ -f "$BG_IMG" ]; then
-    LOCK_ARGS+=(--image="$BG_IMG" --blur=12)
-fi
-
-exec i3lock "${LOCK_ARGS[@]}" >> "$LOG" 2>&1
+log "Backend principal falhou — fallback ativado"
+lock_fallback_i3lock

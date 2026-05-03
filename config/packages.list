@@ -159,20 +159,8 @@ unrar-free
 xdg-user-dirs
 
 # ─── Etapa 13C — Lock Screen & Session Security ──────────────────────────────
-# Backend: i3lock-color (compilado do source via scripts/build-i3lock-color.sh)
-# Substitui i3lock e flavos-lockscreen (Python). Visual premium via CLI flags.
-# xsecurelock testado em 13C.1/13C.2, abandonado por vazamento visual com Picom.
-# flavos-lockscreen (Python GTK) abandonado por deps frágeis (cairo, python3-pam).
-# Ref: docs/SESSION_LOCK_AND_SECURITY.md
-scrot             # screenshot para fundo desfocado
-# Runtime libs do i3lock-color (build deps são removidas após compilação):
-libcairo2         # renderização do relógio e indicador
-libev4            # event loop
-libxcb-image0     # captura de tela XCB
-libxcb-xkb1       # XKB keyboard
-libxkbcommon0      # keymap
-libxkbcommon-x11-0 # X11 keymap bridge
-libfontconfig1    # font discovery (Inter)
-libjpeg62-turbo   # suporte a imagem JPEG (fundo)
-libpam0g          # PAM auth (runtime, já presente no sistema)
-libxcb-xrm0       # xrm resources (X11)
+# Backend primário: mate-screensaver (Solução madura Debian)
+mate-screensaver
+mate-screensaver-common
+i3lock
+dbus-x11

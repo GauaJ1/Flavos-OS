@@ -426,9 +426,9 @@ class FlavosLauncher(Gtk.Window):
         self.pinned_flow.add(self._create_action_btn(
             "Info", "dialog-information-symbolic", ["flavos-settings"]))
         self.pinned_flow.add(self._create_action_btn(
-            "Restart", "system-reboot-symbolic", ["flavos-shellctl", "session", "reboot"]))
+            "Restart", "system-reboot-symbolic", ["/usr/local/bin/flavos-shellctl", "session", "reboot"]))
         self.pinned_flow.add(self._create_action_btn(
-            "Lock", "system-lock-screen-symbolic", ["flavos-shellctl", "session", "lock"]))
+            "Lock", "system-lock-screen-symbolic", ["/usr/local/bin/flavos-shellctl", "session", "lock"]))
 
         # Grade principal: todos exceto pinned
         pinned_ids = {
