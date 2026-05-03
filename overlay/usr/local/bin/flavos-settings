@@ -921,7 +921,17 @@ class PowerPage:
 
         # Ações de sessão
         card2 = _card()
-        card2.pack_start(_row("Suspender sistema", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
+        
+        susp_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        susp_row.get_style_context().add_class("row-item")
+        susp_lbl = Gtk.Label(label="Suspender sistema", xalign=0)
+        susp_lbl.get_style_context().add_class("row-label")
+        susp_row.pack_start(susp_lbl, True, True, 0)
+        btn_susp = Gtk.Button(label="Suspender")
+        btn_susp.connect("clicked", lambda _: _popen(["/usr/local/bin/flavos-shellctl", "session", "suspend"]))
+        susp_row.pack_end(btn_susp, False, False, 0)
+        card2.pack_start(susp_row, False, False, 0)
+
         card2.pack_start(_row("Hibernar sistema", badge=("Próxima versão", "badge-placeholder")), False, False, 0)
         vbox.pack_start(card2, False, False, 0)
 

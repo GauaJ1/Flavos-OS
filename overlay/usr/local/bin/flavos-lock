@@ -76,7 +76,7 @@ ensure_dbus() {
             --nofork \
             --nopidfile \
             --address="unix:path=${target_socket}" \
-            >> /tmp/flavos-dbus-daemon.log 2>&1 &
+            >> "${XDG_RUNTIME_DIR:-/tmp}/flavos-dbus-daemon.log" 2>&1 &
         local DBUS_DAEMON_PID=$!
 
         # Aguardar socket aparecer (20 × 100ms = 2s)
@@ -97,7 +97,7 @@ ensure_dbus() {
             kill "$DBUS_DAEMON_PID" 2>/dev/null || true
         else
             log "D-Bus [3/4] ERRO: socket não apareceu em 2s"
-            log "Stderr: $(tail -5 /tmp/flavos-dbus-daemon.log 2>/dev/null)"
+            log "Stderr: $(tail -5 "${XDG_RUNTIME_DIR:-/tmp}/flavos-dbus-daemon.log" 2>/dev/null)"
             kill "$DBUS_DAEMON_PID" 2>/dev/null || true
         fi
     fi
@@ -157,7 +157,7 @@ lock_mate_screensaver() {
     log "Iniciando mate-screensaver daemon (DBUS=$DBUS_SESSION_BUS_ADDRESS)"
     DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
         mate-screensaver --no-daemon \
-        >> /tmp/flavos-mate-screensaver.log 2>&1 &
+        >> "${XDG_RUNTIME_DIR:-/tmp}/flavos-mate-screensaver.log" 2>&1 &
     local DAEMON_PID=$!
 
     # Aguardar registro no D-Bus (15 × 300ms = 4.5s)
@@ -170,7 +170,7 @@ lock_mate_screensaver() {
             mate-screensaver-command --query 2>&1 || true)
         output_is_failure "$query_out" && {
             log "ERRO D-Bus no daemon: $query_out"
-            log "Log daemon: $(tail -10 /tmp/flavos-mate-screensaver.log 2>/dev/null)"
+            log "Log daemon: $(tail -10 "${XDG_RUNTIME_DIR:-/tmp}/flavos-mate-screensaver.log" 2>/dev/null)"
             kill "$DAEMON_PID" 2>/dev/null || true
             return 1
         }
@@ -184,7 +184,7 @@ lock_mate_screensaver() {
 
     if [[ "$registered" = false ]]; then
         log "TIMEOUT: daemon não registrou em 4.5s"
-        log "Log daemon: $(tail -10 /tmp/flavos-mate-screensaver.log 2>/dev/null)"
+        log "Log daemon: $(tail -10 "${XDG_RUNTIME_DIR:-/tmp}/flavos-mate-screensaver.log" 2>/dev/null)"
         kill "$DAEMON_PID" 2>/dev/null || true
         return 1
     fi

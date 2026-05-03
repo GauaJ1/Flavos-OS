@@ -30,34 +30,78 @@ usage() {
 }
 
 # -----------------
-# CONTROLE DE SESSÃO
+# CONTROLE DE SESSÃO E LOGS
 # -----------------
+
+log_action() {
+    local action="$1"
+    local result="$2"
+    local logdir="$HOME/.local/share/flavos/logs"
+    local logfile="$logdir/session-actions.log"
+    
+    if [ ! -d "$logdir" ]; then
+        (umask 077 && mkdir -p "$logdir")
+    fi
+    
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - ACTION: $action - RESULT: $result" >> "$logfile"
+}
+
 if [ "$ACTION" = "session" ]; then
     if [ "$SUB_ACTION" = "logout" ]; then
+        log_action "logout" "Iniciado"
         # Usa primariamente o logind (limpo, destrói TTY visual e volta pro LightDM/TTY1)
         if [ -n "$XDG_SESSION_ID" ]; then
+            log_action "logout" "Tentando loginctl terminate-session"
             loginctl terminate-session "$XDG_SESSION_ID" 2>/dev/null || true
         fi
         
         # Fallback forçado caso logind falhe (mata WM atual, openbox ou wayland compositor)
         if [ "$XDG_SESSION_TYPE" = "x11" ]; then
-            openbox --exit 2>/dev/null || killall openbox 2>/dev/null || true
+            log_action "logout" "Fallback: openbox --exit"
+            openbox --exit 2>/dev/null || true
         else
             # Logout sem DBus: matar sessão atual encerando os processos X11 do usuário
+            log_action "logout" "Fallback: kill -TERM -1"
             kill -TERM -1 2>/dev/null || true 
         fi
         exit 0
 
     elif [ "$SUB_ACTION" = "lock" ]; then
+        log_action "lock" "Delegado para flavos-lock"
         # Delega inteiramente ao wrapper central de lock.
         # Toda lógica de ambiente, design tokens e guards vive em flavos-lock.
         exec /usr/local/bin/flavos-lock
 
+    elif [ "$SUB_ACTION" = "suspend" ]; then
+        log_action "suspend" "Iniciado (lock-before-suspend)"
+        
+        # Inicia o lock em background para suportar i3lock -n e mate-screensaver
+        /usr/local/bin/flavos-lock &
+        LOCK_PID=$!
+        
+        # Aguarda 1.5s (heurística conservadora para o X11 e mate-screensaver renderizar a tela)
+        sleep 1.5
+        
+        # Verifica se o lock falhou rapidamente
+        if ! kill -0 $LOCK_PID 2>/dev/null; then
+            wait $LOCK_PID
+            if [ $? -ne 0 ]; then
+                log_action "suspend" "FALHA: lock retornou erro, abortando suspend"
+                exit 1
+            fi
+        fi
+        
+        log_action "suspend" "Lock validado/ativo, chamando systemctl suspend"
+        systemctl suspend
+        exit 0
+
     elif [ "$SUB_ACTION" = "reboot" ]; then
+        log_action "reboot" "Chamando systemctl reboot"
         systemctl reboot
         exit 0
 
     elif [ "$SUB_ACTION" = "poweroff" ]; then
+        log_action "poweroff" "Chamando systemctl poweroff"
         systemctl poweroff
         exit 0
     else
@@ -91,8 +135,8 @@ if [ "$ACTION" = "launcher" ]; then
         # ── Toggle baseado em PID file — contrato atômico com flavos-launcher ──
         # Razão: pgrep retorna exit 1 (falharia com set -e) e não garante que
         # o processo está visível. O PID file é escrito pelo launcher ao iniciar
-        # e removido ao sair, sendo a fonte de verdade do estado do launcher.
-        LAUNCHER_PID_FILE="/tmp/flavos-launcher.pid"
+        # removido ao sair, sendo a fonte de verdade do estado do launcher.
+        LAUNCHER_PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/flavos-launcher.pid"
 
         if [ -f "$LAUNCHER_PID_FILE" ]; then
             # Lê o PID armazenado

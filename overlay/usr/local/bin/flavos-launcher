@@ -23,7 +23,7 @@ gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import Gtk, Gdk, GLib, Gio, Pango, GdkPixbuf
 
 # ─── Constantes de sistema ────────────────────────────────────────────────────
-PID_FILE       = "/tmp/flavos-launcher.pid"
+PID_FILE       = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "flavos-launcher.pid")
 FOCUS_GUARD_MS = 300   # Janela de proteção contra focus-out transitório do X11
 FADE_TICK_MS   = 16    # ~60fps (não bloqueante, via GLib.timeout_add)
 

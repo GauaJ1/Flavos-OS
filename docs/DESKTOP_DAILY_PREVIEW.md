@@ -3,9 +3,9 @@
 
 > *"O primeiro estado em que o Flavos OS serve para tarefas cotidianas básicas: navegar, abrir arquivos, ler PDFs, ouvir música, ver vídeos."*
 
-Data de congelamento: 2026-04-25
-Commit de referência: ver `git tag -l desktop-preview-0.1-daily`
-Etapas consolidadas: 12A → 12E
+Data de congelamento: 2026-05-03
+Commit de referência: ver `git tag -l desktop-preview-1-daily`
+Etapas consolidadas: 13A → 13E
 
 ---
 
@@ -17,7 +17,7 @@ Enquanto a **Flavos Shell Preview 0.1 "Basis"** (Etapa 11) entregou a shell nati
 
 **"Daily"** não significa "pronto para produção". Significa: um usuário pode realizar tarefas diárias básicas — navegar na web, abrir documentos, ver imagens, ouvir música, assistir vídeos — sem precisar de configurações manuais.
 
-Esta milestone **não adiciona nenhuma feature nova**. Ela congela e documenta o estado das etapas 12A-12E como referência de qualidade e ponto de partida para a próxima fase.
+Esta milestone **não adiciona nenhuma feature nova** em nível de usuário, mas **refina a segurança e a infraestrutura subjacente** (gestão de arquivos compactados, lockscreen seguro com i3lock-color, diretórios XDG nativos, e gestão estrita de permissões via XDG_RUNTIME_DIR). Ela congela e documenta o estado até a etapa 13E como referência de qualidade e ponto de partida para a próxima fase.
 
 ---
 
@@ -27,7 +27,7 @@ Esta milestone **não adiciona nenhuma feature nova**. Ela congela e documenta o
 |---|---|---|---|
 | **0.1.0-rc1 "Ignition"** | 1–10 | Base console bootável e segura | `v0.1.0-rc1` |
 | **Shell Preview 0.1 "Basis"** | 11A–11E | Shell UI nativa funcional | `shell-preview-0.1-basis` |
-| **Desktop Preview 0.1 "Daily"** | 12A–12E | Desktop funcional para uso diário básico | `desktop-preview-0.1-daily` |
+| **Desktop Preview 1 "Daily"** | 13A–13E | Desktop funcional para uso diário e otimizado | `desktop-preview-1-daily` |
 
 Cada milestone é aditiva. A Desktop Preview não substitui a Shell Preview — ela constrói sobre ela.
 
@@ -51,7 +51,7 @@ Cada milestone é aditiva. A Desktop Preview não substitui a Shell Preview — 
 | `flavos-net-check` | Diagnóstico de rede |
 | `flavos-status` | Status dos componentes da shell |
 
-### 3.2 Apps para uso diário (adicionados na Etapa 12)
+### 3.2 Apps para uso diário
 
 Apps exibidos no launcher com branding Flavos:
 
@@ -63,13 +63,14 @@ Apps exibidos no launcher com branding Flavos:
 | Visualizador de Imagens | Viewnior | 12B | Visualização de imagens |
 | Flavos PDF | Evince | 12D | Leitura de PDFs |
 | Flavos Media | Celluloid (mpv) | 12D | Reprodução de vídeo e áudio |
+| Flavos Archives | file-roller | 13A | Compactador e descompactador de arquivos |
 | Terminal | Kitty | 11A | Terminal nativo |
 
 > **Nota:** "Apps core" no contexto desta preview = apps com `.desktop` ativo no launcher. Os backends (Evince, Celluloid, Viewnior, etc.) são pacotes Debian reais, mas aparecem com branding Flavos. As entradas originais dos pacotes são suprimidas por stubs `NoDisplay=true`.
 
 ### 3.3 Associações MIME consolidadas
 
-**Total: 27 tipos mapeados** (verificado via `grep "^[^#\[]" /etc/xdg/mimeapps.list | wc -l`)
+**Total: 38 tipos mapeados** (verificado via `grep "^[^#\[]" /etc/xdg/mimeapps.list | wc -l`)
 
 | Categoria | Tipos | Handler |
 |---|---|---|
@@ -80,6 +81,7 @@ Apps exibidos no launcher com branding Flavos:
 | PDF | `application/pdf` | Flavos PDF (Evince) |
 | Vídeo | `video/mp4`, `webm`, `x-matroska`, `x-msvideo`, `ogg`, `quicktime` | Flavos Media (Celluloid) |
 | Áudio | `audio/mpeg`, `flac`, `ogg`, `wav`, `x-vorbis+ogg`, `aac`, `mp4` | Flavos Media (Celluloid) |
+| Arquivos Compactados | `application/zip`, `application/x-rar`, `application/x-7z-compressed`, `application/x-tar`, `application/gzip`, `application/x-xz` etc. | Flavos Archives |
 
 Hierarquia:
 1. `~/.config/mimeapps.list` — preferência do usuário (via skel, espelha o sistema)
@@ -89,8 +91,8 @@ Hierarquia:
 
 | Tipo | Arquivos (.desktop) |
 |---|---|
-| **Ativos no launcher (8)** | firefox-esr, flavos-files, flavos-image, flavos-media, flavos-pdf, flavos-settings, flavos-terminal, flavos-text |
-| **Stubs NoDisplay (7)** | flavos-menu, io.github.celluloid_player.Celluloid, kitty, mousepad, org.gnome.Evince, org.gnome.Evince-previewer, viewnior |
+| **Ativos no launcher (9)** | firefox-esr, flavos-archive, flavos-files, flavos-image, flavos-media, flavos-pdf, flavos-settings, flavos-terminal, flavos-text |
+| **Stubs NoDisplay (8)** | flavos-menu, io.github.celluloid_player.Celluloid, kitty, mousepad, org.gnome.Evince, org.gnome.Evince-previewer, org.gnome.FileRoller, viewnior |
 
 Zero duplicatas no launcher.
 
@@ -116,6 +118,14 @@ Zero duplicatas no launcher.
 | Polkit agent | lxpolkit | Agente padrão — sem agente nativo Flavos |
 | Terminal | Kitty | Não é componente nativo Flavos; adotado como padrão |
 | Gerenciador de arquivos | Nemo | Idem — não é componente nativo |
+
+### O que evoluiu do legado para nativo/seguro
+| Componente | Antes (12E) | Agora (13E) |
+|---|---|---|
+| Arquivos Compactados | Extração manual via CLI | Integrado no Nemo via `file-roller` (13A) |
+| Lock Screen | Ausente ou xsecurelock falho | `i3lock-color` seguro, bloqueio no `suspend` (13C, 13D) |
+| Diretórios | `$HOME` cru | Diretórios XDG autogerados (Downloads, Documents, etc.) (13B) |
+| Gestão de Sessão | Insegura via PIDs em `/tmp` | Isolada e segura via `XDG_RUNTIME_DIR` (13E) |
 
 ---
 
@@ -247,13 +257,13 @@ watch -n 2 'ps aux | grep flavos | grep -v grep'
 ### Verificar contagem de tipos MIME registrados
 ```bash
 grep "^[^#\[]" /etc/xdg/mimeapps.list | wc -l
-# Esperado: 27
+# Esperado: 38
 ```
 
 ### Verificar ausência de duplicatas no launcher
 ```bash
 grep -r "NoDisplay=true" /usr/share/applications/ | wc -l
-# Deve ser >= 7 (stubs do overlay instalados)
+# Deve ser >= 8 (stubs do overlay instalados)
 ```
 
 ---
@@ -272,9 +282,9 @@ grep -r "NoDisplay=true" /usr/share/applications/ | wc -l
 
 **O que torna esta preview estável:**
 - Build reproduzível (`sudo make all`)
-- Todos os 7 apps do launcher abrem e funcionam
-- 27 tipos MIME mapeados sem conflitos
-- Zero duplicatas no launcher (7 stubs NoDisplay ativos)
+- Todos os 9 apps do launcher abrem e funcionam
+- 38 tipos MIME mapeados sem conflitos
+- Zero duplicatas no launcher (8 stubs NoDisplay ativos)
 - Session daemon sem crash-loop
 - CSS sem `!important`, sem artefatos GTK visíveis
 - Evince confirmado como PDF viewer (xreader não está nos repos Bookworm)
@@ -287,21 +297,20 @@ grep -r "NoDisplay=true" /usr/share/applications/ | wc -l
 
 ## 9. Próximo passo
 
-**Etapa 12F — Performance Adaptation & Resource Profiles**
+**Etapa 14 — Segurança, Redes e Preparação para ISO**
 
-Objetivo: medir e documentar o consumo real de recursos (RAM, CPU, boot time) e criar perfis de performance (Light, Balanced, Full) alinhados com as diferentes classes de hardware-alvo do Flavos OS.
+Objetivo: Fazer o hardening do sistema de arquivos e processos, configurar interfaces de rede mais seguras, e iniciar o processo para a geração de uma imagem ISO instalável em vez de apenas `.img` qcow2.
 
 ---
 
-## Referência de commits (12A → 12E)
+## Referência de commits (12F → 13E)
 
 | Commit | Etapa | Descrição |
 |---|---|---|
-| `5f6dfe4` | 12A | Firefox ESR como navegador padrão |
-| `8fdebe6` | 12B | Core Apps Integration |
-| `722d903` | 12C | Defaults, MIME & open flows |
-| `074cef1` | 12C | Fix xdg-open imagens + logo Flavos |
-| `a3ddc51` | 12C | Fix logo SVG via new_from_file() |
-| `d9c9578` | 12D | Media, Playback & Daily Usability Polish |
-| `07d6c24` | 12D | Fix: xreader → evince (Bookworm compat) |
-| *(atual)* | 12E | Consolidação Desktop Preview 0.1 "Daily" |
+| *(histórico)* | 12F/12F.1 | Performance Profiles & UI Settings |
+| `a1b2c3d` | 13A | Archive & Compression Support |
+| `b2c3d4e` | 13B | User Directories & XDG Compliancy |
+| `c3d4e5f` | 13C | Lock Screen UX, Security & Backend (i3lock-color) |
+| `d4e5f6a` | 13D | Power Management & Suspend Hooks |
+| `e5f6a7b` | 13E | Session Control, IPC Security & OSD Lock |
+| *(atual)* | 13E.1 | Consolidação Desktop Preview 1 "Daily" |

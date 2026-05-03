@@ -35,7 +35,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GLib
 
 # ─── Constantes ───────────────────────────────────────────────────────────────
-OSD_PID_FILE    = "/tmp/flavos-osd.pid"
+OSD_PID_FILE    = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/tmp", "flavos-osd.pid")
 OSD_TIMEOUT_MS  = 1800   # Auto-dismiss para OSD de hardware
 TOAST_TIMEOUT_MS = 3000  # Auto-dismiss para Toast de shell
 

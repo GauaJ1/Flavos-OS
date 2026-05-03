@@ -139,20 +139,29 @@ class PowerMenu(Gtk.Window):
         self.connect("key-press-event", self._on_key)
         self.connect("focus-out-event", lambda w, e: self.destroy())
 
-        # Surface interna — recebe o fundo sólido e bordas via .power-surface
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        vbox.get_style_context().add_class("power-surface")
-        self.add(vbox)
+        self.stack = Gtk.Stack()
+        self.stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.stack.set_transition_duration(150)
+        self.add(self.stack)
+
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.main_box.get_style_context().add_class("power-surface")
+        
+        self.confirm_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.confirm_box.get_style_context().add_class("power-surface")
+
+        self.stack.add_named(self.main_box, "main")
+        self.stack.add_named(self.confirm_box, "confirm")
 
         heading = Gtk.Label(label="ENERGIA", xalign=0)
         heading.get_style_context().add_class("heading")
-        vbox.pack_start(heading, False, False, 0)
+        self.main_box.pack_start(heading, False, False, 0)
 
         actions = [
             ("Bloquear",        None,     "/usr/local/bin/flavos-shellctl session lock"),
             ("Desligar",        "danger", "flavos-shellctl session poweroff"),
             ("Reiniciar",       None,     "flavos-shellctl session reboot"),
-            ("Suspender",       None,     "systemctl suspend"),
+            ("Suspender",       None,     "flavos-shellctl session suspend"),
             ("Encerrar Sessão", None,     "flavos-shellctl session logout"),
         ]
 
@@ -160,20 +169,62 @@ class PowerMenu(Gtk.Window):
             btn = Gtk.Button(label=label)
             if css_class:
                 btn.get_style_context().add_class(css_class)
-            btn.connect("clicked", lambda _w, c=cmd: [run_async(c), self.destroy()])
-            vbox.pack_start(btn, False, False, 0)
+            
+            is_destructive = label in ["Desligar", "Reiniciar", "Encerrar Sessão"]
+            if is_destructive:
+                btn.connect("clicked", lambda _w, l=label, c=cmd, cls=css_class: self._show_confirm(l, c, cls))
+            else:
+                btn.connect("clicked", lambda _w, c=cmd: [run_async(c), self.destroy()])
+            
+            self.main_box.pack_start(btn, False, False, 0)
 
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        vbox.pack_start(sep, False, False, 0)
+        self.main_box.pack_start(sep, False, False, 0)
 
         btn_cancel = Gtk.Button(label="Cancelar")
         btn_cancel.get_style_context().add_class("cancel")
         btn_cancel.connect("clicked", lambda _: self.destroy())
-        vbox.pack_start(btn_cancel, False, False, 0)
+        self.main_box.pack_start(btn_cancel, False, False, 0)
+
+    def _show_confirm(self, action_name, cmd, css_class):
+        # Limpa confirm_box
+        for child in self.confirm_box.get_children():
+            self.confirm_box.remove(child)
+
+        heading = Gtk.Label(label=f"CONFIRMAR AÇÃO", xalign=0)
+        heading.get_style_context().add_class("heading")
+        self.confirm_box.pack_start(heading, False, False, 0)
+
+        msg = Gtk.Label(label=f"Tem certeza que deseja {action_name.lower()}?", xalign=0)
+        msg.get_style_context().add_class("row-label")
+        msg.set_margin_bottom(12)
+        self.confirm_box.pack_start(msg, False, False, 0)
+
+        btn_confirm = Gtk.Button(label="Confirmar")
+        if css_class:
+            btn_confirm.get_style_context().add_class(css_class)
+        else:
+            btn_confirm.get_style_context().add_class("danger")
+        btn_confirm.connect("clicked", lambda _w: [run_async(cmd), self.destroy()])
+        self.confirm_box.pack_start(btn_confirm, False, False, 0)
+
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        self.confirm_box.pack_start(sep, False, False, 0)
+
+        btn_cancel = Gtk.Button(label="Cancelar")
+        btn_cancel.get_style_context().add_class("cancel")
+        btn_cancel.connect("clicked", lambda _: self.stack.set_visible_child_name("main"))
+        self.confirm_box.pack_start(btn_cancel, False, False, 0)
+
+        self.confirm_box.show_all()
+        self.stack.set_visible_child_name("confirm")
 
     def _on_key(self, widget, event):
         if event.keyval == Gdk.KEY_Escape:
-            self.destroy()
+            if self.stack.get_visible_child_name() == "confirm":
+                self.stack.set_visible_child_name("main")
+            else:
+                self.destroy()
             return True
         return False
 

@@ -110,6 +110,11 @@
       <action name="Execute"><command>/usr/local/bin/flavos-osd brightness-down</command></action>
     </keybind>
 
+    <!-- Sleep (Etapa 13D) -->
+    <keybind key="XF86Sleep">
+      <action name="Execute"><command>/usr/local/bin/flavos-shellctl session suspend</command></action>
+    </keybind>
+
     <!-- Power Menu (Etapa 10B) -->
     <keybind key="C-A-Delete">
       <action name="Execute"><command>/usr/local/bin/flavos-power</command></action>
