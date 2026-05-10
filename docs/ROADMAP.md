@@ -17,7 +17,7 @@
 | 11 | Flavos Shell Preview | Shell UI nativa funcional (Basis) | ✅ Completa |
 | 12 | Core Apps & Usability | Navegador, integração de apps, fluxos e refinamento | ✅ Completa |
 | 13 | Archives, Directories & Lock Screen | Compressão, diretórios, lock screen, desktop preview 1 | ✅ Completa |
-| 14A | Build Artifact Hygiene | Artefatos seguros, verificáveis e padronizados | 🟡 Em progresso |
+| 14A | Build Artifact Hygiene | Artefatos seguros, verificáveis e padronizados | ✅ Completa |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
