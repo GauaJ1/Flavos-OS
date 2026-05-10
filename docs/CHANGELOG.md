@@ -1,5 +1,26 @@
 # Changelog — Flavos OS
 
+## Etapa 14E — Live Installer Strategy & Install Payload Model (2026-05-10)
+
+> Estruturação e arquitetura do instalador Live do Flavos OS (foco no modo offline) e modelo do payload.
+> Tag: `14e-installer-strategy`
+
+### Novidades
+
+- **`docs/LIVE_INSTALLER_STRATEGY.md`** — Documento contendo a visão arquitetural do instalador offline que opera a partir do Live Boot, delineando as regras de particionamento, bootloader e isolamento.
+- **`docs/INSTALL_PAYLOAD_MODEL.md`** — Descrição técnica detalhada da cópia via rsync extraindo dados do próprio `filesystem.squashfs`, incluindo caminhos excluídos e requisitos de pós-instalação (chroot).
+- **`scripts/08-flavos-installer-dry-run.sh`** — Ferramenta de simulação ("dry-run") que reconhece discos, tipo de firmware e estado do LiveBoot, plotando um plano de instalação sem executar comandos destrutivos.
+
+### Mudanças
+
+- `ROADMAP.md` e `CHANGELOG.md` — Etapa 14E adicionada como concluída ✅.
+
+### Notas
+
+- O design do instalador segue rigorosamente a segurança offline, com planos para modo NetInstall reservados apenas para o futuro e comandos destrutivos banidos até o refino do particionamento.
+
+---
+
 ## Etapa 14D — Live Boot Prototype Execution & VM Validation (2026-05-10)
 
 > Validação do protótipo Híbrido Live (X11+Picom) com sucesso, isolamento amnésico comprovado e tempos otimizados para 2GB RAM.

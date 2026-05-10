@@ -21,6 +21,7 @@
 | 14B | Hardware Lab Baseline | Documentação, template e diagnóstico para testes em hardware real | ✅ Completa |
 | 14C | Live Boot Strategy & Prototype | Estratégia de hardware legado, rootfs isolado, squashfs (zstd) | ✅ Completa |
 | 14D | Live Boot Prototype Execution & VM Validation | Boot Híbrido, Performance e Estabilidade Validados | ✅ Completa |
+| 14E | Live Installer Strategy & Payload Model | Arquitetura de instalação offline, payload squashfs e dry-run | ✅ Completa |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -135,6 +136,12 @@
 - **Relatório de Validação**: `docs/LIVE_BOOT_VALIDATION_REPORT.md` detalhando as métricas finais (overlay, squashfs, tempos e processos).
 - **Hardening e Refinamentos**: Correção de processos zumbis do `flavos-session-daemon` e aprimoramentos no `flavos-hw-report` (detecção de processos longos e integração PipeWire/Áudio).
 - **Isolamento Confirmado**: Comportamento de amnésia (`nopersistence`) funcional; sem resíduos entre os reboots.
+
+### Etapa 14E — Live Installer Strategy & Install Payload Model ✅
+
+- **Documentação de Estratégia**: `docs/LIVE_INSTALLER_STRATEGY.md` formaliza que o instalador será offline por padrão, usando o conteúdo já presente na ISO (evitando downloads na hora da instalação) e detalhando o fluxo futuro em GUI/TUI, com planejamento futuro para NetInstall.
+- **Modelo do Payload**: `docs/INSTALL_PAYLOAD_MODEL.md` confirma que a instalação usará `rsync` extraindo dados do próprio `filesystem.squashfs`, detalhando as exclusões e ajustes post-install necessários (fstab, machine-id, limpeza de live users).
+- **Dry-Run Script**: `scripts/08-flavos-installer-dry-run.sh` — Ferramenta segura (apenas leitura) que simula o plano de partição, bootloader e transferência para validar o fluxo em ambiente Live e Host sem modificar os discos.
 
 ## Decisões Fixas (Base)
 
