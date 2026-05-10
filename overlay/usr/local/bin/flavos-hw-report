@@ -1,0 +1,253 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════════
+# flavos-hw-report — Diagnóstico de hardware (somente leitura)
+# ═══════════════════════════════════════════════════════════════════
+#
+# Gera um relatório local com informações de hardware, sistema,
+# serviços, processos e logs. Não altera nada, não exige root,
+# não envia dados pela rede.
+#
+# Uso:
+#   flavos-hw-report              → salva em ~/flavos-hardware-report.txt
+#   flavos-hw-report -            → imprime no stdout
+#   flavos-hw-report /caminho     → salva no caminho especificado
+#
+# Segurança:
+#   - Somente leitura (nenhum comando de escrita ou alteração)
+#   - Não coleta senhas, chaves ou tokens
+#   - Não envia nada pela rede
+#   - Se um comando não existir, registra "não disponível"
+#   - Não falha se um comando individual falhar
+# ═══════════════════════════════════════════════════════════════════
+
+set -u
+
+# ── Cores (se terminal suportar) ──────────────────────────────────
+if [ -t 1 ]; then
+    BOLD="\033[1m"
+    GREEN="\033[0;32m"
+    CYAN="\033[0;36m"
+    RESET="\033[0m"
+else
+    BOLD=""
+    GREEN=""
+    CYAN=""
+    RESET=""
+fi
+
+# ── Destino do relatório ──────────────────────────────────────────
+OUTPUT="${1:-${HOME}/flavos-hardware-report.txt}"
+USE_STDOUT=false
+
+if [ "$OUTPUT" = "-" ]; then
+    USE_STDOUT=true
+fi
+
+# ── Funções auxiliares ────────────────────────────────────────────
+section() {
+    local title="$1"
+    if $USE_STDOUT; then
+        printf "\n══════════════════════════════════════════════════════════════\n"
+        printf " %s\n" "$title"
+        printf "══════════════════════════════════════════════════════════════\n\n"
+    else
+        printf "\n══════════════════════════════════════════════════════════════\n" >> "$OUTPUT"
+        printf " %s\n" "$title" >> "$OUTPUT"
+        printf "══════════════════════════════════════════════════════════════\n\n" >> "$OUTPUT"
+    fi
+}
+
+run_cmd() {
+    local label="$1"
+    shift
+    local cmd="$1"
+    shift
+
+    if $USE_STDOUT; then
+        printf "── %s ──\n" "$label"
+        if command -v "$cmd" > /dev/null 2>&1; then
+            "$cmd" "$@" 2>/dev/null || printf "(comando falhou: %s)\n" "$cmd $*"
+        else
+            printf "(não disponível: %s)\n" "$cmd"
+        fi
+        printf "\n"
+    else
+        printf "── %s ──\n" "$label" >> "$OUTPUT"
+        if command -v "$cmd" > /dev/null 2>&1; then
+            "$cmd" "$@" >> "$OUTPUT" 2>/dev/null || printf "(comando falhou: %s)\n" "$cmd $*" >> "$OUTPUT"
+        else
+            printf "(não disponível: %s)\n" "$cmd" >> "$OUTPUT"
+        fi
+        printf "\n" >> "$OUTPUT"
+    fi
+}
+
+run_pipe() {
+    local label="$1"
+    local pipeline="$2"
+
+    if $USE_STDOUT; then
+        printf "── %s ──\n" "$label"
+        eval "$pipeline" 2>/dev/null || printf "(pipeline falhou)\n"
+        printf "\n"
+    else
+        printf "── %s ──\n" "$label" >> "$OUTPUT"
+        eval "$pipeline" >> "$OUTPUT" 2>/dev/null || printf "(pipeline falhou)\n" >> "$OUTPUT"
+        printf "\n" >> "$OUTPUT"
+    fi
+}
+
+# ── Iniciar relatório ─────────────────────────────────────────────
+if ! $USE_STDOUT; then
+    : > "$OUTPUT"
+fi
+
+HEADER="Flavos OS — Hardware Report
+Gerado em: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Hostname:   $(hostname 2>/dev/null || echo 'desconhecido')
+Usuário:    $(whoami 2>/dev/null || echo 'desconhecido')"
+
+if $USE_STDOUT; then
+    printf "%s\n" "$HEADER"
+else
+    printf "%s\n" "$HEADER" > "$OUTPUT"
+fi
+
+# ═══════════════════════════════════════════════════════════════════
+# SISTEMA
+# ═══════════════════════════════════════════════════════════════════
+section "SISTEMA"
+run_cmd "hostnamectl" hostnamectl
+run_cmd "uname -a" uname -a
+run_cmd "os-release" cat /etc/os-release
+
+# ═══════════════════════════════════════════════════════════════════
+# CPU
+# ═══════════════════════════════════════════════════════════════════
+section "CPU"
+run_cmd "lscpu" lscpu
+
+# ═══════════════════════════════════════════════════════════════════
+# MEMÓRIA
+# ═══════════════════════════════════════════════════════════════════
+section "MEMÓRIA"
+run_cmd "free -h" free -h
+run_pipe "Top 15 processos por memória" "ps aux --sort=-%mem | head -15"
+
+# ═══════════════════════════════════════════════════════════════════
+# DISCOS
+# ═══════════════════════════════════════════════════════════════════
+section "DISCOS"
+run_cmd "lsblk" lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL
+run_cmd "df -h" df -h
+
+# ═══════════════════════════════════════════════════════════════════
+# GPU
+# ═══════════════════════════════════════════════════════════════════
+section "GPU"
+run_pipe "GPU (lspci)" "lspci 2>/dev/null | grep -iE 'vga|3d|display'"
+run_pipe "OpenGL info" "glxinfo 2>/dev/null | grep -E 'renderer|OpenGL version|direct rendering' || echo '(glxinfo não disponível)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# REDE
+# ═══════════════════════════════════════════════════════════════════
+section "REDE"
+run_cmd "ip a" ip a
+run_pipe "Rede PCI" "lspci 2>/dev/null | grep -iE 'ethernet|network|wireless'"
+
+# ═══════════════════════════════════════════════════════════════════
+# ÁUDIO
+# ═══════════════════════════════════════════════════════════════════
+section "ÁUDIO"
+run_pipe "Áudio PCI" "lspci 2>/dev/null | grep -iE 'audio'"
+run_pipe "PipeWire" "pw-cli info 2>/dev/null | head -10 || echo '(pw-cli não disponível)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# KERNEL
+# ═══════════════════════════════════════════════════════════════════
+section "KERNEL"
+run_cmd "Kernel" uname -r
+run_pipe "Módulos carregados (top 20)" "lsmod 2>/dev/null | head -20"
+run_pipe "dmesg (últimas 50 linhas)" "dmesg -T 2>/dev/null | tail -50 || journalctl -k -n 50 --no-pager 2>/dev/null"
+
+# ═══════════════════════════════════════════════════════════════════
+# SESSÃO E DISPLAY
+# ═══════════════════════════════════════════════════════════════════
+section "SESSÃO E DISPLAY"
+run_pipe "Display server" "echo \"XDG_SESSION_TYPE=\${XDG_SESSION_TYPE:-desconhecido}\""
+run_pipe "Display" "echo \"DISPLAY=\${DISPLAY:-não definido}\""
+run_pipe "Resolução" "xrandr --current 2>/dev/null | grep -E '\\*|Screen' || echo '(xrandr não disponível)'"
+run_pipe "Compositor (picom)" "pgrep -la picom 2>/dev/null || echo '(picom não encontrado)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# SERVIÇOS
+# ═══════════════════════════════════════════════════════════════════
+section "SERVIÇOS"
+run_pipe "Serviços com falha" "systemctl --failed --no-pager 2>/dev/null || echo '(systemctl não disponível)'"
+run_pipe "Serviços do usuário com falha" "systemctl --user --failed --no-pager 2>/dev/null || echo '(systemctl --user não disponível)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# BOOT TIMING
+# ═══════════════════════════════════════════════════════════════════
+section "BOOT TIMING"
+run_cmd "systemd-analyze" systemd-analyze
+run_pipe "Top 15 units por tempo" "systemd-analyze blame 2>/dev/null | head -15"
+
+# ═══════════════════════════════════════════════════════════════════
+# LOGS RECENTES
+# ═══════════════════════════════════════════════════════════════════
+section "LOGS RECENTES (warnings+)"
+run_pipe "journalctl -b -p warning" "journalctl -b -p warning --no-pager 2>/dev/null | tail -80 || echo '(journalctl não disponível)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# PROCESSOS FLAVOS
+# ═══════════════════════════════════════════════════════════════════
+section "PROCESSOS FLAVOS"
+run_pipe "Processos flavos-*" "ps aux 2>/dev/null | grep -E 'flavos-|picom|openbox|kitty|nemo|firefox' | grep -v grep || echo '(nenhum encontrado)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# PROCESSOS GRÁFICOS
+# ═══════════════════════════════════════════════════════════════════
+section "PROCESSOS GRÁFICOS"
+run_pipe "Processos gráficos" "ps aux 2>/dev/null | grep -E 'Xorg|Xwayland|weston|picom|mutter|openbox|tint2|polybar|dunst' | grep -v grep || echo '(nenhum encontrado)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# LOCK SCREEN STATUS
+# ═══════════════════════════════════════════════════════════════════
+section "LOCK SCREEN"
+run_pipe "mate-screensaver" "pgrep -la mate-screensaver 2>/dev/null || echo '(mate-screensaver não encontrado)'"
+run_pipe "i3lock" "pgrep -la i3lock 2>/dev/null || echo '(i3lock não ativo)'"
+run_pipe "D-Bus screensaver" "dbus-send --session --dest=org.freedesktop.ScreenSaver --type=method_call --print-reply /org/freedesktop/ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null || echo '(D-Bus screensaver não respondeu)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# POWER / SESSION
+# ═══════════════════════════════════════════════════════════════════
+section "POWER / SESSION"
+run_pipe "flavos-power status" "flavos-power --status 2>/dev/null || echo '(flavos-power não disponível ou sem --status)'"
+run_pipe "logind sessions" "loginctl list-sessions --no-pager 2>/dev/null || echo '(loginctl não disponível)'"
+run_pipe "Suspend capability" "loginctl show-seat seat0 -p CanSuspend 2>/dev/null || echo '(não detectável)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# SWAP
+# ═══════════════════════════════════════════════════════════════════
+section "SWAP"
+run_pipe "Swap ativo" "swapon --show 2>/dev/null || cat /proc/swaps 2>/dev/null || echo '(não detectável)'"
+run_pipe "vm.swappiness" "cat /proc/sys/vm/swappiness 2>/dev/null || echo '(não detectável)'"
+run_pipe "zram" "lsblk -o NAME,SIZE,TYPE 2>/dev/null | grep zram || echo '(zram não ativo)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# PERFORMANCE PROFILE
+# ═══════════════════════════════════════════════════════════════════
+section "PERFORMANCE PROFILE"
+run_pipe "Perfil ativo" "flavos-performance-profile 2>/dev/null || echo '(flavos-performance-profile não disponível)'"
+
+# ═══════════════════════════════════════════════════════════════════
+# FIM
+# ═══════════════════════════════════════════════════════════════════
+
+if ! $USE_STDOUT; then
+    printf "\n${GREEN}${BOLD}✓ Relatório salvo em:${RESET} %s\n" "$OUTPUT"
+    printf "  Tamanho: %s\n" "$(du -h "$OUTPUT" 2>/dev/null | cut -f1)"
+    printf "\n  Para visualizar: ${CYAN}cat %s${RESET}\n" "$OUTPUT"
+    printf "  Para compartilhar: ${CYAN}cat %s | nc termbin.com 9999${RESET} (CUIDADO: dados públicos)\n\n" "$OUTPUT"
+fi

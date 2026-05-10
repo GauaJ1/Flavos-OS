@@ -1,5 +1,30 @@
 # Changelog — Flavos OS
 
+## Etapa 14B — Hardware Lab Baseline (2026-05-10)
+
+> Documentação, template e diagnóstico para testes em hardware real.
+> Tag: `14b-hardware-baseline`
+
+### Novidades
+
+- **`docs/HARDWARE_LAB_BASELINE.md`** — Protocolo completo para testes em hardware real: checklist pré-teste, ficha de hardware, checklists de boot/desktop/performance, critérios para 2 GB RAM (LGA 775), plano de risco, fluxo de validação e comandos úteis.
+- **`docs/HARDWARE_TEST_REPORT_TEMPLATE.md`** — Template preenchível para registro padronizado de resultados de teste em hardware real. Inclui seções de identificação, hardware, boot, desktop, performance, bugs, classificação para 2 GB e veredito.
+- **`overlay/usr/local/bin/flavos-hw-report`** — Script de diagnóstico somente leitura. Coleta CPU, RAM, discos, GPU, rede, áudio, kernel, sessão, serviços, logs, swap e performance profile. Não exige root, não altera o sistema, não envia dados pela rede.
+
+### Mudanças
+
+- `README.md` — Links adicionados para Hardware Lab Baseline e Test Report Template.
+- `ROADMAP.md` — Etapa 14A marcada como ✅. Etapa 14B adicionada como ✅.
+- `CHANGELOG.md` — Entrada da 14B adicionada.
+
+### Notas
+
+- O `flavos-hw-report` complementa o `flavos-debug-report` existente, com foco específico em validação de hardware para testes físicos.
+- O fluxo recomendado de teste é: VM → Pendrive → Disco externo → Disco interno de teste.
+- Credenciais DevLocal (`flavos/123`) continuam como risco documentado.
+
+---
+
 ## Etapa 14A — Build Artifact Hygiene & Release Image Safety (2026-05-10)
 
 > Pipeline de release, credenciais isoladas, documentação de artefatos.

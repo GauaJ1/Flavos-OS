@@ -136,6 +136,10 @@ FlavosOS/
 - [Template de Validação](docs/TEST_REPORT_TEMPLATE.md)
 - [Recuperação de Falhas](docs/RECOVERY.md)
 
+### Hardware Lab
+- [Hardware Lab Baseline](docs/HARDWARE_LAB_BASELINE.md)
+- [Hardware Test Report Template](docs/HARDWARE_TEST_REPORT_TEMPLATE.md)
+
 ### Evolução do Projeto
 - [Roadmap](docs/ROADMAP.md)
 - [Changelog](docs/CHANGELOG.md)
@@ -159,6 +163,7 @@ FlavosOS/
 ## Observabilidade
 
 - `flavos-debug-report` — auditoria rápida de CPU, disco, serviços
+- `flavos-hw-report` — diagnóstico de hardware para testes físicos (somente leitura)
 - `flavos-net-check` — diagnóstico de rede e portas
 - Logs da shell nativa: `~/.local/share/flavos/logs/`
 - [RECOVERY_GUIDE](docs/RECOVERY.md) para emergências de boot

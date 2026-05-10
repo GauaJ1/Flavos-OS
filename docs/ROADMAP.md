@@ -18,6 +18,7 @@
 | 12 | Core Apps & Usability | Navegador, integração de apps, fluxos e refinamento | ✅ Completa |
 | 13 | Archives, Directories & Lock Screen | Compressão, diretórios, lock screen, desktop preview 1 | ✅ Completa |
 | 14A | Build Artifact Hygiene | Artefatos seguros, verificáveis e padronizados | ✅ Completa |
+| 14B | Hardware Lab Baseline | Documentação, template e diagnóstico para testes em hardware real | ✅ Completa |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -105,12 +106,19 @@
 - **13D — Power, Logout & Suspend:** ✅ Fluxos centralizados no session daemon, power menu com lock/logout/suspend/shutdown.
 - **13E — Desktop Preview 1 Consolidação:** ✅ Documentação completa, auditoria de consistência, tag `desktop-preview-1-daily`.
 
-### Etapa 14A — Build Artifact Hygiene & Release Image Safety 🟡
+### Etapa 14A — Build Artifact Hygiene & Release Image Safety ✅
 
 - **Pipeline de release:** `make release` gera `.img.xz` + `.sha256` + `manifest.json`.
 - **Credenciais isoladas:** `config/.secrets` (gitignored), com fallback DevLocal.
 - **Documentação:** `docs/RELEASE_ARTIFACTS.md` — o que publicar, riscos, verificação.
 - **Limpeza:** Arquivos residuais removidos, `.gitignore` atualizado.
+
+### Etapa 14B — Hardware Lab Baseline ✅
+
+- **Documentação de laboratório:** `docs/HARDWARE_LAB_BASELINE.md` — checklist pré-teste, ficha de hardware, protocolo de boot/desktop/performance, critérios para 2 GB RAM, plano de risco, notas LGA 775.
+- **Template de relatório:** `docs/HARDWARE_TEST_REPORT_TEMPLATE.md` — formulário padronizado para registro de resultados em hardware real.
+- **Script de diagnóstico:** `overlay/usr/local/bin/flavos-hw-report` — coleta somente leitura de CPU, RAM, discos, GPU, rede, áudio, kernel, sessão, serviços, logs, swap, performance profile. Não exige root, não envia dados.
+- **Fluxo de validação:** VM → Pendrive → Disco externo → Disco interno de teste (nunca disco principal).
 
 ## Decisões Fixas (Base)
 
