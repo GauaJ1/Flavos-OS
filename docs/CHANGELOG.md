@@ -1,5 +1,40 @@
 # Changelog — Flavos OS
 
+## Etapa 14A — Build Artifact Hygiene & Release Image Safety (2026-05-10)
+
+> Pipeline de release, credenciais isoladas, documentação de artefatos.
+> Tag: `14a-artifact-hygiene`
+
+### Novidades
+
+- **`make release`** — novo pipeline que gera `.img.xz` + `.sha256` + `manifest.json`.
+- **`make compress`** — comprime `.img` para `.xz` (xz -9, multi-thread).
+- **`make checksum`** — gera SHA256 do artefato comprimido.
+- **`config/.secrets`** — credenciais movidas para arquivo gitignored, com fallback DevLocal.
+- **`config/.secrets.example`** — template para credenciais personalizadas.
+- **`docs/RELEASE_ARTIFACTS.md`** — documentação completa de artefatos, riscos e verificação.
+
+### Mudanças
+
+- `flavos.conf` — adicionado `RELEASE_VERSION`, `RELEASE_MILESTONE`, `RELEASE_TAG`, `RELEASE_IMAGE_BASENAME`. Credenciais carregadas de `.secrets` com fallback.
+- `99-generate-manifest.sh` — prioriza artefato `.xz`. Manifest inclui `release_artifact` e `raw_image` separados.
+- `Makefile` — 3 novos targets (compress, checksum, release). Help atualizado.
+- `README.md` — milestone atualizado para Desktop Preview 1. Warning de credenciais reforçado (CAUTION).
+- `ROADMAP.md` — adicionadas Etapas 13 e 14A.
+- `.gitignore` — cobre `*.log`, residuais, `config/.secrets`.
+
+### Limpeza
+
+- Removidos do repositório: `esp_files.txt`, `loop_dev.txt`, `arquivo_recebido.txt`, `makeall.log`.
+
+### Riscos Documentados
+
+- Credenciais DevLocal (`flavos/123`) documentadas como risco conhecido.
+- Autologin documentado como limitação da preview.
+- Classificação de segurança: DevLocal / Preview Técnica.
+
+---
+
 ## Flavos Desktop Preview 0.1 "Daily" (2026-04-25)
 
 > Milestone: primeiro desktop funcional para uso diário básico.

@@ -17,3 +17,14 @@ __pycache__/
 *.pyc
 *.pyo
 .agents/
+
+# Logs (residuais de build/debug)
+*.log
+
+# Residuais de sessões de debug
+esp_files.txt
+loop_dev.txt
+arquivo_recebido.txt
+
+# Credenciais (Etapa 14A)
+config/.secrets

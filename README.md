@@ -1,6 +1,6 @@
 # Flavos OS
 
-> **Milestone atual:** Flavos Desktop Preview 0.1 "Daily" + Performance Profiles (12F)
+> **Milestone atual:** Flavos Desktop Preview 1 "Daily" (Etapa 13E)
 > **Base do sistema:** 0.1.0-rc1 (Ignition)
 
 Sistema operacional construído do zero com foco em **idempotência**, **segurança** e **simplicidade**, evoluindo para uma experiência desktop nativa e coerente.
@@ -9,15 +9,15 @@ Sistema operacional construído do zero com foco em **idempotência**, **seguran
 
 ## Status
 
-### Desktop Preview 0.1 "Daily" + 12F _(milestone atual)_
+### Desktop Preview 1 "Daily" _(milestone atual)_
 
-Primeiro desktop funcional para uso diário básico (12A→12E) com sistema formal de perfis de desempenho (12F). Três perfis: Light (2 GB/LGA775), Balanced (padrão), Full (hardware moderno). O sistema serve para tarefas cotidianas sem configuração manual.
+Desktop funcional para uso diário básico com suporte a navegação, gerenciamento de arquivos, PDF, multimídia, compressão e lock screen. Sistema de perfis de desempenho (Light/Balanced/Full).
 
 - **Veredito:** `EXPERIMENTAL ESTÁVEL`
-- **Congelada em:** 2026-04-25
-- **Tag:** `desktop-preview-0.1-daily`
-- **Documentação desktop:** [docs/DESKTOP_PREVIEW_0.1_DAILY.md](docs/DESKTOP_PREVIEW_0.1_DAILY.md)
+- **Tag:** `desktop-preview-1-daily`
+- **Documentação desktop:** [docs/DESKTOP_DAILY_PREVIEW.md](docs/DESKTOP_DAILY_PREVIEW.md)
 - **Documentação performance:** [docs/PERFORMANCE_PROFILES.md](docs/PERFORMANCE_PROFILES.md)
+- **Artefatos de release:** [docs/RELEASE_ARTIFACTS.md](docs/RELEASE_ARTIFACTS.md)
 
 ### Shell Preview 0.1 "Basis" _(milestone anterior)_
 
@@ -86,6 +86,9 @@ make boot-gui   # modo gráfico (shell nativa)
 | `make boot` | Inicia VM (serial) |
 | `make boot-gui` | Inicia VM (gráfico) |
 | `make write-disk DISK=/dev/sdX` | Grava em disco físico (interativo, seguro) |
+| `make compress` | Comprime `.img` → `.img.xz` (xz -9) |
+| `make checksum` | Gera `.img.xz.sha256` |
+| `make release` | Pipeline de release (compress+checksum+manifest) |
 | `make all` | Pipeline completo (sudo) |
 | `make clean` | Remove build/ |
 
@@ -136,6 +139,7 @@ FlavosOS/
 ### Evolução do Projeto
 - [Roadmap](docs/ROADMAP.md)
 - [Changelog](docs/CHANGELOG.md)
+- [Release Artifacts](docs/RELEASE_ARTIFACTS.md)
 
 ---
 
@@ -144,8 +148,11 @@ FlavosOS/
 - **Usuário:** `flavos` / **Senha:** `123`
 - **Elevação:** `sudo` com senha do usuário (root banido da rede)
 
-> [!WARNING]
-> A senha `123` está configurada apenas para **DevLocal**. Esta imagem **não está pronta** para deployment público. Credenciais devem ser rotacionadas antes de qualquer uso em rede não controlada.
+> [!CAUTION]
+> **Credenciais conhecidas.** As senhas acima são DevLocal e estão documentadas publicamente.
+> Esta imagem **NÃO é segura para produção**, redes públicas ou armazenamento de dados sensíveis.
+> Altere as credenciais antes de qualquer uso fora de ambiente controlado.
+> Consulte [docs/RELEASE_ARTIFACTS.md](docs/RELEASE_ARTIFACTS.md) para a classificação de segurança completa.
 
 ---
 

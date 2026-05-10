@@ -16,6 +16,8 @@
 | 10 | Refinamento V1 | Documentação final, testes, limpeza | ✅ Completa |
 | 11 | Flavos Shell Preview | Shell UI nativa funcional (Basis) | ✅ Completa |
 | 12 | Core Apps & Usability | Navegador, integração de apps, fluxos e refinamento | ✅ Completa |
+| 13 | Archives, Directories & Lock Screen | Compressão, diretórios, lock screen, desktop preview 1 | ✅ Completa |
+| 14A | Build Artifact Hygiene | Artefatos seguros, verificáveis e padronizados | 🟡 Em progresso |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -92,6 +94,23 @@
 - **zram:** `systemd-zram-generator` instalado; ativação opcional via `--with-zram` (perfil light).
 - **Firefox Light:** `firefox-light.js` criado; aplica com `--apply-firefox-light` (com backup automático).
 - **Docs:** `docs/PERFORMANCE_PROFILES.md` — viabilidade real em 2 GB, rollback, limitações honestas.
+
+### Etapa 13 — Archives, Directories, Lock Screen & Desktop Preview 1 ✅
+
+> **Milestone:** Flavos Desktop Preview 1 "Daily" — `desktop-preview-1-daily`
+
+- **13A — Flavos Archive Manager:** ✅ File Roller integrado como `flavos-archive`, com stubs NoDisplay e MIME types para compressão.
+- **13B — User Directories & Downloads:** ✅ Diretórios XDG criados via skel, downloads integrados ao Firefox.
+- **13C — Lock Screen:** ✅ mate-screensaver + D-Bus hierárquico, i3lock-color descartado por instabilidade.
+- **13D — Power, Logout & Suspend:** ✅ Fluxos centralizados no session daemon, power menu com lock/logout/suspend/shutdown.
+- **13E — Desktop Preview 1 Consolidação:** ✅ Documentação completa, auditoria de consistência, tag `desktop-preview-1-daily`.
+
+### Etapa 14A — Build Artifact Hygiene & Release Image Safety 🟡
+
+- **Pipeline de release:** `make release` gera `.img.xz` + `.sha256` + `manifest.json`.
+- **Credenciais isoladas:** `config/.secrets` (gitignored), com fallback DevLocal.
+- **Documentação:** `docs/RELEASE_ARTIFACTS.md` — o que publicar, riscos, verificação.
+- **Limpeza:** Arquivos residuais removidos, `.gitignore` atualizado.
 
 ## Decisões Fixas (Base)
 

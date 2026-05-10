@@ -1,14 +1,17 @@
 # Flavos OS — Makefile
 # Orquestrador principal do build.
 # Uso: make [target]
-#   make deps     — Verifica dependências do host
-#   make rootfs   — Gera rootfs via debootstrap
-#   make image    — Cria imagem .img particionada
-#   make install  — Copia rootfs para imagem, instala bootloader
-#   make test     — Executa smoke test offline
-#   make boot     — Inicia QEMU com a imagem
-#   make all      — Pipeline completo (rootfs → image → install → test)
-#   make clean    — Remove build/
+#   make deps      — Verifica dependências do host
+#   make rootfs    — Gera rootfs via debootstrap
+#   make image     — Cria imagem .img particionada
+#   make install   — Copia rootfs para imagem, instala bootloader
+#   make test      — Executa smoke test offline
+#   make boot      — Inicia QEMU com a imagem
+#   make all       — Pipeline completo (rootfs → image → install → test)
+#   make compress  — Comprime .img → .img.xz
+#   make checksum  — Gera .img.xz.sha256
+#   make release   — Pipeline de release (compress → checksum → manifest)
+#   make clean     — Remove build/
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -19,7 +22,12 @@ ROOTFS_DIR   := $(BUILD_DIR)/rootfs
 IMAGE        := $(BUILD_DIR)/flavos.img
 SCRIPTS      := $(PROJECT_ROOT)/scripts
 
-.PHONY: help deps rootfs image install test manifest boot write-disk all clean
+# Release naming (sourced from config/flavos.conf via scripts)
+RELEASE_BASENAME := $(shell bash -c 'source $(PROJECT_ROOT)/config/flavos.conf && echo $$RELEASE_IMAGE_BASENAME')
+RELEASE_XZ       := $(BUILD_DIR)/$(RELEASE_BASENAME).img.xz
+RELEASE_SHA      := $(RELEASE_XZ).sha256
+
+.PHONY: help deps rootfs image install test manifest boot write-disk compress checksum release all clean
 
 help:
 	@echo ""
@@ -35,6 +43,9 @@ help:
 	@echo "    make boot      Inicia VM via QEMU"
 	@echo "    make boot-gui  Inicia VM via QEMU (modo gráfico)"
 	@echo "    make write-disk DISK=/dev/sdX  Grava imagem em disco real (CUIDADO)"
+	@echo "    make compress  Comprime .img → .img.xz (xz -9)"
+	@echo "    make checksum  Gera .img.xz.sha256"
+	@echo "    make release   Pipeline de release (compress+checksum+manifest)"
 	@echo "    make all       Pipeline completo (requer sudo)"
 	@echo "    make clean     Remove artefatos de build"
 	@echo ""
@@ -84,6 +95,37 @@ write-disk:
 all: rootfs image install test manifest
 	@echo ""
 	@echo "=== Build completo. Execute 'make boot' para iniciar a VM. ==="
+	@echo "    Para gerar artefatos de release: make release"
+
+compress:
+	@echo "=== Comprimindo imagem para release ==="
+	@if [ ! -f "$(BUILD_DIR)/flavos-0.1-basis-amd64.img" ]; then \
+		echo "ERRO: Imagem .img não encontrada em $(BUILD_DIR)/. Execute 'make all' primeiro."; \
+		exit 1; \
+	fi
+	@echo "  Fonte: $(BUILD_DIR)/flavos-0.1-basis-amd64.img"
+	@echo "  Destino: $(RELEASE_XZ)"
+	@echo "  Isso pode levar vários minutos..."
+	@xz -9 -T0 --keep --force --stdout "$(BUILD_DIR)/flavos-0.1-basis-amd64.img" > "$(RELEASE_XZ)"
+	@echo "  Comprimido: $$(du -h "$(RELEASE_XZ)" | awk '{print $$1}')"
+
+checksum:
+	@echo "=== Gerando checksum SHA256 ==="
+	@if [ ! -f "$(RELEASE_XZ)" ]; then \
+		echo "ERRO: $(RELEASE_XZ) não encontrado. Execute 'make compress' primeiro."; \
+		exit 1; \
+	fi
+	@cd "$(BUILD_DIR)" && sha256sum "$(RELEASE_BASENAME).img.xz" > "$(RELEASE_BASENAME).img.xz.sha256"
+	@echo "  SHA256: $$(cat "$(RELEASE_SHA)")"
+
+release: compress checksum manifest
+	@echo ""
+	@echo "=== Release artifacts gerados ==="
+	@echo "  Imagem:    $(RELEASE_XZ)"
+	@echo "  Checksum:  $(RELEASE_SHA)"
+	@echo "  Manifest:  $(BUILD_DIR)/flavos-$$(bash -c 'source $(PROJECT_ROOT)/config/flavos.conf && echo $$FLAVOS_VERSION')-manifest.json"
+	@echo ""
+	@echo "  Validar com: cd build && sha256sum -c $(RELEASE_BASENAME).img.xz.sha256"
 
 clean:
 	@echo "Sincronizando IO antes da limpeza..."
