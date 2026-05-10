@@ -19,6 +19,8 @@
 | 13 | Archives, Directories & Lock Screen | Compressão, diretórios, lock screen, desktop preview 1 | ✅ Completa |
 | 14A | Build Artifact Hygiene | Artefatos seguros, verificáveis e padronizados | ✅ Completa |
 | 14B | Hardware Lab Baseline | Documentação, template e diagnóstico para testes em hardware real | ✅ Completa |
+| 14C | Live Boot Strategy & Prototype | Estratégia de hardware legado, rootfs isolado, squashfs (zstd) | ✅ Completa |
+| 14D | Live Boot Prototype Execution & VM Validation | Boot Híbrido, Performance e Estabilidade Validados | ✅ Completa |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -119,6 +121,20 @@
 - **Template de relatório:** `docs/HARDWARE_TEST_REPORT_TEMPLATE.md` — formulário padronizado para registro de resultados em hardware real.
 - **Script de diagnóstico:** `overlay/usr/local/bin/flavos-hw-report` — coleta somente leitura de CPU, RAM, discos, GPU, rede, áudio, kernel, sessão, serviços, logs, swap, performance profile. Não exige root, não envia dados.
 - **Fluxo de validação:** VM → Pendrive → Disco externo → Disco interno de teste (nunca disco principal).
+
+### Etapa 14C — Live Boot Strategy & Prototype Planning ✅
+
+- **Documentação de Estratégia:** `docs/LIVE_BOOT_STRATEGY.md` — Decisão por live-boot + rootfs atual, sem `toram`, overlay capping (512MB/384MB), compressão zstd otimizada, hibridez BIOS/UEFI, segurança amnésica por default.
+- **Plano de Experimento:** `docs/LIVE_BOOT_EXPERIMENT_PLAN.md` — Isolamento seguro em `build/live/`, restrições do protótipo, roteiro de validação futura e integração no pipeline.
+- **Protótipo de Validação:** `scripts/06-create-live-prototype.sh` — Stub que injeta live-boot via chroot, comprime o rootfs via mksquashfs e empacota uma ISO Híbrida usando grub-mkrescue, sem modificar as imagens oficiais do disco.
+
+### Etapa 14D — Live Boot Prototype Execution & VM Validation ✅
+
+- **Validação de Boot**: Sucesso no boot Legacy/UEFI com GRUB visível e carregamento correto do ambiente Híbrido Live (X11 + Picom).
+- **Validação de Performance**: Inicialização do Desktop em ~4.2s. Consumo de RAM otimizado para 2GB (~562MiB em idle). Limits de overlay testados e dentro do previsto.
+- **Relatório de Validação**: `docs/LIVE_BOOT_VALIDATION_REPORT.md` detalhando as métricas finais (overlay, squashfs, tempos e processos).
+- **Hardening e Refinamentos**: Correção de processos zumbis do `flavos-session-daemon` e aprimoramentos no `flavos-hw-report` (detecção de processos longos e integração PipeWire/Áudio).
+- **Isolamento Confirmado**: Comportamento de amnésia (`nopersistence`) funcional; sem resíduos entre os reboots.
 
 ## Decisões Fixas (Base)
 

@@ -1,5 +1,49 @@
 # Changelog — Flavos OS
 
+## Etapa 14D — Live Boot Prototype Execution & VM Validation (2026-05-10)
+
+> Validação do protótipo Híbrido Live (X11+Picom) com sucesso, isolamento amnésico comprovado e tempos otimizados para 2GB RAM.
+> Tag: `14d-live-boot-vm-validation`
+
+### Novidades
+
+- **`docs/LIVE_BOOT_VALIDATION_REPORT.md`** — Relatório detalhado do teste em VM (2GB RAM), registrando consumo em idle (~562MiB), tamanho final da ISO (720M) e tempo de boot (4.27s), além do comportamento de *nopersistence*.
+
+### Mudanças
+
+- `overlay/usr/local/bin/flavos-hw-report` — Otimizado `pgrep -f` para `mate-screensaver` evitando truncamentos, busca ampliada para `Audio|Multimedia|HDA|AC97` via `lspci` na detecção de som e ajuste não-crítico para o PipeWire ausente.
+- `ROADMAP.md` e `CHANGELOG.md` — Marcação da Etapa 14D como concluída ✅.
+
+### Notas
+
+- Zombie process tracking detectou e solucionou pendências do `flavos-session-daemon` em modo Live. O protótipo está validado para uso laboratorial/físico futuro.
+
+---
+
+## Etapa 14C — Live Boot Strategy & Prototype (2026-05-10)
+
+> Estratégia de hardware legado (2GB RAM), proteção de overlay e stub experimental para ISO Live.
+> Tag: `14c-live-boot-prototype`
+
+### Novidades
+
+- **`docs/LIVE_BOOT_STRATEGY.md`** — Documento de arquitetura detalhando: uso do rootfs existente + `live-boot`, banimento do boot param `toram` (para salvar os 2GB RAM), controle rígido de `overlay-size`, adoção de compressão zstd (-Xcompression-level 3 -b 256K) e suporte híbrido BIOS/UEFI.
+- **`docs/LIVE_BOOT_EXPERIMENT_PLAN.md`** — Plano de execução isolada do protótipo para não quebrar o pipeline principal, incluindo roteiro de validação.
+- **`scripts/06-create-live-prototype.sh`** — Script de laboratório stub (execução isolada em `build/live/`) que aplica chroot para instalar live-boot, roda mksquashfs e gera `flavos-live-experiment.iso` empacotado via `grub-mkrescue`.
+
+### Mudanças
+
+- `ROADMAP.md` — Etapa 14C adicionada como ✅.
+- `CHANGELOG.md` — Entrada da 14C adicionada.
+- `README.md` — Links para as documentações do Live Boot e script na árvore adicionados.
+
+### Notas
+
+- O protótipo usa configuração estritamente *amnésica* (`nopersistence`) como precaução de segurança.
+- O script não integra o `make all` e serve exclusivamente para prova de conceito da ISO live em VMs de homologação antes de oficializar o alvo `make live`.
+
+---
+
 ## Etapa 14B — Hardware Lab Baseline (2026-05-10)
 
 > Documentação, template e diagnóstico para testes em hardware real.

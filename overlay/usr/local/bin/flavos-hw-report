@@ -159,8 +159,8 @@ run_pipe "Rede PCI" "lspci 2>/dev/null | grep -iE 'ethernet|network|wireless'"
 # ÁUDIO
 # ═══════════════════════════════════════════════════════════════════
 section "ÁUDIO"
-run_pipe "Áudio PCI" "lspci 2>/dev/null | grep -iE 'audio'"
-run_pipe "PipeWire" "pw-cli info 2>/dev/null | head -10 || echo '(pw-cli não disponível)'"
+run_pipe "Áudio PCI" "lspci 2>/dev/null | grep -iE 'Audio|Multimedia|HDA|AC97'"
+run_pipe "PipeWire" "pw-cli info 2>/dev/null | head -10 || echo '(não instalado/não ativo)'"
 
 # ═══════════════════════════════════════════════════════════════════
 # KERNEL
@@ -215,7 +215,7 @@ run_pipe "Processos gráficos" "ps aux 2>/dev/null | grep -E 'Xorg|Xwayland|west
 # LOCK SCREEN STATUS
 # ═══════════════════════════════════════════════════════════════════
 section "LOCK SCREEN"
-run_pipe "mate-screensaver" "pgrep -la mate-screensaver 2>/dev/null || echo '(mate-screensaver não encontrado)'"
+run_pipe "mate-screensaver" "pgrep -f mate-screensaver 2>/dev/null || echo '(mate-screensaver não encontrado)'"
 run_pipe "i3lock" "pgrep -la i3lock 2>/dev/null || echo '(i3lock não ativo)'"
 run_pipe "D-Bus screensaver" "dbus-send --session --dest=org.freedesktop.ScreenSaver --type=method_call --print-reply /org/freedesktop/ScreenSaver org.freedesktop.ScreenSaver.GetActive 2>/dev/null || echo '(D-Bus screensaver não respondeu)'"
 
@@ -239,7 +239,7 @@ run_pipe "zram" "lsblk -o NAME,SIZE,TYPE 2>/dev/null | grep zram || echo '(zram 
 # PERFORMANCE PROFILE
 # ═══════════════════════════════════════════════════════════════════
 section "PERFORMANCE PROFILE"
-run_pipe "Perfil ativo" "flavos-performance-profile 2>/dev/null || echo '(flavos-performance-profile não disponível)'"
+run_pipe "Perfil ativo" "flavos-performance-profile current 2>/dev/null || echo '(flavos-performance-profile não disponível)'"
 
 # ═══════════════════════════════════════════════════════════════════
 # FIM
