@@ -1,5 +1,84 @@
 # Changelog — Flavos OS
 
+## Etapa 14I — Legacy BIOS / GRUB Support (2026-05-17)
+
+> Implementação de suporte a boot BIOS Legacy (i386-pc) via GRUB, com layout híbrido GPT de 3 partições. Mantém compatibilidade UEFI/systemd-boot no mesmo disco.
+
+### Novo: Layout Híbrido GPT (3 partições)
+
+Migração de 2 para 3 partições em todas as instalações via `flavos-installer-lab`:
+
+| Partição | Tipo | Label | Tamanho | Filesystem |
+|---|---|---|---|---|
+| p1 | EF02 | FLAVOS_BIOSBOOT | 2 MiB | nenhum |
+| p2 | EF00 | FLAVOS_ESP | 512 MiB | FAT32 |
+| p3 | 8304 | FLAVOS_ROOT | restante | ext4 |
+
+- `p1` (EF02) não é formatada — o `grub-install --target=i386-pc` escreve `core.img` diretamente nela.
+- Layout gerado via `sgdisk` com labels explícitas.
+
+### Novo: `install_grub_bios()` em `flavos-installer-lab`
+
+- Valida presença de EF02 via `sgdisk -i 1` antes de qualquer ação.
+- Confirma binários `grub-install`, `grub-mkconfig` e `/usr/lib/grub/i386-pc` no chroot.
+- Cria `/etc/default/grub` mínimo se ausente.
+- Executa `grub-install --target=i386-pc --recheck` sem `--force`.
+- Gera `grub.cfg` via `update-grub` (fallback: `grub-mkconfig`).
+- Valida `grub.cfg` com `grep vmlinuz` antes de concluir.
+
+### Novo: flag `--mode` obrigatória em `install-bootloader`
+
+| Modo | Ação |
+|---|---|
+| `bios` | Instala GRUB i386-pc |
+| `uefi` | Instala systemd-boot (comportamento da 14G) |
+| `both` | Instala ambos (recomendado para laboratório) |
+| `auto` | Detecta `/sys/firmware/efi` automaticamente |
+
+Sem `--mode`, o subcomando aborta com erro explícito.
+
+### Novo: `install_systemd_boot_uefi()` isolada
+
+A lógica UEFI foi extraída para função própria, desacoplada da BIOS. Comportamento idêntico à 14G.
+
+### Pacotes GRUB adicionados a `config/packages.list`
+
+- `grub-pc-bin` — módulos i386-pc para `grub-install`
+- `grub-common` — fornece `grub-mkconfig`
+- `grub2-common` — fornece `update-grub`
+
+> `grub-pc` (meta-pacote) **não incluído** — dispara debconf interativo e quebraria o build.
+
+### Atualizado: `scripts/10-boot-installed-vm.sh`
+
+- Aceita argumento posicional `bios` ou `uefi` (padrão: `uefi`).
+- Modo `bios`: SeaBIOS nativo QEMU, `if=ide` para compatibilidade LGA 775.
+- Modo `uefi`: OVMF com pflash — comportamento da 14G preservado.
+
+### Novos targets no `Makefile`
+
+- `make boot-installed-bios` — inicia VM com SeaBIOS (sem OVMF)
+- `make boot-installed-uefi` — inicia VM com OVMF (explícito)
+- `make boot-installed-vm` — mantido como alias UEFI (retrocompatibilidade)
+
+### Documentação criada
+
+- `docs/INSTALLER_14I_LEGACY_BIOS_GRUB.md` — arquitetura, motivação, fluxo de instalação, validação e limitações conhecidas
+- `docs/INSTALLER_14I_VALIDATION_REPORT.md` — template de relatório de validação com checklists
+
+### Documentação atualizada
+
+- `docs/LIVE_INSTALLER_STRATEGY.md` — Seções 5, 8 e 9 atualizadas: layout híbrido, rsync sem `-X`, modos de bootloader
+
+### Limitações conhecidas (14I)
+
+- Hardware físico permanece bloqueado até validação VM green.
+- EFI Secure Boot não suportado (GRUB i386-pc não usa SB).
+- NVMe em BIOS Legacy não testado — alvo LGA 775 usa SATA.
+- Atualização automática de kernel pode não regenerar `grub.cfg` sem `grub-pc` instalado.
+
+---
+
 ## Etapa 14H.0 — Physical Hardware Triage & Live Media Integrity (2026-05-17)
 
 > Etapa emergencial de triagem de hardware real (LGA 775) e integridade da mídia Live.

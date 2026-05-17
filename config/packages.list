@@ -167,6 +167,14 @@ mate-screensaver-common
 i3lock
 dbus-x11
 
+# ─── Etapa 14I — Legacy BIOS / GRUB Support ───────────────────────────────────
+# GRUB módulos BIOS (i386-pc) para grub-install em hardware Legacy (LGA 775).
+# NÃO instalar grub-pc (meta-pacote com debconf interativo que quebra build).
+# grub-common fornece grub-mkconfig. grub2-common fornece update-grub.
+grub-pc-bin
+grub-common
+grub2-common
+
 # ─── Etapa 14H.0 — Physical Hardware Triage ───────────────────────────────────
 # Teclado TTY: kbd fornece loadkeys para recuperação de layout ABNT no console
 kbd

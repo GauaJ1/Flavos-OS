@@ -21,6 +21,7 @@ DRY_RUN=0
 CONFIRMED=0
 CONFIRMED_MODIFY=0
 ACTION=""
+BOOT_MODE=""
 
 # Diretórios de trabalho seguros
 LAB_RUN_DIR="/run/flavos-installer-lab"
@@ -36,6 +37,7 @@ usage() {
     echo ""
     echo "Opções para payload-sync e install-bootloader:"
     echo "  --target <disco>                       Ex: /dev/vda, /dev/sda"
+    echo "  --mode <modo>                          uefi|bios|both|auto (obrigatório para install-bootloader)"
     echo "  --i-understand-this-erases-target      Confirmação explícita para payload-sync"
     echo "  --i-understand-this-modifies-target    Confirmação explícita para install-bootloader"
     echo ""
@@ -62,6 +64,10 @@ while [[ $# -gt 0 ]]; do
         install-bootloader)
             ACTION="install-bootloader"
             shift
+            ;;
+        --mode)
+            BOOT_MODE="$2"
+            shift 2
             ;;
         --target)
             TARGET="$2"
@@ -118,6 +124,27 @@ require_safe_target_root() {
         /run/flavos-installer-lab/root) ;;
         *) echo "ERRO: TARGET_ROOT inseguro: $TARGET_ROOT"; exit 1 ;;
     esac
+}
+
+detect_firmware_type() {
+    if [ -d /sys/firmware/efi ]; then
+        echo "uefi"
+    else
+        echo "bios"
+    fi
+}
+
+resolve_part_names() {
+    # Popula BIOS_PART, ESP_PART, ROOT_PART com base em TARGET
+    if echo "$TARGET" | grep -qE "nvme|mmcblk"; then
+        BIOS_PART="${TARGET}p1"
+        ESP_PART="${TARGET}p2"
+        ROOT_PART="${TARGET}p3"
+    else
+        BIOS_PART="${TARGET}1"
+        ESP_PART="${TARGET}2"
+        ROOT_PART="${TARGET}3"
+    fi
 }
 
 require_block_device() {
@@ -234,32 +261,34 @@ do_payload_sync() {
 
     trap cleanup EXIT INT TERM
 
-    echo -e "\n${BLUE}[1] Particionando $TARGET (GPT via sgdisk)...${RESET}"
+    echo -e "\n${BLUE}[1] Particionando $TARGET (GPT híbrido 3 partições via sgdisk — 14I)...${RESET}"
     sgdisk --zap-all "$TARGET"
     sgdisk -o "$TARGET"
-    sgdisk -n 1:1MiB:+512MiB -t 1:EF00 -c 1:"FLAVOS_ESP" "$TARGET"
-    sgdisk -n 2:0:0 -t 2:8304 -c 2:"FLAVOS_ROOT" "$TARGET"
+    # p1: BIOS Boot Partition — EF02, 2 MiB, sem filesystem
+    sgdisk -n 1:1MiB:+2MiB   -t 1:EF02 -c 1:"FLAVOS_BIOSBOOT" "$TARGET"
+    # p2: EFI System Partition — EF00, 512 MiB, FAT32
+    sgdisk -n 2:3MiB:+512MiB -t 2:EF00 -c 2:"FLAVOS_ESP"      "$TARGET"
+    # p3: Root — 8304, restante do disco, ext4
+    sgdisk -n 3:0:0           -t 3:8304 -c 3:"FLAVOS_ROOT"     "$TARGET"
     partprobe "$TARGET"
     udevadm settle
     sleep 2
 
-    # Detecção de nome de partição
-    if echo "$TARGET" | grep -qE "nvme|mmcblk|loop"; then
-        ESP_PART="${TARGET}p1"
-        ROOT_PART="${TARGET}p2"
-    else
-        ESP_PART="${TARGET}1"
-        ROOT_PART="${TARGET}2"
-    fi
+    # Detectar nomes das partições
+    BIOS_PART="" ESP_PART="" ROOT_PART=""
+    resolve_part_names
 
-    [ -b "$ESP_PART" ] || { echo "ERRO: Partição ESP não encontrada: $ESP_PART"; exit 1; }
+    [ -b "$BIOS_PART" ] || { echo "ERRO: BIOS Boot Partition não encontrada: $BIOS_PART"; exit 1; }
+    [ -b "$ESP_PART"  ] || { echo "ERRO: Partição ESP não encontrada: $ESP_PART"; exit 1; }
     [ -b "$ROOT_PART" ] || { echo "ERRO: Partição ROOT não encontrada: $ROOT_PART"; exit 1; }
 
-    echo -e "${GREEN}✓ Partições criadas: $ESP_PART (ESP) e $ROOT_PART (Root).${RESET}"
+    echo -e "${GREEN}✓ Partições criadas: $BIOS_PART (BIOS Boot) | $ESP_PART (ESP) | $ROOT_PART (Root).${RESET}"
 
-    echo -e "\n${BLUE}[2] Formatando as partições...${RESET}"
+    echo -e "\n${BLUE}[2] Formatando ESP e Root (BIOS Boot NÃO é formatada)...${RESET}"
     mkfs.vfat -F 32 -n FLAVOS_ESP "$ESP_PART"
     mkfs.ext4 -F -L FLAVOS_ROOT "$ROOT_PART"
+    # BIOS Boot Partition (BIOS_PART) é deixada sem filesystem intencionalmente.
+    # O grub-install --target=i386-pc escreve diretamente nela.
     echo -e "${GREEN}✓ Formatação concluída.${RESET}"
 
     echo -e "\n${BLUE}[3] Preparando montagem em $TARGET_ROOT...${RESET}"
@@ -357,6 +386,141 @@ EOF
     echo -e "Nota: O bootloader NÃO foi instalado nesta etapa (14F)."
 }
 
+# ─── Funções de instalação do bootloader (14I) ───────────────────────────────
+
+install_systemd_boot_uefi() {
+    echo -e "\n${BLUE}[B1] Instalando systemd-boot (UEFI)...${RESET}"
+
+    # bootctl precisa de machine-id não vazio para criar os diretórios na ESP
+    chroot "$TARGET_ROOT" systemd-machine-id-setup || true
+
+    if ! chroot "$TARGET_ROOT" bootctl --esp-path=/boot/efi --no-variables install; then
+        echo -e "${RED}ERRO FATAL: bootctl install falhou! Verifique as mensagens acima.${RESET}"
+        exit 1
+    fi
+
+    # Validar BOOTX64.EFI
+    if [ ! -f "$TARGET_ROOT/boot/efi/EFI/BOOT/BOOTX64.EFI" ]; then
+        echo -e "${RED}ERRO: Fallback BOOTX64.EFI não encontrado após bootctl.${RESET}"
+        exit 1
+    fi
+
+    # Limpar machine-id para que o SO gere um novo no primeiro boot
+    > "$TARGET_ROOT/etc/machine-id"
+
+    echo -e "\n${BLUE}[B2] Copiando Kernel e Initrd para ESP...${RESET}"
+    mkdir -p "$TARGET_ROOT/boot/efi/EFI/flavos"
+
+    VMLINUZ_FILE=$(find "$TARGET_ROOT/boot" -maxdepth 1 -name "vmlinuz-*" -type f | head -n 1)
+    INITRD_FILE=$(find "$TARGET_ROOT/boot" -maxdepth 1 -name "initrd.img-*" -type f | head -n 1)
+
+    if [ -z "$VMLINUZ_FILE" ] || [ -z "$INITRD_FILE" ]; then
+        echo -e "${RED}ERRO: Kernel ou Initrd não encontrados em $TARGET_ROOT/boot.${RESET}"
+        exit 1
+    fi
+
+    VMLINUZ_NAME=$(basename "$VMLINUZ_FILE")
+    INITRD_NAME=$(basename "$INITRD_FILE")
+
+    cp "$VMLINUZ_FILE" "$TARGET_ROOT/boot/efi/EFI/flavos/"
+    cp "$INITRD_FILE"  "$TARGET_ROOT/boot/efi/EFI/flavos/"
+    echo -e "${GREEN}✓ Kernel ($VMLINUZ_NAME) e Initrd ($INITRD_NAME) copiados para a ESP.${RESET}"
+
+    echo -e "\n${BLUE}[B3] Configurando loader.conf e boot entry...${RESET}"
+    mkdir -p "$TARGET_ROOT/boot/efi/loader/entries"
+
+    cat > "$TARGET_ROOT/boot/efi/loader/loader.conf" <<EOF
+default flavos.conf
+timeout 3
+console-mode max
+editor no
+EOF
+
+    ROOT_UUID_UEFI="$(blkid -s UUID -o value "$ROOT_PART")"
+
+    cat > "$TARGET_ROOT/boot/efi/loader/entries/flavos.conf" <<EOF
+title Flavos OS
+linux /EFI/flavos/$VMLINUZ_NAME
+initrd /EFI/flavos/$INITRD_NAME
+options root=UUID=$ROOT_UUID_UEFI rw quiet
+EOF
+
+    echo -e "${GREEN}✓ systemd-boot configurado (UEFI).${RESET}"
+}
+
+install_grub_bios() {
+    echo -e "\n${BLUE}[G1] Validando pré-requisitos do GRUB BIOS (i386-pc)...${RESET}"
+
+    # Validar presença da BIOS Boot Partition (tipo EF02)
+    if ! sgdisk -i 1 "$TARGET" | grep -qi "EF02\|BIOS boot"; then
+        echo -e "${RED}ERRO: Partição 1 não é tipo EF02 (BIOS Boot). Detalhes abaixo:${RESET}"
+        sgdisk -i 1 "$TARGET" || true
+        sgdisk -p "$TARGET" || true
+        exit 1
+    fi
+    echo -e "${GREEN}✓ BIOS Boot Partition EF02 confirmada em ${TARGET}1.${RESET}"
+
+    # Validar binários GRUB dentro do chroot target
+    chroot "$TARGET_ROOT" command -v grub-install >/dev/null 2>&1 || {
+        echo -e "${RED}ERRO: grub-install não encontrado no target (falta grub-pc-bin?).${RESET}"
+        exit 1
+    }
+    chroot "$TARGET_ROOT" command -v grub-mkconfig >/dev/null 2>&1 || {
+        echo -e "${RED}ERRO: grub-mkconfig não encontrado no target (falta grub-common?).${RESET}"
+        exit 1
+    }
+    test -d "$TARGET_ROOT/usr/lib/grub/i386-pc" || {
+        echo -e "${RED}ERRO: Módulos GRUB i386-pc ausentes em /usr/lib/grub/i386-pc.${RESET}"
+        exit 1
+    }
+    echo -e "${GREEN}✓ Binários GRUB e módulos i386-pc verificados.${RESET}"
+
+    # Criar /etc/default/grub mínimo se não existir
+    if [ ! -f "$TARGET_ROOT/etc/default/grub" ]; then
+        echo -e "${CYAN}Criando /etc/default/grub mínimo...${RESET}"
+        cat > "$TARGET_ROOT/etc/default/grub" <<'EOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=3
+GRUB_DISTRIBUTOR="Flavos OS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet"
+GRUB_CMDLINE_LINUX=""
+GRUB_DISABLE_OS_PROBER=true
+EOF
+    fi
+
+    echo -e "\n${BLUE}[G2] Instalando GRUB i386-pc no disco $TARGET...${RESET}"
+    # grub-install com target explícito e --recheck para forçar re-detecção.
+    # Nunca usar --force. Se EF02 não existir, o comando falha de forma controlada.
+    if ! chroot "$TARGET_ROOT" grub-install --target=i386-pc --recheck "$TARGET"; then
+        echo -e "${RED}ERRO FATAL: grub-install --target=i386-pc falhou.${RESET}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ GRUB i386-pc instalado no disco.${RESET}"
+
+    echo -e "\n${BLUE}[G3] Gerando grub.cfg via grub-mkconfig...${RESET}"
+    # Preferir update-grub (wrapper); fallback para grub-mkconfig direto
+    if chroot "$TARGET_ROOT" command -v update-grub >/dev/null 2>&1; then
+        chroot "$TARGET_ROOT" update-grub
+    else
+        chroot "$TARGET_ROOT" grub-mkconfig -o /boot/grub/grub.cfg
+    fi
+
+    # Validar grub.cfg gerado
+    test -d "$TARGET_ROOT/boot/grub" || {
+        echo -e "${RED}ERRO: /boot/grub não encontrado após grub-install.${RESET}"
+        exit 1
+    }
+    test -f "$TARGET_ROOT/boot/grub/grub.cfg" || {
+        echo -e "${RED}ERRO: grub.cfg não foi gerado.${RESET}"
+        exit 1
+    }
+    grep -qEi "vmlinuz|linux" "$TARGET_ROOT/boot/grub/grub.cfg" || {
+        echo -e "${RED}ERRO: grub.cfg não contém referência ao kernel.${RESET}"
+        exit 1
+    }
+    echo -e "${GREEN}✓ grub.cfg gerado e validado com sucesso.${RESET}"
+}
+
 do_install_bootloader() {
     require_root
     require_live_environment
@@ -364,6 +528,27 @@ do_install_bootloader() {
     check_target_sanity
     require_block_device
     require_safe_target_root
+
+    # --mode é obrigatório
+    if [ -z "$BOOT_MODE" ]; then
+        echo -e "${RED}ERRO: --mode é obrigatório para install-bootloader. Use: bios|uefi|both|auto${RESET}"
+        exit 1
+    fi
+
+    # Resolver 'auto' antes de qualquer ação
+    if [ "$BOOT_MODE" = "auto" ]; then
+        BOOT_MODE="$(detect_firmware_type)"
+        echo -e "${CYAN}Firmware detectado: $BOOT_MODE${RESET}"
+    fi
+
+    # Validar modo
+    case "$BOOT_MODE" in
+        bios|uefi|both) ;;
+        *)
+            echo -e "${RED}ERRO: --mode inválido: '$BOOT_MODE'. Modos válidos: bios|uefi|both|auto${RESET}"
+            exit 1
+            ;;
+    esac
 
     if [ "${FLAVOS_INSTALL_LAB_DESTRUCTIVE:-}" != "YES" ]; then
         echo -e "${RED}ERRO: Variável FLAVOS_INSTALL_LAB_DESTRUCTIVE=YES ausente.${RESET}"
@@ -375,7 +560,7 @@ do_install_bootloader() {
         exit 1
     fi
 
-    echo -e "${RED}ATENÇÃO: Você solicitou a instalação do bootloader no disco $TARGET.${RESET}"
+    echo -e "${RED}ATENÇÃO: Instalação do bootloader no disco $TARGET (modo: $BOOT_MODE).${RESET}"
     echo -e "Informações do disco:"
     lsblk -o NAME,SIZE,MODEL "$TARGET"
     echo ""
@@ -387,16 +572,12 @@ do_install_bootloader() {
 
     trap cleanup EXIT INT TERM
 
-    # Detecção de nome de partição
-    if echo "$TARGET" | grep -qE "nvme|mmcblk|loop"; then
-        ESP_PART="${TARGET}p1"
-        ROOT_PART="${TARGET}p2"
-    else
-        ESP_PART="${TARGET}1"
-        ROOT_PART="${TARGET}2"
-    fi
+    # Detectar partições (layout 14I: p1=BIOS Boot, p2=ESP, p3=Root)
+    BIOS_PART="" ESP_PART="" ROOT_PART=""
+    resolve_part_names
 
-    [ -b "$ESP_PART" ] || { echo "ERRO: Partição ESP não encontrada: $ESP_PART"; exit 1; }
+    [ -b "$BIOS_PART" ] || { echo "ERRO: BIOS Boot Partition não encontrada: $BIOS_PART"; exit 1; }
+    [ -b "$ESP_PART"  ] || { echo "ERRO: Partição ESP não encontrada: $ESP_PART"; exit 1; }
     [ -b "$ROOT_PART" ] || { echo "ERRO: Partição ROOT não encontrada: $ROOT_PART"; exit 1; }
 
     echo -e "\n${BLUE}[1] Preparando montagem em $TARGET_ROOT...${RESET}"
@@ -405,77 +586,28 @@ do_install_bootloader() {
     mkdir -p "$TARGET_ROOT/boot/efi"
     mount "$ESP_PART" "$TARGET_ROOT/boot/efi"
 
-    # Bind mounts
     echo -e "\n${BLUE}[2] Montando pseudo-filesystems (bind mounts)...${RESET}"
-    mount --bind /dev "$TARGET_ROOT/dev"
+    mount --bind /dev     "$TARGET_ROOT/dev"
     mount --bind /dev/pts "$TARGET_ROOT/dev/pts"
-    mount --bind /proc "$TARGET_ROOT/proc"
-    mount --bind /sys "$TARGET_ROOT/sys"
-    mount --bind /run "$TARGET_ROOT/run"
+    mount --bind /proc    "$TARGET_ROOT/proc"
+    mount --bind /sys     "$TARGET_ROOT/sys"
+    mount --bind /run     "$TARGET_ROOT/run"
 
-    echo -e "\n${BLUE}[3] Instalando systemd-boot (chroot)...${RESET}"
-    
-    # bootctl precisa de um machine-id não vazio para criar os diretórios na ESP
-    chroot "$TARGET_ROOT" systemd-machine-id-setup || true
+    echo -e "\n${BLUE}[3] Instalando bootloader (modo: $BOOT_MODE)...${RESET}"
+    case "$BOOT_MODE" in
+        bios)
+            install_grub_bios
+            ;;
+        uefi)
+            install_systemd_boot_uefi
+            ;;
+        both)
+            install_grub_bios
+            install_systemd_boot_uefi
+            ;;
+    esac
 
-    if ! chroot "$TARGET_ROOT" bootctl --esp-path=/boot/efi --no-variables install; then
-        echo -e "${RED}ERRO FATAL: bootctl install falhou! Verifique as mensagens acima.${RESET}"
-        exit 1
-    fi
-
-    # Validar BOOTX64.EFI
-    if [ ! -f "$TARGET_ROOT/boot/efi/EFI/BOOT/BOOTX64.EFI" ]; then
-        echo -e "${RED}ERRO: Fallback BOOTX64.EFI não encontrado após a instalação do bootctl.${RESET}"
-        exit 1
-    fi
-
-    # Limpar o machine-id novamente para que o SO gere um novo no primeiro boot
-    > "$TARGET_ROOT/etc/machine-id"
-
-    echo -e "\n${BLUE}[4] Copiando Kernel e Initrd para ESP...${RESET}"
-    mkdir -p "$TARGET_ROOT/boot/efi/EFI/flavos"
-    
-    # Encontrar vmlinuz e initrd no /boot ext4
-    VMLINUZ_FILE=$(find "$TARGET_ROOT/boot" -maxdepth 1 -name "vmlinuz-*" -type f | head -n 1)
-    INITRD_FILE=$(find "$TARGET_ROOT/boot" -maxdepth 1 -name "initrd.img-*" -type f | head -n 1)
-
-    if [ -z "$VMLINUZ_FILE" ] || [ -z "$INITRD_FILE" ]; then
-        echo -e "${RED}ERRO: Kernel ou Initrd não encontrados em /boot.${RESET}"
-        exit 1
-    fi
-
-    VMLINUZ_NAME=$(basename "$VMLINUZ_FILE")
-    INITRD_NAME=$(basename "$INITRD_FILE")
-
-    cp "$VMLINUZ_FILE" "$TARGET_ROOT/boot/efi/EFI/flavos/"
-    cp "$INITRD_FILE" "$TARGET_ROOT/boot/efi/EFI/flavos/"
-
-    echo -e "${GREEN}✓ Kernel ($VMLINUZ_NAME) e Initrd ($INITRD_NAME) copiados para a ESP.${RESET}"
-
-    echo -e "\n${BLUE}[5] Configurando loader e entries...${RESET}"
-    
-    # loader.conf
-    cat > "$TARGET_ROOT/boot/efi/loader/loader.conf" <<EOF
-default flavos.conf
-timeout 3
-console-mode max
-editor no
-EOF
-
-    # Obter UUID da raiz
-    ROOT_UUID="$(blkid -s UUID -o value "$ROOT_PART")"
-
-    # flavos.conf
-    cat > "$TARGET_ROOT/boot/efi/loader/entries/flavos.conf" <<EOF
-title Flavos OS
-linux /EFI/flavos/$VMLINUZ_NAME
-initrd /EFI/flavos/$INITRD_NAME
-options root=UUID=$ROOT_UUID rw quiet
-EOF
-
-    echo -e "${GREEN}✓ Configuração do systemd-boot gerada com sucesso.${RESET}"
-
-    echo -e "\n${BLUE}[6] Configurando Modo Instalado e Marcadores OOBE...${RESET}"
+    echo -e "\n${BLUE}[4] Configurando Modo Instalado e Marcadores OOBE...${RESET}"
     mkdir -p "$TARGET_ROOT/var/lib/flavos"
     mkdir -p "$TARGET_ROOT/etc/flavos"
     touch "$TARGET_ROOT/var/lib/flavos/firstboot-required"
@@ -485,7 +617,7 @@ EOF
     echo -e "\n${GREEN}=================================================${RESET}"
     echo -e "${GREEN}    Flavos OS Bootloader Instalado com Sucesso   ${RESET}"
     echo -e "${GREEN}=================================================${RESET}"
-    echo -e "O disco $TARGET agora possui o bootloader systemd-boot configurado."
+    echo -e "Disco: $TARGET | Modo: $BOOT_MODE"
 }
 
 if [ "$ACTION" = "dry-run" ]; then

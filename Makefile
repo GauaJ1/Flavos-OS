@@ -27,7 +27,7 @@ RELEASE_BASENAME := $(shell bash -c 'source $(PROJECT_ROOT)/config/flavos.conf &
 RELEASE_XZ       := $(BUILD_DIR)/$(RELEASE_BASENAME).img.xz
 RELEASE_SHA      := $(RELEASE_XZ).sha256
 
-.PHONY: help deps rootfs image install test manifest boot boot-gui write-disk compress checksum release all clean live boot-live boot-installed-vm
+.PHONY: help deps rootfs image install test manifest boot boot-gui write-disk compress checksum release all clean live boot-live boot-live-lab boot-installed-vm boot-installed-bios boot-installed-uefi
 
 help:
 	@echo ""
@@ -50,7 +50,9 @@ help:
 	@echo "    make live      Gera a ISO Live experimental (requer sudo)"
 	@echo "    make boot-live Inicia a ISO Live na VM"
 	@echo "    make boot-live-lab Inicia a ISO Live na VM com disco extra para o laboratório de instalação"
-	@echo "    make boot-installed-vm Inicia a VM a partir do disco instalado (UEFI)"
+	@echo "    make boot-installed-vm   Inicia a VM a partir do disco instalado (UEFI, padrão)"
+	@echo "    make boot-installed-uefi Inicia a VM a partir do disco instalado (UEFI explícito)"
+	@echo "    make boot-installed-bios Inicia a VM a partir do disco instalado (BIOS — SeaBIOS, 14I)"
 	@echo "    make clean     Remove artefatos de build"
 	@echo ""
 
@@ -106,7 +108,13 @@ boot-live-lab:
 	@bash $(SCRIPTS)/09-boot-live-install-lab.sh
 
 boot-installed-vm:
-	@bash $(SCRIPTS)/10-boot-installed-vm.sh
+	@bash $(SCRIPTS)/10-boot-installed-vm.sh uefi
+
+boot-installed-uefi:
+	@bash $(SCRIPTS)/10-boot-installed-vm.sh uefi
+
+boot-installed-bios:
+	@bash $(SCRIPTS)/10-boot-installed-vm.sh bios
 
 all: rootfs image install test manifest
 	@echo ""

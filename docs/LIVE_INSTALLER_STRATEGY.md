@@ -32,19 +32,33 @@ Quando implementada, o instalador fará o download de um arquivo `manifest.json`
 2. Particionamento (GPT via `sgdisk` ou `parted`).
 3. Formatação (`mkfs.ext4` e `mkfs.vfat`).
 4. Montagem das partições de destino em `/mnt/flavos-install`.
-5. Cópia dos dados via `rsync -aAXv` do squashfs para o `/mnt`.
+5. Cópia dos dados via `rsync -aH` do squashfs para o `/mnt` (sem `-X` — vide 14H.0).
 6. Bind mounts (`/dev`, `/proc`, `/sys`) para realizar chroot.
 7. Ajustes no chroot (remoção de pacotes live, recriação do initramfs, instalação do bootloader).
 8. Desmontagem e finalização.
 
-## 8. Particionamento Futuro
-O instalador utilizará GPT por padrão.
-- Partição 1: ESP (FAT32, ~512MB)
-- Partição 2: Root (ext4, restante do disco)
-Swap será gerido dinamicamente via `zram` por padrão, em vez de uma partição de swap estática, para preservar a vida útil de SSDs antigos e simplificar o esquema de partições.
+## 8. Particionamento (14I — Layout Híbrido GPT)
+O instalador utiliza GPT por padrão com 3 partições:
 
-## 9. Bootloader Futuro
-A instalação empregará o `systemd-boot` para sistemas UEFI. Para compatibilidade com hardwares LGA 775 estritamente Legacy (BIOS), o instalador precisará futuramente instalar o `grub-pc`. 
+| # | Tipo | Label | Tamanho | Filesystem | Ponto de montagem |
+|---|---|---|---|---|---|
+| p1 | EF02 | FLAVOS_BIOSBOOT | 2 MiB | nenhum | — |
+| p2 | EF00 | FLAVOS_ESP | 512 MiB | FAT32 | /boot/efi |
+| p3 | 8304 | FLAVOS_ROOT | restante | ext4 | / |
+
+- **BIOS Boot Partition (EF02):** Não formatada. O `grub-install --target=i386-pc` escreve o `core.img` diretamente nela em hardware BIOS Legacy.
+- **ESP (EF00):** Usada pelo `systemd-boot` em sistemas UEFI.
+- Swap gerido via `zram`, sem partição estática.
+
+## 9. Bootloader (14I)
+O instalador suporta dois modos via flag `--mode`:
+
+- **`--mode uefi`:** Instala `systemd-boot` na ESP. Requer UEFI.
+- **`--mode bios`:** Instala `grub-pc-bin` (i386-pc) na BIOS Boot Partition. Suporte a hardware LGA 775.
+- **`--mode both`:** Instala ambos no mesmo disco (recomendado para laboratório).
+- **`--mode auto`:** Detecta firmware via `/sys/firmware/efi` e escolhe automaticamente.
+
+O flag `--mode` é **obrigatório** para `install-bootloader`. Sem ele, o comando aborta.
 
 ## 10. Usuário e Senha
 Durante a instalação, o usuário criará suas credenciais finais. O script criará este usuário no sistema de destino (`useradd`, `passwd`), adicionará ao grupo `sudo` (ou `wheel`) e configurará seu diretório `home`.

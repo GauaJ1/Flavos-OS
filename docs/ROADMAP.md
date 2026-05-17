@@ -25,6 +25,7 @@
 | 14F | Live Installer Lab (Payload Sync) | Particionamento, Formatação e Cópia do Sistema Base via rsync | ✅ Completa |
 | 14G | Bootloader Install & First Boot Validation | GRUB no target, boot pós-instalação validado em VM | ✅ Completa |
 | 14H.0 | Physical Hardware Triage & Live Media Integrity | Verificação de mídia, safe graphics, TTY keyboard, rsync fix | 🔄 Em Progresso |
+| 14I | Legacy BIOS / GRUB Support | Layout híbrido EF02+EF00+Root, GRUB i386-pc, --mode bios/uefi/both | 🔄 Em Progresso |
 | 14H | OOBE & Post-Install Hardening | First-boot wizard, remoção de live-user, hardening | ⏳ Pendente |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
@@ -168,11 +169,22 @@
 - **Diagnóstico expandido**: `flavos-hw-report` com USB, DMI/placa-mãe, data/hora e PCI detalhado.
 - **rsync corrigido**: Flag `-X` removida (incompatível com squashfs xattr), usando `-aH`.
 - **Documentação**: Relatório de teste físico, checklist pré-instalação, guias de recuperação TTY, Safe Graphics/VIA e sincronização de relógio.
-- **Status**: Instalação em hardware físico permanece bloqueada até validação completa. BIOS Legacy requer Etapa 14I futura.
+- **Status**: Instalação em hardware físico permanece bloqueada até validação completa. Suporte BIOS Legacy implementado na Etapa 14I.
+
+### Etapa 14I — Legacy BIOS / GRUB Support 🔄
+
+- **Layout híbrido GPT**: Migração de 2 para 3 partições — `EF02` (BIOS Boot, 2 MiB) + `EF00` (ESP, 512 MiB) + `8304` (Root).
+- **GRUB i386-pc**: `install_grub_bios()` valida EF02, confirma binários no chroot, gera `grub.cfg` e valida entrada de kernel.
+- **flag `--mode` obrigatória**: `bios` | `uefi` | `both` | `auto` — sem default, falha explícita se omitido.
+- **systemd-boot desacoplado**: `install_systemd_boot_uefi()` isolada, comportamento da 14G preservado.
+- **Pacotes**: `grub-pc-bin`, `grub-common`, `grub2-common` adicionados ao rootfs. `grub-pc` (debconf) excluído.
+- **QEMU**: `make boot-installed-bios` (SeaBIOS + if=ide) e `make boot-installed-uefi` (OVMF).
+- **Validação VM**: ⏳ Pendente — aguarda execução do fluxo laboratório.
+- **Hardware físico**: Bloqueado até VM green.
 
 ### Etapa 14H — OOBE & Post-Install Hardening (pendente)
 
-- **Dependência**: Requer 14H.0 concluída (hardware validado) e, opcionalmente, 14I (BIOS Legacy).
+- **Dependência**: Requer 14H.0 concluída (hardware validado) e 14I VM-green.
 - **Escopo planejado**: First-boot wizard (hostname, timezone, keyboard, usuário), remoção de live-user, autologin, limpeza pós-instalação.
 
 ## Decisões Fixas (Base)
@@ -180,11 +192,10 @@
 | Aspecto | Decisão |
 |---|---|
 | Abordagem | Debootstrap (Debian Bookworm amd64) |
-| Bootloader | systemd-boot |
-| Firmware | UEFI (OVMF para VM) |
-| Init | systemd |
-| Filesystem | ext4 (root), FAT32 (ESP) |
-| Particionamento | GPT |
+| Bootloader | systemd-boot (UEFI) + GRUB i386-pc (BIOS Legacy, 14I) |
+| Firmware | UEFI (OVMF) + BIOS Legacy (SeaBIOS, LGA 775) |
+| Filesystem | ext4 (root), FAT32 (ESP), sem filesystem (BIOS Boot EF02) |
+| Particionamento | GPT — 3 partições: EF02 + EF00 + Root |
 | Imagem | Raw .img, 2GB |
 | Build | Makefile + bash scripts |
 | Teste | QEMU/KVM |
