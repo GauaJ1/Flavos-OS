@@ -460,20 +460,21 @@ install_grub_bios() {
     fi
     echo -e "${GREEN}✓ BIOS Boot Partition EF02 confirmada em ${TARGET}1.${RESET}"
 
-    # Validar binários GRUB dentro do chroot target
-    chroot "$TARGET_ROOT" command -v grub-install >/dev/null 2>&1 || {
-        echo -e "${RED}ERRO: grub-install não encontrado no target (falta grub-pc-bin?).${RESET}"
+    # Validar binários GRUB — verificação direta no filesystem do host.
+    # NÃO usar 'chroot command -v': chroot mínimo pode não incluir /usr/sbin no PATH.
+    test -f "$TARGET_ROOT/usr/sbin/grub-install" || {
+        echo -e "${RED}ERRO: grub-install não encontrado em /usr/sbin/grub-install no target (falta grub2-common?).${RESET}"
         exit 1
     }
-    chroot "$TARGET_ROOT" command -v grub-mkconfig >/dev/null 2>&1 || {
-        echo -e "${RED}ERRO: grub-mkconfig não encontrado no target (falta grub-common?).${RESET}"
+    test -f "$TARGET_ROOT/usr/sbin/grub-mkconfig" || {
+        echo -e "${RED}ERRO: grub-mkconfig não encontrado em /usr/sbin/grub-mkconfig no target (falta grub-common?).${RESET}"
         exit 1
     }
     test -d "$TARGET_ROOT/usr/lib/grub/i386-pc" || {
-        echo -e "${RED}ERRO: Módulos GRUB i386-pc ausentes em /usr/lib/grub/i386-pc.${RESET}"
+        echo -e "${RED}ERRO: Módulos GRUB i386-pc ausentes em /usr/lib/grub/i386-pc (falta grub-pc-bin?).${RESET}"
         exit 1
     }
-    echo -e "${GREEN}✓ Binários GRUB e módulos i386-pc verificados.${RESET}"
+    echo -e "${GREEN}✓ grub-install, grub-mkconfig e módulos i386-pc verificados.${RESET}"
 
     # Criar /etc/default/grub mínimo se não existir
     if [ ! -f "$TARGET_ROOT/etc/default/grub" ]; then
@@ -489,20 +490,20 @@ EOF
     fi
 
     echo -e "\n${BLUE}[G2] Instalando GRUB i386-pc no disco $TARGET...${RESET}"
-    # grub-install com target explícito e --recheck para forçar re-detecção.
+    # Caminho absoluto /usr/sbin/grub-install — PATH do chroot mínimo não é confiável.
     # Nunca usar --force. Se EF02 não existir, o comando falha de forma controlada.
-    if ! chroot "$TARGET_ROOT" grub-install --target=i386-pc --recheck "$TARGET"; then
+    if ! chroot "$TARGET_ROOT" /usr/sbin/grub-install --target=i386-pc --recheck "$TARGET"; then
         echo -e "${RED}ERRO FATAL: grub-install --target=i386-pc falhou.${RESET}"
         exit 1
     fi
     echo -e "${GREEN}✓ GRUB i386-pc instalado no disco.${RESET}"
 
     echo -e "\n${BLUE}[G3] Gerando grub.cfg via grub-mkconfig...${RESET}"
-    # Preferir update-grub (wrapper); fallback para grub-mkconfig direto
-    if chroot "$TARGET_ROOT" command -v update-grub >/dev/null 2>&1; then
-        chroot "$TARGET_ROOT" update-grub
+    # Caminhos absolutos — PATH do chroot mínimo pode não incluir /usr/sbin.
+    if test -f "$TARGET_ROOT/usr/sbin/update-grub"; then
+        chroot "$TARGET_ROOT" /usr/sbin/update-grub
     else
-        chroot "$TARGET_ROOT" grub-mkconfig -o /boot/grub/grub.cfg
+        chroot "$TARGET_ROOT" /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg
     fi
 
     # Validar grub.cfg gerado
