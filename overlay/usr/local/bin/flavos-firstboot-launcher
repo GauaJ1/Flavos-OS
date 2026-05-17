@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/flavos-firstboot.pid"
+
+# Evita duplicacao (singleton)
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    if kill -0 "$PID" 2>/dev/null; then
+        exit 0
+    fi
+fi
+
+MODE=$(flavos-system-mode)
+
+if [ "$MODE" = "installed-firstboot" ]; then
+    # Registra o proprio PID (ou exec flavos-firstboot guardaria o dele, mas o python vai rodar filho, 
+    # entao travamos pelo launcher)
+    echo $$ > "$PID_FILE"
+    flavos-firstboot
+    rm -f "$PID_FILE"
+fi

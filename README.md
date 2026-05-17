@@ -108,7 +108,8 @@ FlavosOS/
 │   ├── 01-create-rootfs.sh
 │   ├── 02-create-image.sh
 │   ├── 03-install-system.sh
-│   └── 04-boot-vm.sh
+│   ├── 04-boot-vm.sh
+│   └── 06-create-live-prototype.sh
 ├── overlay/
 │   ├── etc/              # Identidade do OS (hostname, os-release, etc)
 │   ├── usr/local/bin/    # Shell nativa (flavos-panel, taskbar, launcher, osd…)
@@ -139,6 +140,10 @@ FlavosOS/
 ### Hardware Lab
 - [Hardware Lab Baseline](docs/HARDWARE_LAB_BASELINE.md)
 - [Hardware Test Report Template](docs/HARDWARE_TEST_REPORT_TEMPLATE.md)
+
+### Live Environment
+- [Live Boot Strategy](docs/LIVE_BOOT_STRATEGY.md)
+- [Live Boot Experiment Plan](docs/LIVE_BOOT_EXPERIMENT_PLAN.md)
 
 ### Evolução do Projeto
 - [Roadmap](docs/ROADMAP.md)

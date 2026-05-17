@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+#
+# flavos-safe-graphics-setup
+# Etapa 14H.0 — Safe Graphics Runtime Setup
+#
+# Lê parâmetros de boot (/proc/cmdline) e, se encontrar flavos.graphics=<driver>,
+# cria um xorg.conf.d temporário para forçar o driver especificado.
+#
+# Este script deve rodar ANTES do Xorg (via .xinitrc, autostart, ou getty wrapper).
+# Não roda no sistema instalado sem parâmetro explícito.
+#
+# Parâmetros de boot reconhecidos:
+#   flavos.graphics=openchrome
+#   flavos.graphics=vesa
+#   flavos.graphics=fbdev
+#   flavos.graphics=safe   (equivalente a vesa)
+
+set -euo pipefail
+
+XORG_CONF_DIR="/etc/X11/xorg.conf.d"
+CONF_FILE="${XORG_CONF_DIR}/20-flavos-safe-graphics.conf"
+CMDLINE=$(cat /proc/cmdline 2>/dev/null || echo "")
+
+# Extrair parâmetro flavos.graphics=
+GRAPHICS_MODE=""
+for param in $CMDLINE; do
+    case "$param" in
+        flavos.graphics=*)
+            GRAPHICS_MODE="${param#flavos.graphics=}"
+            ;;
+    esac
+done
+
+# Se não há parâmetro, sair silenciosamente
+if [ -z "$GRAPHICS_MODE" ]; then
+    exit 0
+fi
+
+echo "[flavos-safe-graphics-setup] Modo detectado: $GRAPHICS_MODE"
+
+# Criar diretório se não existir
+mkdir -p "$XORG_CONF_DIR"
+
+case "$GRAPHICS_MODE" in
+    openchrome)
+        cat > "$CONF_FILE" << 'EOF'
+# Gerado automaticamente por flavos-safe-graphics-setup
+# Modo: VIA/OpenChrome (hardware antigo)
+Section "Device"
+    Identifier "Flavos VIA OpenChrome"
+    Driver "openchrome"
+    Option "NoAccel" "true"
+EndSection
+
+Section "Screen"
+    Identifier "Screen0"
+    Device "Flavos VIA OpenChrome"
+    DefaultDepth 16
+    SubSection "Display"
+        Depth 16
+        Modes "1024x768" "800x600"
+    EndSubSection
+EndSection
+EOF
+        echo "[flavos-safe-graphics-setup] Configuração OpenChrome aplicada."
+        ;;
+
+    vesa|safe)
+        cat > "$CONF_FILE" << 'EOF'
+# Gerado automaticamente por flavos-safe-graphics-setup
+# Modo: VESA (fallback genérico)
+Section "Device"
+    Identifier "Flavos VESA"
+    Driver "vesa"
+EndSection
+EOF
+        echo "[flavos-safe-graphics-setup] Configuração VESA aplicada."
+        ;;
+
+    fbdev)
+        cat > "$CONF_FILE" << 'EOF'
+# Gerado automaticamente por flavos-safe-graphics-setup
+# Modo: Framebuffer (fallback mínimo)
+Section "Device"
+    Identifier "Flavos FBDEV"
+    Driver "fbdev"
+    Option "fbdev" "/dev/fb0"
+EndSection
+EOF
+        echo "[flavos-safe-graphics-setup] Configuração FBDEV aplicada."
+        ;;
+
+    *)
+        echo "[flavos-safe-graphics-setup] AVISO: Modo desconhecido '$GRAPHICS_MODE'. Ignorando."
+        exit 0
+        ;;
+esac
+
+# Remover configuração ao desligar (só em Live)
+if [ -d "/run/live/medium" ] || [ -d "/lib/live/mount/medium" ]; then
+    # Em Live, a config é efêmera de qualquer forma
+    echo "[flavos-safe-graphics-setup] Ambiente Live: config será descartada no reboot."
+fi

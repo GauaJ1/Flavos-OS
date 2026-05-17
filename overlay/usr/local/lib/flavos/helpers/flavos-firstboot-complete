@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ $# -gt 0 ]; then
+    echo "Erro: Este helper nao aceita argumentos."
+    exit 1
+fi
+
+if [ -f "/var/lib/flavos/firstboot-required" ]; then
+    rm -f "/var/lib/flavos/firstboot-required"
+fi
+touch "/var/lib/flavos/firstboot-complete"

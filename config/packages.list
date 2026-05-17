@@ -30,6 +30,7 @@ procps
 openssh-server
 sudo
 kmod
+pciutils
 
 # Rede
 iproute2
@@ -95,6 +96,7 @@ gir1.2-wnck-3.0
 dunst
 libnotify-bin
 alsa-utils
+pipewire-bin
 pulseaudio
 pulseaudio-utils
 network-manager
@@ -164,3 +166,12 @@ mate-screensaver
 mate-screensaver-common
 i3lock
 dbus-x11
+
+# ─── Etapa 14H.0 — Physical Hardware Triage ───────────────────────────────────
+# Teclado TTY: kbd fornece loadkeys para recuperação de layout ABNT no console
+kbd
+console-setup
+keyboard-configuration
+# Diagnóstico de hardware antigo (LGA 775, VIA, etc.)
+usbutils
+dmidecode

@@ -27,7 +27,7 @@ RELEASE_BASENAME := $(shell bash -c 'source $(PROJECT_ROOT)/config/flavos.conf &
 RELEASE_XZ       := $(BUILD_DIR)/$(RELEASE_BASENAME).img.xz
 RELEASE_SHA      := $(RELEASE_XZ).sha256
 
-.PHONY: help deps rootfs image install test manifest boot write-disk compress checksum release all clean
+.PHONY: help deps rootfs image install test manifest boot boot-gui write-disk compress checksum release all clean live boot-live boot-installed-vm
 
 help:
 	@echo ""
@@ -47,6 +47,10 @@ help:
 	@echo "    make checksum  Gera .img.xz.sha256"
 	@echo "    make release   Pipeline de release (compress+checksum+manifest)"
 	@echo "    make all       Pipeline completo (requer sudo)"
+	@echo "    make live      Gera a ISO Live experimental (requer sudo)"
+	@echo "    make boot-live Inicia a ISO Live na VM"
+	@echo "    make boot-live-lab Inicia a ISO Live na VM com disco extra para o laboratório de instalação"
+	@echo "    make boot-installed-vm Inicia a VM a partir do disco instalado (UEFI)"
 	@echo "    make clean     Remove artefatos de build"
 	@echo ""
 
@@ -92,6 +96,18 @@ write-disk:
 	fi
 	@sudo bash $(SCRIPTS)/05-write-to-disk.sh --disk $(DISK)
 
+live:
+	@sudo bash $(SCRIPTS)/06-create-live-prototype.sh
+
+boot-live:
+	@bash $(SCRIPTS)/07-boot-live-vm.sh bios
+
+boot-live-lab:
+	@bash $(SCRIPTS)/09-boot-live-install-lab.sh
+
+boot-installed-vm:
+	@bash $(SCRIPTS)/10-boot-installed-vm.sh
+
 all: rootfs image install test manifest
 	@echo ""
 	@echo "=== Build completo. Execute 'make boot' para iniciar a VM. ==="
@@ -133,8 +149,8 @@ clean:
 	@echo "Removendo artefatos de build..."
 	@if mountpoint -q "$(BUILD_DIR)/mnt_root" 2>/dev/null; then sudo umount "$(BUILD_DIR)/mnt_root" || sudo umount -l "$(BUILD_DIR)/mnt_root"; fi
 	@if mountpoint -q "$(BUILD_DIR)/mnt_esp" 2>/dev/null; then sudo umount "$(BUILD_DIR)/mnt_esp" || sudo umount -l "$(BUILD_DIR)/mnt_esp"; fi
-	@# Desmontar qualquer coisa dentro do rootfs (dev, proc, sys, run)
-	@for mp in $(ROOTFS_DIR)/run $(ROOTFS_DIR)/sys $(ROOTFS_DIR)/proc $(ROOTFS_DIR)/dev/pts $(ROOTFS_DIR)/dev; do \
+	@# Desmontar qualquer coisa dentro do rootfs (dev, proc, sys, run) e do rootfs_stage
+	@for mp in $(ROOTFS_DIR)/run $(ROOTFS_DIR)/sys $(ROOTFS_DIR)/proc $(ROOTFS_DIR)/dev/pts $(ROOTFS_DIR)/dev $(BUILD_DIR)/live/rootfs_stage/run $(BUILD_DIR)/live/rootfs_stage/sys $(BUILD_DIR)/live/rootfs_stage/proc $(BUILD_DIR)/live/rootfs_stage/dev/pts $(BUILD_DIR)/live/rootfs_stage/dev; do \
 		if mountpoint -q "$$mp" 2>/dev/null; then sudo umount "$$mp" || sudo umount -l "$$mp"; fi; \
 	done
 	@# Desanexar loop devices associados à imagem

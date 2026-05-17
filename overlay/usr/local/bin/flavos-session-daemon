@@ -11,6 +11,7 @@ import os
 import shutil
 
 processes = {}
+ff_processes = []
 
 # Pilares visuais supervisionados (watchdog revive se morrerem)
 COMMANDS = {
@@ -28,6 +29,7 @@ COMMANDS = {
 FIRE_AND_FORGET = {
     "xcape": ["xcape", "-e", "Super_L=Alt_L|F1"],
     "mate_screensaver": ["mate-screensaver"],
+    "firstboot": ["flavos-firstboot-launcher"],
 }
 
 def spawn(name):
@@ -48,11 +50,12 @@ def spawn(name):
 def spawn_fire_and_forget(name):
     """Inicia processo que faz fork interno. Não será supervisionado."""
     print(f"[flavos-shell] Fire-and-forget: {name}", flush=True)
-    subprocess.Popen(
+    p = subprocess.Popen(
         FIRE_AND_FORGET[name],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
+    ff_processes.append(p)
 
 def spawn_delayed(name, delay=2.0):
     """Inicia um node visual com atraso para garantir que X11/WM subiu."""
@@ -118,7 +121,7 @@ if __name__ == "__main__":
         except Exception as _e:
             print(f"[flavos-shell] rc.xml sync falhou (não fatal): {_e}", flush=True)
         try:
-            subprocess.Popen(
+            subprocess.run(
                 ["openbox", "--reconfigure"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -137,3 +140,8 @@ if __name__ == "__main__":
              if processes.get(name) and processes[name].poll() is not None:
                  print(f"[flavos-shell] Node morta ({name}). Revivendo...", flush=True)
                  spawn(name)
+
+        # Reap (recolher) filhos "fire-and-forget" que possam ter terminado
+        for p in ff_processes.copy():
+            if p.poll() is not None:
+                ff_processes.remove(p)

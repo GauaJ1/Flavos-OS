@@ -1,0 +1,500 @@
+#!/usr/bin/env bash
+#
+# flavos-installer-lab
+# Etapa 14F — Flavos OS Live Installer Lab (Payload Sync)
+#
+# IMPORTANTE: Este script realiza particionamento, formatação e 
+# sincronização via rsync. As proteções abaixo são rigorosas.
+
+set -euo pipefail
+
+# Cores
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+BLUE='\033[1;34m'
+YELLOW='\033[1;33m'
+CYAN='\033[1;36m'
+RESET='\033[0m'
+
+TARGET=""
+DRY_RUN=0
+CONFIRMED=0
+CONFIRMED_MODIFY=0
+ACTION=""
+
+# Diretórios de trabalho seguros
+LAB_RUN_DIR="/run/flavos-installer-lab"
+TARGET_ROOT="${LAB_RUN_DIR}/root"
+
+usage() {
+    echo "Uso: flavos-installer-lab [ACAO] [OPCOES]"
+    echo ""
+    echo "Ações:"
+    echo "  --dry-run      Simula as verificações e lista os discos (como na 14E)"
+    echo "  payload-sync   Executa a sincronização destrutiva (requer target e confirmação)"
+    echo "  install-bootloader  Instala e configura o bootloader no target (requer target e confirmação)"
+    echo ""
+    echo "Opções para payload-sync e install-bootloader:"
+    echo "  --target <disco>                       Ex: /dev/vda, /dev/sda"
+    echo "  --i-understand-this-erases-target      Confirmação explícita para payload-sync"
+    echo "  --i-understand-this-modifies-target    Confirmação explícita para install-bootloader"
+    echo ""
+    echo "Variável obrigatória para payload-sync e install-bootloader:"
+    echo "  FLAVOS_INSTALL_LAB_DESTRUCTIVE=YES"
+    exit 1
+}
+
+if [ $# -eq 0 ]; then
+    usage
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run)
+            DRY_RUN=1
+            ACTION="dry-run"
+            shift
+            ;;
+        payload-sync)
+            ACTION="payload-sync"
+            shift
+            ;;
+        install-bootloader)
+            ACTION="install-bootloader"
+            shift
+            ;;
+        --target)
+            TARGET="$2"
+            shift 2
+            ;;
+        --i-understand-this-erases-target)
+            CONFIRMED=1
+            shift
+            ;;
+        --i-understand-this-modifies-target)
+            CONFIRMED_MODIFY=1
+            shift
+            ;;
+        *)
+            echo -e "${RED}Opção desconhecida: $1${RESET}"
+            usage
+            ;;
+    esac
+done
+
+require_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo -e "${RED}ERRO: Este script deve ser executado como root.${RESET}"
+        exit 1
+    fi
+}
+
+require_live_environment() {
+    if [ ! -d "/run/live/medium" ] && [ ! -d "/lib/live/mount/medium" ]; then
+        echo -e "${RED}ERRO: O script só pode ser executado dentro do Live Boot.${RESET}"
+        exit 1
+    fi
+}
+
+require_vm() {
+    local VIRT
+    if command -v systemd-detect-virt >/dev/null; then
+        VIRT=$(systemd-detect-virt || true)
+        if [ "$VIRT" != "kvm" ] && [ "$VIRT" != "qemu" ] && [ "$VIRT" != "oracle" ]; then
+            echo -e "${RED}ERRO: Este laboratório só permite execução dentro de VM (QEMU/KVM/VBox). Detectado: ${VIRT:-none}${RESET}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}AVISO: systemd-detect-virt não encontrado, não é possível validar VM com segurança absoluta.${RESET}"
+        echo -e "${RED}ERRO: Abortando por precaução.${RESET}"
+        exit 1
+    fi
+}
+
+require_safe_target_root() {
+    [ -n "${TARGET_ROOT:-}" ] || { echo "ERRO: TARGET_ROOT vazio"; exit 1; }
+    [ "$TARGET_ROOT" != "/" ] || { echo "ERRO: TARGET_ROOT não pode ser /"; exit 1; }
+    case "$TARGET_ROOT" in
+        /run/flavos-installer-lab/root) ;;
+        *) echo "ERRO: TARGET_ROOT inseguro: $TARGET_ROOT"; exit 1 ;;
+    esac
+}
+
+require_block_device() {
+    [ -b "$TARGET" ] || { echo "ERRO: target não é block device: $TARGET"; exit 1; }
+    case "$TARGET" in
+        /dev/vd*|/dev/sd*|/dev/nvme*n*|/dev/mmcblk*) ;;
+        *) echo "ERRO: target fora do padrão permitido: $TARGET"; exit 1 ;;
+    esac
+}
+
+check_target_sanity() {
+    if [ -z "$TARGET" ]; then
+        echo -e "${RED}ERRO: Nenhum --target especificado.${RESET}"
+        exit 1
+    fi
+    if [ "$TARGET" = "/dev/sr0" ]; then
+        echo -e "${RED}ERRO: O target não pode ser sr0 (CD-ROM).${RESET}"
+        exit 1
+    fi
+    if echo "$TARGET" | grep -q "loop"; then
+        echo -e "${RED}ERRO: O target não pode ser um loop device.${RESET}"
+        exit 1
+    fi
+    if lsblk -no MOUNTPOINT "$TARGET" | grep -q "/"; then
+        echo -e "${RED}ERRO: O target ou suas partições já estão montados.${RESET}"
+        exit 1
+    fi
+    # Evitar o disco da live (geralmente /run/live/medium)
+    local LIVE_DISK
+    LIVE_DISK=$(findmnt -n -o SOURCE /run/live/medium || true)
+    if [ -n "$LIVE_DISK" ]; then
+        # Ex: /dev/vda1 -> /dev/vda
+        LIVE_DEV=$(lsblk -no PKNAME "$LIVE_DISK" | head -n1 || echo "$LIVE_DISK")
+        if [ -z "$LIVE_DEV" ]; then
+             LIVE_DEV=$(echo "$LIVE_DISK" | sed 's/[0-9]*//g')
+        fi
+        if [ "/dev/$LIVE_DEV" = "$TARGET" ] || [ "$LIVE_DISK" = "$TARGET" ]; then
+            echo -e "${RED}ERRO: O target parece ser o disco da Live ISO ($LIVE_DISK).${RESET}"
+            exit 1
+        fi
+    fi
+
+    local SIZE_BYTES
+    SIZE_BYTES=$(lsblk -nb -o SIZE "$TARGET" | head -n1)
+    local MIN_SIZE=$(( 5 * 1024 * 1024 * 1024 )) # 5GB
+    local MAX_SIZE=$(( 50 * 1024 * 1024 * 1024 )) # 50GB
+    if [ "$SIZE_BYTES" -lt $MIN_SIZE ] || [ "$SIZE_BYTES" -gt $MAX_SIZE ]; then
+        echo -e "${RED}ERRO: Tamanho do disco fora do limite de laboratório (5GB - 50GB).${RESET}"
+        exit 1
+    fi
+}
+
+cleanup() {
+    set +e
+    sync
+    echo -e "${CYAN}[CLEANUP] Desmontando partições e limpando diretórios temporários...${RESET}"
+    mountpoint -q "$TARGET_ROOT/dev/pts" && umount "$TARGET_ROOT/dev/pts"
+    mountpoint -q "$TARGET_ROOT/dev" && umount "$TARGET_ROOT/dev"
+    mountpoint -q "$TARGET_ROOT/proc" && umount "$TARGET_ROOT/proc"
+    mountpoint -q "$TARGET_ROOT/sys" && umount "$TARGET_ROOT/sys"
+    mountpoint -q "$TARGET_ROOT/run" && umount "$TARGET_ROOT/run"
+    mountpoint -q "$TARGET_ROOT/boot/efi" && umount "$TARGET_ROOT/boot/efi"
+    mountpoint -q "$TARGET_ROOT" && umount "$TARGET_ROOT"
+    
+    rmdir "$TARGET_ROOT" 2>/dev/null || true
+    rmdir "$LAB_RUN_DIR" 2>/dev/null || true
+    echo -e "${GREEN}✓ Cleanup finalizado.${RESET}"
+}
+
+do_dry_run() {
+    echo -e "${BLUE}=================================================${RESET}"
+    echo -e "${CYAN}    Flavos OS Installer - TUI Dry Run (14F)      ${RESET}"
+    echo -e "${BLUE}=================================================${RESET}"
+    echo -e "MODO: ${YELLOW}Simulação (Somente Leitura)${RESET}"
+    
+    echo -e "\n${BLUE}[1] Discos Disponíveis (lsblk):${RESET}"
+    lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL,SERIAL
+    
+    echo -e "\n${BLUE}[2] Payload detectado:${RESET}"
+    findmnt -t squashfs
+    
+    echo -e "\nPara testar a instalação real, use:"
+    echo -e "  sudo FLAVOS_INSTALL_LAB_DESTRUCTIVE=YES flavos-installer-lab payload-sync --target /dev/vdx --i-understand-this-erases-target"
+    exit 0
+}
+
+do_payload_sync() {
+    require_root
+    require_live_environment
+    require_vm
+    check_target_sanity
+    require_block_device
+    require_safe_target_root
+
+    if [ "${FLAVOS_INSTALL_LAB_DESTRUCTIVE:-}" != "YES" ]; then
+        echo -e "${RED}ERRO: Variável FLAVOS_INSTALL_LAB_DESTRUCTIVE=YES ausente.${RESET}"
+        exit 1
+    fi
+
+    if [ "$CONFIRMED" -ne 1 ]; then
+        echo -e "${RED}ERRO: Flag --i-understand-this-erases-target ausente.${RESET}"
+        exit 1
+    fi
+
+    echo -e "${RED}ATENÇÃO: Você solicitou a instalação no disco $TARGET.${RESET}"
+    echo -e "Informações do disco:"
+    lsblk -o NAME,SIZE,MODEL "$TARGET"
+    echo ""
+    read -p "Digite exatamente 'ERASE $TARGET' para continuar: " USER_CONFIRM
+    if [ "$USER_CONFIRM" != "ERASE $TARGET" ]; then
+        echo -e "${RED}Confirmação incorreta. Abortando.${RESET}"
+        exit 1
+    fi
+
+    trap cleanup EXIT INT TERM
+
+    echo -e "\n${BLUE}[1] Particionando $TARGET (GPT via sgdisk)...${RESET}"
+    sgdisk --zap-all "$TARGET"
+    sgdisk -o "$TARGET"
+    sgdisk -n 1:1MiB:+512MiB -t 1:EF00 -c 1:"FLAVOS_ESP" "$TARGET"
+    sgdisk -n 2:0:0 -t 2:8304 -c 2:"FLAVOS_ROOT" "$TARGET"
+    partprobe "$TARGET"
+    udevadm settle
+    sleep 2
+
+    # Detecção de nome de partição
+    if echo "$TARGET" | grep -qE "nvme|mmcblk|loop"; then
+        ESP_PART="${TARGET}p1"
+        ROOT_PART="${TARGET}p2"
+    else
+        ESP_PART="${TARGET}1"
+        ROOT_PART="${TARGET}2"
+    fi
+
+    [ -b "$ESP_PART" ] || { echo "ERRO: Partição ESP não encontrada: $ESP_PART"; exit 1; }
+    [ -b "$ROOT_PART" ] || { echo "ERRO: Partição ROOT não encontrada: $ROOT_PART"; exit 1; }
+
+    echo -e "${GREEN}✓ Partições criadas: $ESP_PART (ESP) e $ROOT_PART (Root).${RESET}"
+
+    echo -e "\n${BLUE}[2] Formatando as partições...${RESET}"
+    mkfs.vfat -F 32 -n FLAVOS_ESP "$ESP_PART"
+    mkfs.ext4 -F -L FLAVOS_ROOT "$ROOT_PART"
+    echo -e "${GREEN}✓ Formatação concluída.${RESET}"
+
+    echo -e "\n${BLUE}[3] Preparando montagem em $TARGET_ROOT...${RESET}"
+    mkdir -p "$TARGET_ROOT"
+    mount "$ROOT_PART" "$TARGET_ROOT"
+    mkdir -p "$TARGET_ROOT/boot/efi"
+    mount "$ESP_PART" "$TARGET_ROOT/boot/efi"
+    echo -e "${GREEN}✓ Diretórios montados.${RESET}"
+
+    echo -e "\n${BLUE}[4] Verificando Integridade da Mídia Live...${RESET}"
+    if command -v flavos-live-media-check >/dev/null 2>&1; then
+        if ! flavos-live-media-check --full; then
+            echo -e "${RED}ERRO FATAL: Integridade da mídia Live falhou.${RESET}"
+            echo -e "${RED}NÃO instale a partir desta mídia.${RESET}"
+            echo -e "Ações recomendadas:"
+            echo -e "  1. Trocar o pendrive"
+            echo -e "  2. Trocar a porta USB"
+            echo -e "  3. Regravar a ISO após verificar checksum"
+            exit 1
+        fi
+        echo -e "${GREEN}✓ Integridade da mídia Live verificada.${RESET}"
+    else
+        echo -e "${RED}ERRO: flavos-live-media-check não encontrado. Abortando por segurança.${RESET}"
+        exit 1
+    fi
+
+    echo -e "\n${BLUE}[5] Sincronizando Payload (rsync)...${RESET}"
+    SOURCE_ROOT="$(findmnt -n -t squashfs -o TARGET | head -n 1)"
+    if [ -z "$SOURCE_ROOT" ]; then
+        echo -e "${RED}ERRO: Não foi possível localizar o mountpoint do squashfs.${RESET}"
+        exit 1
+    fi
+    echo -e "Copiando de $SOURCE_ROOT para $TARGET_ROOT..."
+    
+    rsync -aH --numeric-ids --info=progress2 \
+        --exclude='/proc/*' \
+        --exclude='/sys/*' \
+        --exclude='/dev/*' \
+        --exclude='/run/*' \
+        --exclude='/tmp/*' \
+        --exclude='/mnt/*' \
+        --exclude='/media/*' \
+        --exclude='/lost+found' \
+        "$SOURCE_ROOT"/ "$TARGET_ROOT"/
+
+    echo -e "${GREEN}✓ Rsync concluído.${RESET}"
+
+    echo -e "\n${BLUE}[6] Ajustes Post-Install (fstab e machine-id)...${RESET}"
+    ROOT_UUID="$(blkid -s UUID -o value "$ROOT_PART")"
+    ESP_UUID="$(blkid -s UUID -o value "$ESP_PART")"
+
+    cat > "$TARGET_ROOT/etc/fstab" <<EOF
+# /etc/fstab: static file system information.
+# Gerado pelo instalador do Flavos OS
+
+# / (Root)
+UUID=$ROOT_UUID / ext4 defaults,noatime 0 1
+
+# /boot/efi (ESP)
+UUID=$ESP_UUID /boot/efi vfat umask=0077 0 1
+
+# Swap gerido pelo zram
+EOF
+
+    if [ -n "$TARGET_ROOT" ] && [ "$TARGET_ROOT" != "/" ] && [ -d "$TARGET_ROOT/etc" ] && [ -d "$TARGET_ROOT/usr" ]; then
+        rm -f "$TARGET_ROOT/etc/machine-id"
+        touch "$TARGET_ROOT/etc/machine-id"
+        rm -f "$TARGET_ROOT/var/lib/dbus/machine-id"
+    else
+        echo -e "${RED}ERRO DE SEGURANÇA: TARGET_ROOT parece inválido durante limpeza de machine-id.${RESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ fstab e machine-id ajustados.${RESET}"
+
+    echo -e "\n${BLUE}[7] Validação Final do Target...${RESET}"
+    test -f "$TARGET_ROOT/etc/os-release" || { echo "Falha: os-release não encontrado"; exit 1; }
+    test -d "$TARGET_ROOT/usr" || { echo "Falha: /usr não encontrado"; exit 1; }
+    test -d "$TARGET_ROOT/etc" || { echo "Falha: /etc não encontrado"; exit 1; }
+    test -d "$TARGET_ROOT/boot" || { echo "Falha: /boot não encontrado"; exit 1; }
+    test -f "$TARGET_ROOT/etc/fstab" || { echo "Falha: fstab não encontrado"; exit 1; }
+    
+    echo -e "Tamanho do root instalado:"
+    du -sh "$TARGET_ROOT"
+
+    echo -e "Verificando pseudo-filesystems (devem estar vazios):"
+    find "$TARGET_ROOT/proc" -mindepth 1 -maxdepth 1 | head || true
+    find "$TARGET_ROOT/sys" -mindepth 1 -maxdepth 1 | head || true
+    find "$TARGET_ROOT/dev" -mindepth 1 -maxdepth 1 | head || true
+
+    echo -e "\n${GREEN}=================================================${RESET}"
+    echo -e "${GREEN}    Flavos OS Instalado com Sucesso (Payload Sync)  ${RESET}"
+    echo -e "${GREEN}=================================================${RESET}"
+    echo -e "O disco $TARGET possui as partições formatadas e o rootfs populado."
+    echo -e "Nota: O bootloader NÃO foi instalado nesta etapa (14F)."
+}
+
+do_install_bootloader() {
+    require_root
+    require_live_environment
+    require_vm
+    check_target_sanity
+    require_block_device
+    require_safe_target_root
+
+    if [ "${FLAVOS_INSTALL_LAB_DESTRUCTIVE:-}" != "YES" ]; then
+        echo -e "${RED}ERRO: Variável FLAVOS_INSTALL_LAB_DESTRUCTIVE=YES ausente.${RESET}"
+        exit 1
+    fi
+
+    if [ "$CONFIRMED_MODIFY" -ne 1 ]; then
+        echo -e "${RED}ERRO: Flag --i-understand-this-modifies-target ausente.${RESET}"
+        exit 1
+    fi
+
+    echo -e "${RED}ATENÇÃO: Você solicitou a instalação do bootloader no disco $TARGET.${RESET}"
+    echo -e "Informações do disco:"
+    lsblk -o NAME,SIZE,MODEL "$TARGET"
+    echo ""
+    read -p "Digite exatamente 'MODIFY $TARGET' para continuar: " USER_CONFIRM
+    if [ "$USER_CONFIRM" != "MODIFY $TARGET" ]; then
+        echo -e "${RED}Confirmação incorreta. Abortando.${RESET}"
+        exit 1
+    fi
+
+    trap cleanup EXIT INT TERM
+
+    # Detecção de nome de partição
+    if echo "$TARGET" | grep -qE "nvme|mmcblk|loop"; then
+        ESP_PART="${TARGET}p1"
+        ROOT_PART="${TARGET}p2"
+    else
+        ESP_PART="${TARGET}1"
+        ROOT_PART="${TARGET}2"
+    fi
+
+    [ -b "$ESP_PART" ] || { echo "ERRO: Partição ESP não encontrada: $ESP_PART"; exit 1; }
+    [ -b "$ROOT_PART" ] || { echo "ERRO: Partição ROOT não encontrada: $ROOT_PART"; exit 1; }
+
+    echo -e "\n${BLUE}[1] Preparando montagem em $TARGET_ROOT...${RESET}"
+    mkdir -p "$TARGET_ROOT"
+    mount "$ROOT_PART" "$TARGET_ROOT"
+    mkdir -p "$TARGET_ROOT/boot/efi"
+    mount "$ESP_PART" "$TARGET_ROOT/boot/efi"
+
+    # Bind mounts
+    echo -e "\n${BLUE}[2] Montando pseudo-filesystems (bind mounts)...${RESET}"
+    mount --bind /dev "$TARGET_ROOT/dev"
+    mount --bind /dev/pts "$TARGET_ROOT/dev/pts"
+    mount --bind /proc "$TARGET_ROOT/proc"
+    mount --bind /sys "$TARGET_ROOT/sys"
+    mount --bind /run "$TARGET_ROOT/run"
+
+    echo -e "\n${BLUE}[3] Instalando systemd-boot (chroot)...${RESET}"
+    
+    # bootctl precisa de um machine-id não vazio para criar os diretórios na ESP
+    chroot "$TARGET_ROOT" systemd-machine-id-setup || true
+
+    if ! chroot "$TARGET_ROOT" bootctl --esp-path=/boot/efi --no-variables install; then
+        echo -e "${RED}ERRO FATAL: bootctl install falhou! Verifique as mensagens acima.${RESET}"
+        exit 1
+    fi
+
+    # Validar BOOTX64.EFI
+    if [ ! -f "$TARGET_ROOT/boot/efi/EFI/BOOT/BOOTX64.EFI" ]; then
+        echo -e "${RED}ERRO: Fallback BOOTX64.EFI não encontrado após a instalação do bootctl.${RESET}"
+        exit 1
+    fi
+
+    # Limpar o machine-id novamente para que o SO gere um novo no primeiro boot
+    > "$TARGET_ROOT/etc/machine-id"
+
+    echo -e "\n${BLUE}[4] Copiando Kernel e Initrd para ESP...${RESET}"
+    mkdir -p "$TARGET_ROOT/boot/efi/EFI/flavos"
+    
+    # Encontrar vmlinuz e initrd no /boot ext4
+    VMLINUZ_FILE=$(find "$TARGET_ROOT/boot" -maxdepth 1 -name "vmlinuz-*" -type f | head -n 1)
+    INITRD_FILE=$(find "$TARGET_ROOT/boot" -maxdepth 1 -name "initrd.img-*" -type f | head -n 1)
+
+    if [ -z "$VMLINUZ_FILE" ] || [ -z "$INITRD_FILE" ]; then
+        echo -e "${RED}ERRO: Kernel ou Initrd não encontrados em /boot.${RESET}"
+        exit 1
+    fi
+
+    VMLINUZ_NAME=$(basename "$VMLINUZ_FILE")
+    INITRD_NAME=$(basename "$INITRD_FILE")
+
+    cp "$VMLINUZ_FILE" "$TARGET_ROOT/boot/efi/EFI/flavos/"
+    cp "$INITRD_FILE" "$TARGET_ROOT/boot/efi/EFI/flavos/"
+
+    echo -e "${GREEN}✓ Kernel ($VMLINUZ_NAME) e Initrd ($INITRD_NAME) copiados para a ESP.${RESET}"
+
+    echo -e "\n${BLUE}[5] Configurando loader e entries...${RESET}"
+    
+    # loader.conf
+    cat > "$TARGET_ROOT/boot/efi/loader/loader.conf" <<EOF
+default flavos.conf
+timeout 3
+console-mode max
+editor no
+EOF
+
+    # Obter UUID da raiz
+    ROOT_UUID="$(blkid -s UUID -o value "$ROOT_PART")"
+
+    # flavos.conf
+    cat > "$TARGET_ROOT/boot/efi/loader/entries/flavos.conf" <<EOF
+title Flavos OS
+linux /EFI/flavos/$VMLINUZ_NAME
+initrd /EFI/flavos/$INITRD_NAME
+options root=UUID=$ROOT_UUID rw quiet
+EOF
+
+    echo -e "${GREEN}✓ Configuração do systemd-boot gerada com sucesso.${RESET}"
+
+    echo -e "\n${BLUE}[6] Configurando Modo Instalado e Marcadores OOBE...${RESET}"
+    mkdir -p "$TARGET_ROOT/var/lib/flavos"
+    mkdir -p "$TARGET_ROOT/etc/flavos"
+    touch "$TARGET_ROOT/var/lib/flavos/firstboot-required"
+    printf "installed\n" > "$TARGET_ROOT/etc/flavos/system-mode"
+    echo -e "${GREEN}✓ Marcadores criados com sucesso.${RESET}"
+
+    echo -e "\n${GREEN}=================================================${RESET}"
+    echo -e "${GREEN}    Flavos OS Bootloader Instalado com Sucesso   ${RESET}"
+    echo -e "${GREEN}=================================================${RESET}"
+    echo -e "O disco $TARGET agora possui o bootloader systemd-boot configurado."
+}
+
+if [ "$ACTION" = "dry-run" ]; then
+    do_dry_run
+elif [ "$ACTION" = "payload-sync" ]; then
+    do_payload_sync
+elif [ "$ACTION" = "install-bootloader" ]; then
+    do_install_bootloader
+else
+    echo -e "${RED}ERRO: Nenhuma ação especificada.${RESET}"
+    usage
+fi

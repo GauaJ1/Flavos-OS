@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+if [ -d "/run/live/medium" ]; then
+    echo "live"
+elif [ -f "/var/lib/flavos/firstboot-required" ] && [ ! -f "/var/lib/flavos/firstboot-complete" ]; then
+    echo "installed-firstboot"
+elif grep -q "installed" "/etc/flavos/system-mode" 2>/dev/null; then
+    echo "installed"
+else
+    echo "unknown"
+fi

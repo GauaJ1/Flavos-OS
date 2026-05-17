@@ -126,6 +126,7 @@ run_cmd "os-release" cat /etc/os-release
 # ═══════════════════════════════════════════════════════════════════
 section "CPU"
 run_cmd "lscpu" lscpu
+run_pipe "/proc/cpuinfo (resumo)" "head -80 /proc/cpuinfo 2>/dev/null || echo '(não disponível)'"
 
 # ═══════════════════════════════════════════════════════════════════
 # MEMÓRIA
@@ -146,6 +147,7 @@ run_cmd "df -h" df -h
 # ═══════════════════════════════════════════════════════════════════
 section "GPU"
 run_pipe "GPU (lspci)" "lspci 2>/dev/null | grep -iE 'vga|3d|display'"
+run_pipe "GPU (lspci -nn)" "lspci -nn 2>/dev/null | grep -iE 'vga|3d|display|via'"
 run_pipe "OpenGL info" "glxinfo 2>/dev/null | grep -E 'renderer|OpenGL version|direct rendering' || echo '(glxinfo não disponível)'"
 
 # ═══════════════════════════════════════════════════════════════════
@@ -240,6 +242,33 @@ run_pipe "zram" "lsblk -o NAME,SIZE,TYPE 2>/dev/null | grep zram || echo '(zram 
 # ═══════════════════════════════════════════════════════════════════
 section "PERFORMANCE PROFILE"
 run_pipe "Perfil ativo" "flavos-performance-profile current 2>/dev/null || echo '(flavos-performance-profile não disponível)'"
+
+# ═════════════════════════════════════════════════════════════════
+# USB (14H.0)
+# ═════════════════════════════════════════════════════════════════
+section "USB"
+run_cmd "lsusb" lsusb
+
+# ═════════════════════════════════════════════════════════════════
+# DMI / PLACA-MÃE (14H.0)
+# ═════════════════════════════════════════════════════════════════
+section "DMI / PLACA-MÃE"
+run_pipe "dmidecode -t system" "dmidecode -t system 2>/dev/null || echo '(requer root ou não disponível)'"
+run_pipe "dmidecode -t baseboard" "dmidecode -t baseboard 2>/dev/null || echo '(requer root ou não disponível)'"
+
+# ═════════════════════════════════════════════════════════════════
+# DATA / HORA (14H.0)
+# ═════════════════════════════════════════════════════════════════
+section "DATA / HORA"
+run_cmd "date" date
+run_cmd "timedatectl" timedatectl status
+
+# ═════════════════════════════════════════════════════════════════
+# PCI DETALHADO (14H.0)
+# ═════════════════════════════════════════════════════════════════
+section "PCI DETALHADO"
+run_cmd "lspci -nn" lspci -nn
+run_pipe "Dispositivos críticos" "lspci 2>/dev/null | grep -Ei 'vga|display|3d|via|audio|multimedia|ethernet|network' || echo '(nenhum detectado)'"
 
 # ═══════════════════════════════════════════════════════════════════
 # FIM

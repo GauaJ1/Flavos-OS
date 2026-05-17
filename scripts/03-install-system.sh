@@ -79,6 +79,11 @@ trap cleanup EXIT
 echo "[2/6] Copiando rootfs para partição root..."
 cp -a "${ROOTFS}/"* "$MNT_ROOT/"
 
+echo "  Aplicando atualizações do overlay..."
+if [[ -d "${PROJECT_ROOT}/overlay" ]]; then
+    cp -a "${PROJECT_ROOT}/overlay/"* "$MNT_ROOT/"
+fi
+
 # Garantir permissões corretas nos helpers privilegiados (pkexec exige root:root + 0755)
 HELPERS_DIR="${MNT_ROOT}/usr/local/lib/flavos/helpers"
 if [[ -d "$HELPERS_DIR" ]]; then

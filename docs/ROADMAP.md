@@ -22,6 +22,10 @@
 | 14C | Live Boot Strategy & Prototype | Estratégia de hardware legado, rootfs isolado, squashfs (zstd) | ✅ Completa |
 | 14D | Live Boot Prototype Execution & VM Validation | Boot Híbrido, Performance e Estabilidade Validados | ✅ Completa |
 | 14E | Live Installer Strategy & Payload Model | Arquitetura de instalação offline, payload squashfs e dry-run | ✅ Completa |
+| 14F | Live Installer Lab (Payload Sync) | Particionamento, Formatação e Cópia do Sistema Base via rsync | ✅ Completa |
+| 14G | Bootloader Install & First Boot Validation | GRUB no target, boot pós-instalação validado em VM | ✅ Completa |
+| 14H.0 | Physical Hardware Triage & Live Media Integrity | Verificação de mídia, safe graphics, TTY keyboard, rsync fix | 🔄 Em Progresso |
+| 14H | OOBE & Post-Install Hardening | First-boot wizard, remoção de live-user, hardening | ⏳ Pendente |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
 
@@ -142,6 +146,34 @@
 - **Documentação de Estratégia**: `docs/LIVE_INSTALLER_STRATEGY.md` formaliza que o instalador será offline por padrão, usando o conteúdo já presente na ISO (evitando downloads na hora da instalação) e detalhando o fluxo futuro em GUI/TUI, com planejamento futuro para NetInstall.
 - **Modelo do Payload**: `docs/INSTALL_PAYLOAD_MODEL.md` confirma que a instalação usará `rsync` extraindo dados do próprio `filesystem.squashfs`, detalhando as exclusões e ajustes post-install necessários (fstab, machine-id, limpeza de live users).
 - **Dry-Run Script**: `scripts/08-flavos-installer-dry-run.sh` — Ferramenta segura (apenas leitura) que simula o plano de partição, bootloader e transferência para validar o fluxo em ambiente Live e Host sem modificar os discos.
+
+### Etapa 14F — Live Installer Lab (Payload Sync) ✅
+
+- **Script de Instalação no Live OS**: `overlay/usr/local/bin/flavos-installer-lab` configurado com proteções (variáveis de segurança rigorosas) para efetuar o particionamento em GPT, formatação (EFI e Ext4) e sync do SquashFS via rsync.
+- **Ajustes Post-Install**: Atualização autônoma de `/etc/fstab` apontando para os novos UUIDs do disco, junto com limpeza correta do `machine-id`.
+- **Relatório de Validação**: `docs/INSTALLER_14F_VALIDATION_REPORT.md` constatou sucesso no payload sync seguro contra um disco virtual VDA em ~40 segundos.
+
+### Etapa 14G — Bootloader Install & First Boot Validation ✅
+
+- **GRUB no sistema instalado**: `grub-install` + `grub-mkconfig` executados dentro de chroot no target, gerando boot chain funcional.
+- **Primeiro boot pós-instalação**: Sistema alvo boota do disco sem mídia Live, com serviços systemd e desktop Openbox/Picom funcionais.
+- **Validação em VM**: Boot, login, rede e shutdown limpo comprovados em QEMU/KVM.
+
+### Etapa 14H.0 — Physical Hardware Triage & Live Media Integrity 🔄
+
+- **Verificação de integridade**: `flavos-live-media-check` (--quick/--full) valida SquashFS antes de qualquer payload-sync. SHA256 gerado automaticamente no build.
+- **Safe Graphics**: `flavos-safe-graphics-setup` detecta `flavos.graphics=` no cmdline e gera xorg.conf.d para VIA/OpenChrome, VESA ou FBDEV.
+- **Boot entries expandidas**: GRUB da ISO inclui Safe Graphics, VIA/OpenChrome, VESA, Framebuffer, TTY Recovery e Low RAM.
+- **TTY keyboard**: Pacotes `kbd`, `console-setup`, `keyboard-configuration` adicionados para `loadkeys br-abnt2` no console.
+- **Diagnóstico expandido**: `flavos-hw-report` com USB, DMI/placa-mãe, data/hora e PCI detalhado.
+- **rsync corrigido**: Flag `-X` removida (incompatível com squashfs xattr), usando `-aH`.
+- **Documentação**: Relatório de teste físico, checklist pré-instalação, guias de recuperação TTY, Safe Graphics/VIA e sincronização de relógio.
+- **Status**: Instalação em hardware físico permanece bloqueada até validação completa. BIOS Legacy requer Etapa 14I futura.
+
+### Etapa 14H — OOBE & Post-Install Hardening (pendente)
+
+- **Dependência**: Requer 14H.0 concluída (hardware validado) e, opcionalmente, 14I (BIOS Legacy).
+- **Escopo planejado**: First-boot wizard (hostname, timezone, keyboard, usuário), remoção de live-user, autologin, limpeza pós-instalação.
 
 ## Decisões Fixas (Base)
 

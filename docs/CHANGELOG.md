@@ -1,5 +1,76 @@
 # Changelog — Flavos OS
 
+## Etapa 14H.0 — Physical Hardware Triage & Live Media Integrity (2026-05-17)
+
+> Etapa emergencial de triagem de hardware real (LGA 775) e integridade da mídia Live.
+> Status: Em progresso — rebuild obrigatório pendente.
+
+### Novidades
+
+- **`overlay/usr/local/bin/flavos-live-media-check`** — Verificador de integridade da mídia Live com modos `--quick` (readability + dmesg) e `--full` (SHA256 checksum). Bloqueio automático do instalador se a verificação falhar.
+- **`overlay/usr/local/bin/flavos-safe-graphics-setup`** — Autodetecção de parâmetro `flavos.graphics=` no cmdline para geração de xorg.conf.d forçando driver VIA/OpenChrome, VESA ou FBDEV.
+- **Boot entries expandidas** no `06-create-live-prototype.sh` — Safe Graphics, VIA/OpenChrome, VESA, Framebuffer, TTY Recovery e Low RAM.
+- **SHA256 do SquashFS** gerado automaticamente no build (`filesystem.squashfs.sha256`).
+- **`docs/PHYSICAL_HARDWARE_TEST_REPORT_14H0.md`** — Relatório do primeiro teste em hardware real LGA 775.
+- **`docs/PHYSICAL_INSTALL_PRECHECK.md`** — Checklist de segurança obrigatório para instalação física.
+- **`docs/TTY_KEYBOARD_RECOVERY.md`** — Guia de recuperação ABNT2 via `loadkeys`.
+- **`docs/SAFE_GRAPHICS_AND_VIA.md`** — Plano técnico de fallback gráfico para GPUs legadas.
+- **`docs/APT_TIME_SYNC_RECOVERY.md`** — Recuperação de data/hora para CMOS fraca.
+
+### Mudanças
+
+- `overlay/usr/local/bin/flavos-installer-lab` — rsync corrigido de `-aAXH` para `-aH` (flag `-X` causava erro de xattr em squashfs). Media-check `--full` agora é obrigatório antes do payload-sync.
+- `config/packages.list` — Adicionados `kbd`, `console-setup`, `keyboard-configuration` (TTY keyboard), `usbutils` e `dmidecode` (diagnóstico de hardware).
+- `overlay/usr/local/bin/flavos-hw-report` — Expandido com seções USB (`lsusb`), DMI/placa-mãe (`dmidecode`), data/hora (`timedatectl`), PCI detalhado (`lspci -nn`) e `/proc/cpuinfo`.
+- `ROADMAP.md` — Adicionadas etapas 14G ✅, 14H.0 🔄 e 14H ⏳.
+
+### Notas
+
+- Instalação física permanece bloqueada (`require_vm`) até validação completa em hardware real.
+- BIOS Legacy requer Etapa 14I futura — não é escopo da 14H.0.
+- Rebuild completo (`make live`) é obrigatório para embutir os novos pacotes e scripts na ISO.
+
+---
+
+## Etapa 14G — Bootloader Install & First Boot Validation (2026-05-17)
+
+> GRUB instalado no sistema alvo via chroot, primeiro boot pós-instalação validado em VM.
+> Tag: `14g-bootloader-first-boot`
+
+### Novidades
+
+- **GRUB no target**: `grub-install` + `grub-mkconfig` executados dentro de chroot, gerando boot chain funcional no disco instalado.
+- **Primeiro boot sem mídia Live**: Sistema alvo boota com serviços systemd e desktop Openbox/Picom funcionais.
+
+### Mudanças
+
+- `overlay/usr/local/bin/flavos-installer-lab` — Integração de etapas de instalação do GRUB no workflow post-install.
+- `ROADMAP.md` e `CHANGELOG.md` — Etapa 14G adicionada como concluída ✅.
+
+---
+
+## Etapa 14F — Live Installer Lab (Payload Sync) (2026-05-10)
+
+> Primeira execução destrutiva, controlada e laboratorial do instalador do Flavos OS de forma offline dentro de VM (QEMU/KVM).
+> Tag: `14f-live-installer-payload-sync`
+
+### Novidades
+
+- **`overlay/usr/local/bin/flavos-installer-lab`** — Script final injetado diretamente na Live ISO que efetua o workflow offline seguro da instalação: `sgdisk` para particionar EFI/Root, `mkfs.vfat`/`mkfs.ext4` para formatar e `rsync` isolando diretórios sensíveis (dev/proc/sys/run) para sincronizar ~2.2GB do payload Live num disco alvo de 20GB. Inclui rotinas protetoras (`FLAVOS_INSTALL_LAB_DESTRUCTIVE=YES`, confirmação explícita de `ERASE`).
+- **`scripts/09-boot-live-install-lab.sh`** — Helper script no host para subir a Live ISO injetando simultaneamente uma nova imagem virtual crua (`flavos-install-target-20g.img`) alocada por `qemu-img create`, permitindo teste seguro sem risco de formatações acidentais.
+- **`docs/INSTALLER_14F_VALIDATION_REPORT.md`** — Documento contendo a validação de sucesso com logs mostrando a finalização segura da cópia do rootfs.
+
+### Mudanças
+
+- `ROADMAP.md` e `CHANGELOG.md` — Marcação da Etapa 14F como concluída ✅.
+- `Makefile` — Novo target `boot-live-lab` adicionado chamando o script `09` automaticamente.
+
+### Notas
+
+- Ferramentas inseguras e de alto risco como `rm -rf` indiscriminado ou `wipefs` sem targets rígidos foram explicitamente desencorajadas/banidas do instalador. Toda a limpeza é feita via `trap` com `rmdir` e `umount` explícito no `TARGET_ROOT`.
+
+---
+
 ## Etapa 14E — Live Installer Strategy & Install Payload Model (2026-05-10)
 
 > Estruturação e arquitetura do instalador Live do Flavos OS (foco no modo offline) e modelo do payload.
