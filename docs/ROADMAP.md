@@ -160,7 +160,7 @@
 - **Primeiro boot pós-instalação**: Sistema alvo boota do disco sem mídia Live, com serviços systemd e desktop Openbox/Picom funcionais.
 - **Validação em VM**: Boot, login, rede e shutdown limpo comprovados em QEMU/KVM.
 
-### Etapa 14H.0 — Physical Hardware Triage & Live Media Integrity 🔄
+### Etapa 14H.0 — Physical Hardware Triage & Live Media Integrity ✅
 
 - **Verificação de integridade**: `flavos-live-media-check` (--quick/--full) valida SquashFS antes de qualquer payload-sync. SHA256 gerado automaticamente no build.
 - **Safe Graphics**: `flavos-safe-graphics-setup` detecta `flavos.graphics=` no cmdline e gera xorg.conf.d para VIA/OpenChrome, VESA ou FBDEV.
@@ -168,8 +168,8 @@
 - **TTY keyboard**: Pacotes `kbd`, `console-setup`, `keyboard-configuration` adicionados para `loadkeys br-abnt2` no console.
 - **Diagnóstico expandido**: `flavos-hw-report` com USB, DMI/placa-mãe, data/hora e PCI detalhado.
 - **rsync corrigido**: Flag `-X` removida (incompatível com squashfs xattr), usando `-aH`.
-- **Documentação**: Relatório de teste físico, checklist pré-instalação, guias de recuperação TTY, Safe Graphics/VIA e sincronização de relógio.
-- **Status**: Instalação em hardware físico permanece bloqueada até validação completa. Suporte BIOS Legacy implementado na Etapa 14I.
+- **Documentação**: `PHYSICAL_HARDWARE_TEST_REPORT_14H0.md` e checklist `HARDWARE_TEST_PLAN_14K.md` preparados para o teste definitivo.
+- **Status**: Triage concluída. Pronta para validação física definitiva na Etapa 14K.
 
 ### Etapa 14I — Legacy BIOS / GRUB Support ✅
 
