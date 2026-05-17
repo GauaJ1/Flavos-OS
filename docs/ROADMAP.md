@@ -25,7 +25,7 @@
 | 14F | Live Installer Lab (Payload Sync) | Particionamento, Formatação e Cópia do Sistema Base via rsync | ✅ Completa |
 | 14G | Bootloader Install & First Boot Validation | GRUB no target, boot pós-instalação validado em VM | ✅ Completa |
 | 14H.0 | Physical Hardware Triage & Live Media Integrity | Verificação de mídia, safe graphics, TTY keyboard, rsync fix | 🔄 Em Progresso |
-| 14I | Legacy BIOS / GRUB Support | Layout híbrido EF02+EF00+Root, GRUB i386-pc, --mode bios/uefi/both | 🔄 Em Progresso |
+| 14I | Legacy BIOS / GRUB Support | Layout híbrido EF02+EF00+Root, GRUB i386-pc, --mode bios/uefi/both | ✅ Completa |
 | 14H | OOBE & Post-Install Hardening | First-boot wizard, remoção de live-user, hardening | ⏳ Pendente |
 
 ## Roadmap Detalhado até Primeiro Boot (Etapas 1-5)
@@ -171,16 +171,16 @@
 - **Documentação**: Relatório de teste físico, checklist pré-instalação, guias de recuperação TTY, Safe Graphics/VIA e sincronização de relógio.
 - **Status**: Instalação em hardware físico permanece bloqueada até validação completa. Suporte BIOS Legacy implementado na Etapa 14I.
 
-### Etapa 14I — Legacy BIOS / GRUB Support 🔄
+### Etapa 14I — Legacy BIOS / GRUB Support ✅
 
 - **Layout híbrido GPT**: Migração de 2 para 3 partições — `EF02` (BIOS Boot, 2 MiB) + `EF00` (ESP, 512 MiB) + `8304` (Root).
 - **GRUB i386-pc**: `install_grub_bios()` valida EF02, confirma binários no chroot, gera `grub.cfg` e valida entrada de kernel.
 - **flag `--mode` obrigatória**: `bios` | `uefi` | `both` | `auto` — sem default, falha explícita se omitido.
 - **systemd-boot desacoplado**: `install_systemd_boot_uefi()` isolada, comportamento da 14G preservado.
 - **Pacotes**: `grub-pc-bin`, `grub-common`, `grub2-common` adicionados ao rootfs. `grub-pc` (debconf) excluído.
-- **QEMU**: `make boot-installed-bios` (SeaBIOS + if=ide) e `make boot-installed-uefi` (OVMF).
-- **Validação VM**: ⏳ Pendente — aguarda execução do fluxo laboratório.
-- **Hardware físico**: Bloqueado até VM green.
+- **Bug fix**: `chroot command -v` não confiável em chroot mínimo (`/usr/sbin` ausente do PATH). Caminhos absolutos usados.
+- **Validado em VM**: `make boot-installed-bios` (SeaBIOS) e `make boot-installed-uefi` (OVMF) — ambos funcional.
+- **Hardware físico**: Bloqueado até 14H.0 ser concluída.
 
 ### Etapa 14H — OOBE & Post-Install Hardening (pendente)
 

@@ -98,24 +98,35 @@ class FlavosFirstBoot(Gtk.Window):
         perf = self.perf_combo.get_active_text()
         log_action(f"OOBE simulação: Hostname={hostname}, Performance={perf}")
         
-        log_action("Iniciando finalização via sudo helper...")
+        # Usa pkexec em vez de sudo: funciona em sessões gráficas sem TTY.
+        # A policy org.flavos.firstboot.policy permite allow_active=yes
+        # (usuário local ativo) sem prompt de senha via lxpolkit.
+        log_action("Iniciando finalização via pkexec helper...")
         try:
-            subprocess.run(["sudo", "/usr/local/lib/flavos/helpers/flavos-firstboot-complete"], check=True)
+            result = subprocess.run(
+                ["pkexec", "/usr/local/lib/flavos/helpers/flavos-firstboot-complete"],
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                raise subprocess.CalledProcessError(result.returncode, "pkexec", result.stderr)
+
             log_action("Finalização concluída com sucesso. Marcador 'firstboot-complete' criado.")
-            
-            # Show a message dialog
+
             dialog = Gtk.MessageDialog(
                 transient_for=self,
                 flags=0,
                 message_type=Gtk.MessageType.INFO,
                 buttons=Gtk.ButtonsType.OK,
-                text="OOBE Concluído"
+                text="Configuração Concluída"
             )
-            dialog.format_secondary_text("A configuração inicial foi finalizada. O OOBE não aparecerá mais nos próximos boots.")
+            dialog.format_secondary_text(
+                "A configuração inicial foi finalizada.\n"
+                "O assistente não aparecerá mais nos próximos boots."
+            )
             dialog.run()
             dialog.destroy()
-            
             Gtk.main_quit()
+
         except subprocess.CalledProcessError as e:
             log_action(f"Falha ao executar o helper de conclusão: {e}")
             dialog = Gtk.MessageDialog(
@@ -125,7 +136,12 @@ class FlavosFirstBoot(Gtk.Window):
                 buttons=Gtk.ButtonsType.OK,
                 text="Erro ao Concluir"
             )
-            dialog.format_secondary_text(f"Falha ao chamar o helper de OOBE. Verifique os logs.\nErro: {e}")
+            stderr_detail = e.stderr.strip() if hasattr(e, "stderr") and e.stderr else str(e)
+            dialog.format_secondary_text(
+                f"Falha ao chamar o helper de OOBE.\n"
+                f"Verifique os logs em ~/.local/share/flavos/logs/firstboot.log\n\n"
+                f"Detalhe: {stderr_detail}"
+            )
             dialog.run()
             dialog.destroy()
 

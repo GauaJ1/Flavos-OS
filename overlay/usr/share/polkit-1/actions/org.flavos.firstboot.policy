@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+
+<!--
+  Flavos OS — Política de autorização para o OOBE (First Boot).
+  Permite que o usuário ativo local execute o helper de conclusão do primeiro
+  boot sem prompt de senha. Necessário porque o flavos-firstboot roda em
+  ambiente gráfico sem TTY disponível.
+-->
+<policyconfig>
+
+  <vendor>Flavos OS</vendor>
+  <vendor_url>https://github.com/GauaJ1/Flavos-OS</vendor_url>
+
+  <action id="org.flavos.firstboot.complete">
+    <description>Concluir a configuração inicial do Flavos OS (OOBE)</description>
+    <message>Informe sua senha para finalizar a configuração inicial.</message>
+    <defaults>
+      <!-- Sessões locais ativas: sem senha (NOPASSWD via polkit) -->
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/lib/flavos/helpers/flavos-firstboot-complete</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>

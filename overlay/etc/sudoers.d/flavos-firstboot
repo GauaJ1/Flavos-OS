@@ -1,1 +1,7 @@
+# Flavos OS — sudoers: OOBE firstboot helper
+# Permite que o usuário 'flavos' execute o helper de conclusão do primeiro
+# boot sem senha e sem TTY.
+# Nota: a via principal é pkexec + polkit (org.flavos.firstboot.policy).
+# Esta entrada existe como fallback para execução via terminal.
+Defaults:flavos !requiretty
 flavos ALL=(root) NOPASSWD: /usr/local/lib/flavos/helpers/flavos-firstboot-complete

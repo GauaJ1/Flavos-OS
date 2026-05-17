@@ -27,7 +27,7 @@ RELEASE_BASENAME := $(shell bash -c 'source $(PROJECT_ROOT)/config/flavos.conf &
 RELEASE_XZ       := $(BUILD_DIR)/$(RELEASE_BASENAME).img.xz
 RELEASE_SHA      := $(RELEASE_XZ).sha256
 
-.PHONY: help deps rootfs image install test manifest boot boot-gui write-disk compress checksum release all clean live boot-live boot-live-lab boot-installed-vm boot-installed-bios boot-installed-uefi
+.PHONY: help deps rootfs image install test manifest boot boot-gui write-disk compress checksum release all clean live boot-live boot-live-lab boot-installed-vm boot-installed-bios boot-installed-uefi test-physical-preview-vm boot-physical-preview-vm lint-physical-preview
 
 help:
 	@echo ""
@@ -53,6 +53,9 @@ help:
 	@echo "    make boot-installed-vm   Inicia a VM a partir do disco instalado (UEFI, padrão)"
 	@echo "    make boot-installed-uefi Inicia a VM a partir do disco instalado (UEFI explícito)"
 	@echo "    make boot-installed-bios Inicia a VM a partir do disco instalado (BIOS — SeaBIOS, 14I)"
+	@echo "    make test-physical-preview-vm  Testa flavos-physical-install-preview em VM (14J)"
+	@echo "    make boot-physical-preview-vm  Boot do disco instalado pelo preview físico (14J)"
+	@echo "    make lint-physical-preview     Valida sintaxe do comando físico (bash -n)"
 	@echo "    make clean     Remove artefatos de build"
 	@echo ""
 
@@ -115,6 +118,19 @@ boot-installed-uefi:
 
 boot-installed-bios:
 	@bash $(SCRIPTS)/10-boot-installed-vm.sh bios
+
+# ── 14J: Physical Install Preview ─────────────────────────────────────────────
+test-physical-preview-vm:
+	@sudo bash $(SCRIPTS)/12-test-physical-preview-vm.sh
+
+boot-physical-preview-vm:
+	@bash $(SCRIPTS)/10-boot-installed-vm.sh bios $(BUILD_DIR)/live/flavos-physical-test.img
+
+lint-physical-preview:
+	@echo "=== Verificando sintaxe: flavos-physical-install-preview ==="
+	@bash -n $(PROJECT_ROOT)/overlay/usr/local/bin/flavos-physical-install-preview && \
+		echo "  ✓ Sintaxe OK" || \
+		{ echo "  ✗ Erro de sintaxe!"; exit 1; }
 
 all: rootfs image install test manifest
 	@echo ""

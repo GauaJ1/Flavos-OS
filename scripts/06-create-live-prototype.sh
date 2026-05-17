@@ -89,6 +89,10 @@ if [ -d "overlay" ]; then
         chown root:root "$STAGING_DIR/etc/sudoers.d/flavos-settings"
         chmod 0440 "$STAGING_DIR/etc/sudoers.d/flavos-settings"
     fi
+    if [ -f "$STAGING_DIR/etc/sudoers.d/flavos-firstboot" ]; then
+        chown root:root "$STAGING_DIR/etc/sudoers.d/flavos-firstboot"
+        chmod 0440 "$STAGING_DIR/etc/sudoers.d/flavos-firstboot"
+    fi
 fi
 
 echo "      Mounting virtual filesystems and setting up DNS..."

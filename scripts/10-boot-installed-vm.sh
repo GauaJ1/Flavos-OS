@@ -15,19 +15,25 @@
 set -euo pipefail
 
 BOOT_MODE="${1:-uefi}"
-BUILD_DIR="build/live"
-TARGET_IMG="flavos-install-target-20g.img"
+TARGET_PATH="${2:-build/live/flavos-install-target-20g.img}"
+BUILD_DIR="$(dirname "$TARGET_PATH")"
 
-if [ ! -f "$BUILD_DIR/$TARGET_IMG" ]; then
-    echo "Erro: Disco virtual de teste não encontrado ($BUILD_DIR/$TARGET_IMG)."
-    echo "Execute a instalação da etapa 14F/14G/14I antes de testar o boot."
+if [ ! -f "$TARGET_PATH" ]; then
+    echo "Erro: Disco virtual de teste não encontrado ($TARGET_PATH)."
+    echo "Execute a instalação antes de testar o boot."
     exit 1
 fi
+
+IMG_FORMAT=$(qemu-img info "$TARGET_PATH" 2>/dev/null | awk '/^file format:/ {print $3}')
+if [ -z "$IMG_FORMAT" ]; then
+    IMG_FORMAT="raw"
+fi
+echo "Formato detectado: $IMG_FORMAT"
 
 case "$BOOT_MODE" in
     bios)
         echo "Iniciando QEMU em modo BIOS (SeaBIOS — sem OVMF)..."
-        echo "Alvo: $BUILD_DIR/$TARGET_IMG"
+        echo "Alvo: $TARGET_PATH"
         # Modo BIOS: SeaBIOS nativo do QEMU, sem pflash OVMF.
         # if=ide para máxima compatibilidade com hardware legado (LGA 775).
         qemu-system-x86_64 \
@@ -38,7 +44,7 @@ case "$BOOT_MODE" in
             -vga std \
             -display gtk \
             -device virtio-rng-pci \
-            -drive file="$BUILD_DIR/$TARGET_IMG",format=raw,if=ide \
+            -drive file="$TARGET_PATH",format="$IMG_FORMAT",if=ide \
             -boot c
         ;;
     uefi)
@@ -76,7 +82,7 @@ case "$BOOT_MODE" in
         fi
 
         echo "Iniciando QEMU em modo UEFI (OVMF)..."
-        echo "Alvo: $BUILD_DIR/$TARGET_IMG"
+        echo "Alvo: $TARGET_PATH"
         qemu-system-x86_64 \
             -enable-kvm \
             -m 2048 \
@@ -87,7 +93,7 @@ case "$BOOT_MODE" in
             -device virtio-rng-pci \
             -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
             -drive if=pflash,format=raw,file="$OVMF_VARS_LOCAL" \
-            -drive file="$BUILD_DIR/$TARGET_IMG",format=raw,if=virtio \
+            -drive file="$TARGET_PATH",format="$IMG_FORMAT",if=virtio \
             -boot c
         ;;
     *)

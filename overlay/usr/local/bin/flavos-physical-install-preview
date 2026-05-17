@@ -1,0 +1,866 @@
+#!/usr/bin/env bash
+#
+# flavos-physical-install-preview
+# Etapa 14J — Physical Install Preview Mode & Extreme Disk Safety
+#
+# AVISO: Este script pode apagar um disco físico irreversivelmente.
+# Leia docs/PHYSICAL_INSTALL_PREVIEW_MODE.md antes de usar.
+#
+# Uso:
+#   flavos-physical-install-preview inspect
+#   flavos-physical-install-preview precheck
+#   flavos-physical-install-preview plan   --target <disco> [--bootloader-mode auto|bios|uefi|both]
+#   flavos-physical-install-preview install --target <disco> --i-understand-this-erases-physical-disk [--bootloader-mode auto|bios|uefi|both]
+#
+# Variável obrigatória para install:
+#   FLAVOS_ALLOW_PHYSICAL_INSTALL_PREVIEW=YES
+
+set -euo pipefail
+
+# ── Cores ─────────────────────────────────────────────────────────────────────
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[1;34m'
+CYAN='\033[1;36m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# ── Estado global ──────────────────────────────────────────────────────────────
+SUBCMD=""
+TARGET=""
+BOOTLOADER_MODE="auto"
+FLAG_ERASE=0
+
+RUN_DIR="/run/flavos-physical-install"
+PRECHECK_ENV="${RUN_DIR}/precheck.env"
+INSTALL_REPORT="${RUN_DIR}/install-report.txt"
+
+TARGET_ROOT="${RUN_DIR}/root"
+BIOS_PART=""
+ESP_PART=""
+ROOT_PART=""
+
+# ── Usage ─────────────────────────────────────────────────────────────────────
+usage() {
+    echo -e "${BOLD}flavos-physical-install-preview${RESET} — Etapa 14J"
+    echo ""
+    echo "Subcomandos:"
+    echo "  inspect                    Diagnóstico read-only: live, firmware, discos"
+    echo "  precheck                   Verifica ambiente completo, salva estado em /run"
+    echo "  plan     --target <disco>  Exibe layout sem tocar disco"
+    echo "  install  --target <disco>  Instala no disco (destrutivo, exige tudo)"
+    echo ""
+    echo "Opções:"
+    echo "  --target <disco>                           Ex: /dev/sda ou /dev/disk/by-id/..."
+    echo "  --bootloader-mode auto|bios|uefi|both      Padrão: auto"
+    echo "  --i-understand-this-erases-physical-disk   Obrigatório para install"
+    echo ""
+    echo "Variável obrigatória para install:"
+    echo "  FLAVOS_ALLOW_PHYSICAL_INSTALL_PREVIEW=YES"
+    exit 1
+}
+
+# ── Parsing ───────────────────────────────────────────────────────────────────
+[ $# -eq 0 ] && usage
+
+SUBCMD="$1"
+shift
+
+case "$SUBCMD" in
+    inspect|precheck|plan|install) ;;
+    *) echo -e "${RED}Subcomando inválido: $SUBCMD${RESET}"; usage ;;
+esac
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --target) TARGET="$2"; shift 2 ;;
+        --bootloader-mode) BOOTLOADER_MODE="$2"; shift 2 ;;
+        --i-understand-this-erases-physical-disk) FLAG_ERASE=1; shift ;;
+        *) echo -e "${RED}Opção desconhecida: $1${RESET}"; usage ;;
+    esac
+done
+
+# ── Validação do --bootloader-mode ────────────────────────────────────────────
+case "$BOOTLOADER_MODE" in
+    auto|bios|uefi|both) ;;
+    *) echo -e "${RED}ERRO: --bootloader-mode inválido: $BOOTLOADER_MODE${RESET}"; exit 1 ;;
+esac
+
+# ── Helpers básicos ────────────────────────────────────────────────────────────
+require_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo -e "${RED}ERRO: Este subcomando exige root (sudo).${RESET}"
+        exit 1
+    fi
+}
+
+require_live_environment() {
+    if [ ! -d "/run/live/medium" ] && [ ! -d "/lib/live/mount/medium" ]; then
+        echo -e "${RED}ERRO: Não detectado ambiente Live Boot.${RESET}"
+        echo "  Este comando deve ser executado a partir da mídia Live do Flavos OS."
+        exit 1
+    fi
+}
+
+# ── detect_firmware ────────────────────────────────────────────────────────────
+detect_firmware() {
+    if [ -d "/sys/firmware/efi" ]; then
+        echo "uefi"
+    else
+        echo "bios"
+    fi
+}
+
+# ── detect_live_disk ───────────────────────────────────────────────────────────
+# Retorna o disco pai da mídia Live (ex: /dev/sdb de /dev/sdb1)
+detect_live_disk() {
+    local live_src=""
+    local live_real=""
+    local live_parent=""
+
+    # Tentar /run/live/medium primeiro, fallback /lib/live/mount/medium
+    live_src="$(findmnt -n -o SOURCE /run/live/medium 2>/dev/null \
+              || findmnt -n -o SOURCE /lib/live/mount/medium 2>/dev/null \
+              || echo "")"
+
+    [ -z "$live_src" ] && echo "" && return 0
+
+    live_real="$(readlink -f "$live_src" 2>/dev/null || echo "$live_src")"
+
+    # Se for partição (/dev/sdb1), pegar disco pai
+    live_parent="$(lsblk -no PKNAME "$live_real" 2>/dev/null | head -1 || echo "")"
+
+    if [ -n "$live_parent" ]; then
+        echo "/dev/${live_parent}"
+    else
+        echo "$live_real"
+    fi
+}
+
+# ── resolve_target ─────────────────────────────────────────────────────────────
+# Normaliza o target e sugere by-id se possível
+resolve_target() {
+    local raw="$1"
+    local resolved=""
+
+    resolved="$(readlink -f "$raw" 2>/dev/null || echo "$raw")"
+
+    # Sugerir by-id
+    if [[ "$resolved" == /dev/sd* ]] || [[ "$resolved" == /dev/hd* ]]; then
+        echo -e "${YELLOW}⚠  AVISO: Usando nome de disco volátil ($resolved).${RESET}" >&2
+        echo -e "   Prefira /dev/disk/by-id/ para evitar troca de disco." >&2
+        local by_id_link=""
+        by_id_link="$(ls -la /dev/disk/by-id/ 2>/dev/null \
+            | grep "$(basename "$resolved")$" \
+            | awk '{print $NF}' | head -1 || echo "")"
+        if [ -n "$by_id_link" ]; then
+            echo -e "   by-id disponível: /dev/disk/by-id/${by_id_link}" >&2
+        fi
+    fi
+
+    echo "$resolved"
+}
+
+# ── block_unsafe_target ────────────────────────────────────────────────────────
+# Falha se o target não for seguro. Sem override possível.
+block_unsafe_target() {
+    local t="$1"
+    local live_disk="$2"
+
+    # Deve ser block device
+    if [ ! -b "$t" ]; then
+        echo -e "${RED}ERRO: $t não é um block device.${RESET}"
+        exit 1
+    fi
+
+    # Não pode ser partição (deve ser disco inteiro)
+    local dev_type
+    dev_type="$(lsblk -ndo TYPE "$t" 2>/dev/null || echo "unknown")"
+    if [ "$dev_type" != "disk" ]; then
+        echo -e "${RED}ERRO: $t não é um disco inteiro (TYPE=$dev_type). Passe o disco, não a partição.${RESET}"
+        exit 1
+    fi
+
+    # Não pode ser loop, sr, dm, md
+    if [[ "$t" == /dev/loop* ]]; then
+        echo -e "${RED}ERRO: Target é loop device ($t). Não permitido.${RESET}"; exit 1
+    fi
+    if [[ "$t" == /dev/sr* ]]; then
+        echo -e "${RED}ERRO: Target é CD/DVD ($t). Não permitido.${RESET}"; exit 1
+    fi
+    if [[ "$t" == /dev/dm-* ]] || [[ "$t" == /dev/mapper/* ]]; then
+        echo -e "${RED}ERRO: Target é device-mapper ($t). Não permitido.${RESET}"; exit 1
+    fi
+    if [[ "$t" == /dev/md* ]]; then
+        echo -e "${RED}ERRO: Target é RAID software ($t). Não permitido.${RESET}"; exit 1
+    fi
+
+    # Não pode ser a live media
+    if [ -n "$live_disk" ] && [ "$t" = "$live_disk" ]; then
+        echo -e "${RED}ERRO: $t é o disco da mídia Live. Operação bloqueada.${RESET}"
+        exit 1
+    fi
+    # Também checar se target é pai da live (caso live esteja em /dev/sda e target seja /dev/sda)
+    local live_parent_of_target=""
+    live_parent_of_target="$(lsblk -no PKNAME "$t" 2>/dev/null | head -1 || echo "")"
+    if [ -n "$live_disk" ] && [ -n "$live_parent_of_target" ] \
+       && [ "/dev/${live_parent_of_target}" = "$live_disk" ]; then
+        echo -e "${RED}ERRO: $t é filho do disco da mídia Live. Operação bloqueada.${RESET}"
+        exit 1
+    fi
+
+    # USB ou removível: bloquear
+    local tran rm_flag
+    tran="$(lsblk -ndo TRAN "$t" 2>/dev/null || echo "")"
+    rm_flag="$(lsblk -ndo RM "$t" 2>/dev/null || echo "0")"
+
+    if [ "$tran" = "usb" ]; then
+        echo -e "${RED}ERRO: $t é dispositivo USB (TRAN=usb). Não permitido por padrão.${RESET}"
+        exit 1
+    fi
+    if [ "$rm_flag" = "1" ]; then
+        echo -e "${RED}ERRO: $t é dispositivo removível (RM=1). Não permitido por padrão.${RESET}"
+        exit 1
+    fi
+
+    # TRAN vazio em disco SATA/IDE antigo: permitir com aviso extra
+    if [ -z "$tran" ]; then
+        echo -e "${YELLOW}⚠  AVISO: TRAN vazio para $t (pode ser SATA/IDE antigo).${RESET}"
+        echo -e "   Verifique com: lsblk -ndo NAME,MODEL,TRAN,SIZE $t"
+        echo -e "   Prosseguindo, mas confirme que é o disco correto."
+    fi
+
+    # Verificar se alguma partição filha está montada (lsblk -nrpo NAME,MOUNTPOINTS)
+    local mounted_children
+    mounted_children="$(lsblk -nrpo NAME,MOUNTPOINTS "$t" 2>/dev/null \
+        | awk '$2 != "" {print $1, $2}' || echo "")"
+    if [ -n "$mounted_children" ]; then
+        echo -e "${RED}ERRO: Partições de $t estão montadas:${RESET}"
+        echo "$mounted_children"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Target $t passou nas verificações de segurança.${RESET}"
+}
+
+# ── do_inspect ────────────────────────────────────────────────────────────────
+do_inspect() {
+    local fw live_disk sq_src sq_mnt errs
+    fw="$(detect_firmware)"
+    live_disk="$(detect_live_disk)"
+    sq_src="$(findmnt -n -t squashfs -o SOURCE 2>/dev/null | head -1 || echo '')"
+    sq_mnt="$(findmnt -n -t squashfs -o TARGET 2>/dev/null | head -1 || echo '')"
+
+    echo -e "${BLUE}=== Flavos OS — Physical Install Preview: INSPECT ===${RESET}"
+    echo ""
+    echo -e "${CYAN}[Firmware]${RESET}:  $fw"
+    echo -e "${CYAN}[Data/Hora]${RESET}: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+    echo ""
+    echo -e "${CYAN}[Mídia Live]${RESET}"
+    echo "  Disco pai:       ${live_disk:-não detectado}"
+    echo "  SquashFS source: ${sq_src:-não detectado}"
+    echo "  SquashFS mount:  ${sq_mnt:-não detectado}"
+    echo ""
+    echo -e "${CYAN}[Discos disponíveis]${RESET}"
+    lsblk -o NAME,SIZE,TYPE,TRAN,RM,FSTYPE,MOUNTPOINTS 2>/dev/null || lsblk
+    echo ""
+    echo -e "${CYAN}[/dev/disk/by-id]${RESET}"
+    ls -la /dev/disk/by-id/ 2>/dev/null | grep -v "^total" | awk '{print "  "$NF}' || echo "  (não disponível)"
+    echo ""
+    echo -e "${CYAN}[Erros recentes no kernel (SquashFS/I-O)]${RESET}"
+    errs="$(dmesg 2>/dev/null | grep -iE 'SQUASHFS error|I/O error|Input.output error|failed verification' | tail -10 || echo '')"
+    if [ -n "$errs" ]; then
+        echo -e "${RED}$errs${RESET}"
+    else
+        echo -e "  ${GREEN}Nenhum erro detectado.${RESET}"
+    fi
+    echo ""
+    echo -e "${CYAN}[Precheck salvo em /run]${RESET}"
+    if [ -f "$PRECHECK_ENV" ]; then
+        cat "$PRECHECK_ENV" | sed 's/^/  /'
+    else
+        echo "  (precheck ainda não executado nesta sessão)"
+    fi
+}
+
+# ── do_precheck ───────────────────────────────────────────────────────────────
+do_precheck() {
+    require_root
+    local errors=0 fw live_disk sq_src boot_id yr mem_mb byid_count
+
+    echo -e "${BLUE}=== Flavos OS — Physical Install Preview: PRECHECK ===${RESET}"
+    echo ""
+
+    echo -e "${CYAN}[1] Root${RESET}"
+    echo -e "  ${GREEN}✓ Executando como root.${RESET}"
+
+    echo -e "${CYAN}[2] Ambiente Live Boot${RESET}"
+    if [ -d "/run/live/medium" ] || [ -d "/lib/live/mount/medium" ]; then
+        echo -e "  ${GREEN}✓ Ambiente Live detectado.${RESET}"
+    else
+        echo -e "  ${RED}✗ Ambiente Live NÃO detectado.${RESET}"
+        errors=$((errors + 1))
+    fi
+
+    echo -e "${CYAN}[3] SquashFS${RESET}"
+    sq_src="$(findmnt -n -t squashfs -o SOURCE 2>/dev/null | head -1 || echo '')"
+    if [ -n "$sq_src" ]; then
+        echo -e "  ${GREEN}✓ SquashFS montado: $sq_src${RESET}"
+    else
+        echo -e "  ${RED}✗ Nenhum SquashFS montado.${RESET}"
+        errors=$((errors + 1))
+    fi
+
+    echo -e "${CYAN}[4] Logs do kernel${RESET}"
+    if dmesg 2>/dev/null | grep -qiE 'SQUASHFS error|I/O error|Input.output error'; then
+        echo -e "  ${RED}✗ Erros detectados no dmesg.${RESET}"
+        dmesg 2>/dev/null | grep -iE 'SQUASHFS error|I/O error|Input.output error' | tail -5 | sed 's/^/    /'
+        errors=$((errors + 1))
+    else
+        echo -e "  ${GREEN}✓ Sem erros de I/O no kernel log.${RESET}"
+    fi
+
+    echo -e "${CYAN}[5] Firmware${RESET}"
+    fw="$(detect_firmware)"
+    echo -e "  ${GREEN}✓ Modo: $fw${RESET}"
+
+    echo -e "${CYAN}[6] Disco da mídia Live${RESET}"
+    live_disk="$(detect_live_disk)"
+    if [ -n "$live_disk" ]; then
+        echo -e "  ${GREEN}✓ Live disk: $live_disk${RESET}"
+    else
+        echo -e "  ${YELLOW}⚠ Não foi possível detectar disco pai da Live.${RESET}"
+    fi
+
+    echo -e "${CYAN}[7] Discos candidatos (não-USB, não-removível)${RESET}"
+    lsblk -ndo NAME,TYPE,TRAN,RM,SIZE 2>/dev/null \
+        | awk '$2=="disk" && $3!="usb" && $4!="1" {print "  "$0}' \
+        || echo "  (nenhum encontrado)"
+
+    echo -e "${CYAN}[8] Data/Hora${RESET}"
+    yr="$(date +%Y)"
+    if [ "$yr" -ge 2025 ] && [ "$yr" -le 2030 ]; then
+        echo -e "  ${GREEN}✓ Data: $(date '+%Y-%m-%d %H:%M:%S')${RESET}"
+    else
+        echo -e "  ${RED}✗ Ano suspeito ($yr). Pode causar falha em apt/certificados.${RESET}"
+        errors=$((errors + 1))
+    fi
+
+    echo -e "${CYAN}[9] /dev/disk/by-id${RESET}"
+    byid_count="$(ls /dev/disk/by-id/ 2>/dev/null | wc -l || echo 0)"
+    if [ "$byid_count" -gt 0 ]; then
+        echo -e "  ${GREEN}✓ $byid_count entradas em /dev/disk/by-id${RESET}"
+    else
+        echo -e "  ${YELLOW}⚠ /dev/disk/by-id vazio ou indisponível.${RESET}"
+    fi
+
+    echo -e "${CYAN}[10] flavos-live-media-check${RESET}"
+    if command -v flavos-live-media-check >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓ Disponível.${RESET}"
+    else
+        echo -e "  ${RED}✗ flavos-live-media-check não encontrado.${RESET}"
+        errors=$((errors + 1))
+    fi
+
+    echo -e "${CYAN}[11] Memória RAM${RESET}"
+    mem_mb="$(free -m 2>/dev/null | awk '/^Mem:/{print $2}' || echo 0)"
+    if [ "$mem_mb" -ge 512 ]; then
+        echo -e "  ${GREEN}✓ RAM: ${mem_mb} MB${RESET}"
+    else
+        echo -e "  ${YELLOW}⚠ RAM baixa: ${mem_mb} MB (mínimo recomendado: 512 MB)${RESET}"
+    fi
+
+    # ── Salvar estado em /run ──────────────────────────────────────────────────
+    mkdir -p "$RUN_DIR"
+    boot_id="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo 'unknown')"
+    cat > "$PRECHECK_ENV" <<EOF
+PRECHECK_BOOT_ID="${boot_id}"
+PRECHECK_TIMESTAMP=$(date +%s)
+PRECHECK_TIMESTAMP_HUMAN="$(date '+%Y-%m-%d %H:%M:%S')"
+PRECHECK_LIVE_DISK="${live_disk}"
+PRECHECK_SQUASHFS_SOURCE="${sq_src}"
+PRECHECK_FIRMWARE="${fw}"
+PRECHECK_ERRORS=${errors}
+EOF
+
+    echo ""
+    echo "========================================"
+    if [ "$errors" -gt 0 ]; then
+        echo -e "${RED}PRECHECK: $errors problema(s). Resolva antes de continuar.${RESET}"
+        exit 1
+    else
+        echo -e "${GREEN}PRECHECK: OK — ambiente seguro.${RESET}"
+        echo "  Estado salvo em: $PRECHECK_ENV"
+        echo "  Próximo: flavos-physical-install-preview plan --target /dev/disk/by-id/..."
+    fi
+}
+
+# ── do_plan ───────────────────────────────────────────────────────────────────
+do_plan() {
+    [ -z "$TARGET" ] && { echo -e "${RED}ERRO: --target obrigatório.${RESET}"; usage; }
+
+    local fw live_disk target_resolved effective_mode disk_size
+    fw="$(detect_firmware)"
+    live_disk="$(detect_live_disk)"
+    target_resolved="$(resolve_target "$TARGET")"
+
+    echo -e "${BLUE}=== Flavos OS — Physical Install Preview: PLAN ===${RESET}"
+    echo -e "${YELLOW}Somente leitura. Nenhum disco será alterado.${RESET}"
+    echo ""
+
+    block_unsafe_target "$target_resolved" "$live_disk"
+
+    effective_mode="$BOOTLOADER_MODE"
+    if [ "$effective_mode" = "auto" ]; then
+        effective_mode="$fw"
+        echo -e "  --bootloader-mode auto → resolvido para: ${BOLD}${effective_mode}${RESET}"
+    fi
+
+    disk_size="$(lsblk -ndo SIZE "$target_resolved" 2>/dev/null || echo '?')"
+    echo ""
+    echo -e "${CYAN}[Layout para: $target_resolved  (${disk_size})]${RESET}"
+    echo "  ┌─────────────────────────────────────────────────────┐"
+    echo "  │ p1  2 MiB    EF02  BIOS Boot Partition              │"
+    echo "  │ p2  512 MiB  EF00  EFI System Partition (ESP)       │"
+    echo "  │ p3  RESTO    8300  Linux Root (ext4)                 │"
+    echo "  └─────────────────────────────────────────────────────┘"
+    echo ""
+    echo -e "${CYAN}[Bootloader: $effective_mode]${RESET}"
+    case "$effective_mode" in
+        bios) echo "  GRUB i386-pc: obrigatório | systemd-boot: não instalado" ;;
+        uefi) echo "  systemd-boot: obrigatório | GRUB BIOS: não instalado" ;;
+        both) echo "  GRUB i386-pc: obrigatório | systemd-boot: best-effort (falha não invalida GRUB)" ;;
+    esac
+    echo ""
+    echo -e "${CYAN}[Precheck]${RESET}"
+    if [ -f "$PRECHECK_ENV" ]; then
+        echo -e "  ${GREEN}✓ Encontrado:${RESET}"
+        grep -E "PRECHECK_TIMESTAMP_HUMAN|PRECHECK_FIRMWARE|PRECHECK_ERRORS" "$PRECHECK_ENV" | sed 's/^/  /'
+    else
+        echo -e "  ${YELLOW}⚠ Precheck não executado ainda. Execute primeiro:${RESET}"
+        echo "    flavos-physical-install-preview precheck"
+    fi
+    echo ""
+    echo -e "${CYAN}[Comando para instalar]${RESET}"
+    echo "  sudo FLAVOS_ALLOW_PHYSICAL_INSTALL_PREVIEW=YES \\"
+    echo "    flavos-physical-install-preview install \\"
+    echo "      --target $target_resolved \\"
+    echo "      --bootloader-mode ${effective_mode} \\"
+    echo "      --i-understand-this-erases-physical-disk"
+}
+
+# ── cleanup via trap ──────────────────────────────────────────────────────────
+CLEANUP_DONE=0
+cleanup() {
+    [ "$CLEANUP_DONE" -eq 1 ] && return
+    CLEANUP_DONE=1
+    echo -e "\n${YELLOW}[cleanup] Desmontando sistemas de arquivos...${RESET}"
+    # Ordem inversa: dev/pts → dev → proc → sys → run → boot/efi → root
+    for mnt in \
+        "${TARGET_ROOT}/dev/pts" \
+        "${TARGET_ROOT}/dev" \
+        "${TARGET_ROOT}/proc" \
+        "${TARGET_ROOT}/sys" \
+        "${TARGET_ROOT}/run" \
+        "${TARGET_ROOT}/boot/efi" \
+        "${TARGET_ROOT}"; do
+        if mountpoint -q "$mnt" 2>/dev/null; then
+            umount -l "$mnt" 2>/dev/null && echo "  desmontado: $mnt" || echo "  falha ao desmontar: $mnt"
+        fi
+    done
+    # Validação final
+    local residual
+    residual="$(findmnt 2>/dev/null | grep "$RUN_DIR" || echo '')"
+    if [ -n "$residual" ]; then
+        echo -e "${YELLOW}  ⚠ Mounts residuais:${RESET}"
+        echo "$residual" | sed 's/^/    /'
+    else
+        echo -e "${GREEN}  ✓ Cleanup completo.${RESET}"
+    fi
+}
+trap cleanup EXIT INT TERM
+
+# ── validate_precheck_env ─────────────────────────────────────────────────────
+validate_precheck_env() {
+    local target_resolved="$1"
+    if [ ! -f "$PRECHECK_ENV" ]; then
+        echo -e "${RED}ERRO: Precheck não encontrado em $PRECHECK_ENV.${RESET}"
+        echo "  Execute: flavos-physical-install-preview precheck"
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$PRECHECK_ENV"
+
+    # Verificar boot_id igual (mesma sessão)
+    local current_boot_id
+    current_boot_id="$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo 'unknown')"
+    if [ "${PRECHECK_BOOT_ID:-}" != "$current_boot_id" ]; then
+        echo -e "${RED}ERRO: Precheck de sessão diferente (boot_id diverge). Reexecute precheck.${RESET}"
+        exit 1
+    fi
+
+    # Verificar se precheck passou sem erros
+    if [ "${PRECHECK_ERRORS:-1}" -ne 0 ]; then
+        echo -e "${RED}ERRO: Precheck registrou ${PRECHECK_ERRORS} problema(s). Resolva antes.${RESET}"
+        exit 1
+    fi
+
+    # Verificar timestamp (máx 4 horas)
+    local now ts_diff
+    now="$(date +%s)"
+    ts_diff=$((now - ${PRECHECK_TIMESTAMP:-0}))
+    if [ "$ts_diff" -gt 14400 ]; then
+        echo -e "${RED}ERRO: Precheck tem mais de 4 horas. Reexecute.${RESET}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Precheck válido (gerado às ${PRECHECK_TIMESTAMP_HUMAN:-?}).${RESET}"
+}
+
+# ── confirm_destructive ───────────────────────────────────────────────────────
+confirm_destructive() {
+    local target="$1"
+    local model serial
+
+    echo ""
+    echo -e "${RED}╔══════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${RED}║   ATENÇÃO: OPERAÇÃO DESTRUTIVA E IRREVERSÍVEL            ║${RESET}"
+    echo -e "${RED}║   O disco $target será completamente apagado.            ║${RESET}"
+    echo -e "${RED}╚══════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+
+    # Mostrar info do disco para conferência
+    echo -e "${CYAN}Informações do disco target:${RESET}"
+    lsblk -ndo NAME,MODEL,SERIAL,SIZE,TRAN "$target" 2>/dev/null | sed 's/^/  /' || true
+    echo ""
+
+    # Confirmação 1: path do disco
+    local input_path=""
+    read -r -p "  [1/5] Digite o path exato do disco ($target): " input_path
+    if [ "$input_path" != "$target" ]; then
+        echo -e "${RED}Path incorreto. Abortando.${RESET}"; exit 1
+    fi
+
+    # Confirmação 2: modelo
+    model="$(lsblk -ndo MODEL "$target" 2>/dev/null | xargs || echo 'DESCONHECIDO')"
+    local input_model=""
+    read -r -p "  [2/5] Digite o MODELO do disco ($model), ou 'DESCONHECIDO': " input_model
+    if [ "$input_model" != "$model" ] && [ "$input_model" != "DESCONHECIDO" ]; then
+        echo -e "${RED}Modelo incorreto. Abortando.${RESET}"; exit 1
+    fi
+
+    # Confirmação 3: serial
+    serial="$(lsblk -ndo SERIAL "$target" 2>/dev/null | xargs || echo 'NO-SERIAL')"
+    local input_serial=""
+    read -r -p "  [3/5] Digite o SERIAL do disco ($serial), ou 'NO-SERIAL': " input_serial
+    if [ "$input_serial" != "$serial" ] && [ "$input_serial" != "NO-SERIAL" ]; then
+        echo -e "${RED}Serial incorreto. Abortando.${RESET}"; exit 1
+    fi
+
+    # Confirmação 4: frase de apagamento
+    local phrase="ERASE PHYSICAL DISK ${target}"
+    local input_phrase=""
+    read -r -p "  [4/5] Digite exatamente: $phrase  → " input_phrase
+    if [ "$input_phrase" != "$phrase" ]; then
+        echo -e "${RED}Frase incorreta. Abortando.${RESET}"; exit 1
+    fi
+
+    # Confirmação 5: token de sessão aleatório
+    local token
+    token="$(head -c 6 /dev/urandom | base64 | tr -dc 'A-Z0-9' | head -c 8 || echo 'FALLBACK')"
+    echo -e "\n  ${BOLD}Token de sessão: ${token}${RESET}"
+    local input_token=""
+    read -r -p "  [5/5] Digite o token acima: " input_token
+    if [ "$input_token" != "$token" ]; then
+        echo -e "${RED}Token incorreto. Abortando.${RESET}"; exit 1
+    fi
+
+    # Não logar o token. Apenas registrar sucesso.
+    echo -e "${GREEN}✓ Todas as confirmações passaram. Prosseguindo com a instalação.${RESET}"
+    echo "confirm_destructive: OK" >> "$INSTALL_REPORT" 2>/dev/null || true
+}
+
+# ── install_grub_bios_physical ────────────────────────────────────────────────
+install_grub_bios_physical() {
+    echo -e "\n${BLUE}[G1] Validando BIOS Boot Partition (EF02)...${RESET}"
+    if ! sgdisk -i 1 "$TARGET" 2>/dev/null | grep -qi "EF02\|BIOS boot"; then
+        echo -e "${RED}ERRO: Partição 1 não é EF02. Detalhes:${RESET}"
+        sgdisk -p "$TARGET" || true
+        exit 1
+    fi
+    echo -e "${GREEN}✓ EF02 confirmada.${RESET}"
+
+    # Verificar binários no target (caminhos absolutos — lição crítica da 14I)
+    test -f "${TARGET_ROOT}/usr/sbin/grub-install" || {
+        echo -e "${RED}ERRO: grub-install ausente no target (falta grub2-common?).${RESET}"; exit 1; }
+    test -f "${TARGET_ROOT}/usr/sbin/grub-mkconfig" || {
+        echo -e "${RED}ERRO: grub-mkconfig ausente no target.${RESET}"; exit 1; }
+    test -d "${TARGET_ROOT}/usr/lib/grub/i386-pc" || {
+        echo -e "${RED}ERRO: módulos i386-pc ausentes (falta grub-pc-bin?).${RESET}"; exit 1; }
+
+    if [ ! -f "${TARGET_ROOT}/etc/default/grub" ]; then
+        cat > "${TARGET_ROOT}/etc/default/grub" <<'EOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=3
+GRUB_DISTRIBUTOR="Flavos OS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet"
+GRUB_CMDLINE_LINUX=""
+GRUB_DISABLE_OS_PROBER=true
+EOF
+    fi
+
+    echo -e "\n${BLUE}[G2] Instalando GRUB i386-pc em $TARGET...${RESET}"
+    chroot "$TARGET_ROOT" /usr/sbin/grub-install --target=i386-pc --recheck "$TARGET" || {
+        echo -e "${RED}ERRO FATAL: grub-install i386-pc falhou.${RESET}"; exit 1; }
+
+    echo -e "\n${BLUE}[G3] Gerando grub.cfg...${RESET}"
+    if test -f "${TARGET_ROOT}/usr/sbin/update-grub"; then
+        chroot "$TARGET_ROOT" /usr/sbin/update-grub
+    else
+        chroot "$TARGET_ROOT" /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg
+    fi
+    test -f "${TARGET_ROOT}/boot/grub/grub.cfg" || {
+        echo -e "${RED}ERRO: grub.cfg não gerado.${RESET}"; exit 1; }
+    grep -qiE "vmlinuz|linux" "${TARGET_ROOT}/boot/grub/grub.cfg" || {
+        echo -e "${RED}ERRO: grub.cfg não referencia kernel.${RESET}"; exit 1; }
+    echo -e "${GREEN}✓ GRUB BIOS instalado e grub.cfg validado.${RESET}"
+}
+
+# ── install_systemd_boot_physical ─────────────────────────────────────────────
+# Retorna 0 em sucesso, 1 em falha (para not-fatal em modo bios/auto)
+install_systemd_boot_physical() {
+    echo -e "\n${BLUE}[B1] Instalando systemd-boot (UEFI)...${RESET}"
+    chroot "$TARGET_ROOT" systemd-machine-id-setup || true
+
+    if ! chroot "$TARGET_ROOT" bootctl --esp-path=/boot/efi --no-variables install; then
+        echo -e "${YELLOW}⚠ bootctl falhou (esperado em hardware BIOS-only).${RESET}"
+        return 1
+    fi
+
+    if [ ! -f "${TARGET_ROOT}/boot/efi/EFI/BOOT/BOOTX64.EFI" ]; then
+        echo -e "${YELLOW}⚠ BOOTX64.EFI não encontrado. Máquina pode ser BIOS-only.${RESET}"
+        return 1
+    fi
+
+    > "${TARGET_ROOT}/etc/machine-id"
+
+    mkdir -p "${TARGET_ROOT}/boot/efi/EFI/flavos"
+    local vmlinuz initrd
+    vmlinuz="$(find "${TARGET_ROOT}/boot" -maxdepth 1 -name 'vmlinuz-*' -type f | head -1)"
+    initrd="$(find  "${TARGET_ROOT}/boot" -maxdepth 1 -name 'initrd.img-*' -type f | head -1)"
+    [ -z "$vmlinuz" ] || [ -z "$initrd" ] && {
+        echo -e "${RED}ERRO: Kernel/Initrd não encontrados.${RESET}"; return 1; }
+
+    cp "$vmlinuz" "${TARGET_ROOT}/boot/efi/EFI/flavos/"
+    cp "$initrd"  "${TARGET_ROOT}/boot/efi/EFI/flavos/"
+
+    mkdir -p "${TARGET_ROOT}/boot/efi/loader/entries"
+    cat > "${TARGET_ROOT}/boot/efi/loader/loader.conf" <<EOF
+default flavos.conf
+timeout 3
+console-mode max
+editor no
+EOF
+    local root_uuid
+    root_uuid="$(blkid -s UUID -o value "$ROOT_PART")"
+    local vmlinuz_name initrd_name
+    vmlinuz_name="$(basename "$vmlinuz")"
+    initrd_name="$(basename "$initrd")"
+    cat > "${TARGET_ROOT}/boot/efi/loader/entries/flavos.conf" <<EOF
+title Flavos OS
+linux /EFI/flavos/${vmlinuz_name}
+initrd /EFI/flavos/${initrd_name}
+options root=UUID=${root_uuid} rw quiet
+EOF
+    echo -e "${GREEN}✓ systemd-boot instalado (UEFI).${RESET}"
+    return 0
+}
+
+# ── do_install ────────────────────────────────────────────────────────────────
+do_install() {
+    require_root
+    require_live_environment
+
+    [ -z "$TARGET" ]       && { echo -e "${RED}ERRO: --target obrigatório.${RESET}"; usage; }
+    [ "$FLAG_ERASE" -ne 1 ] && {
+        echo -e "${RED}ERRO: Falta --i-understand-this-erases-physical-disk${RESET}"; exit 1; }
+    [ "${FLAVOS_ALLOW_PHYSICAL_INSTALL_PREVIEW:-}" != "YES" ] && {
+        echo -e "${RED}ERRO: Variável FLAVOS_ALLOW_PHYSICAL_INSTALL_PREVIEW=YES não definida.${RESET}"; exit 1; }
+
+    local fw live_disk target_resolved effective_mode
+    live_disk="$(detect_live_disk)"
+    target_resolved="$(resolve_target "$TARGET")"
+    fw="$(detect_firmware)"
+
+    block_unsafe_target "$target_resolved" "$live_disk"
+
+    effective_mode="$BOOTLOADER_MODE"
+    [ "$effective_mode" = "auto" ] && effective_mode="$fw"
+
+    echo -e "${BLUE}=== Flavos OS — Physical Install Preview: INSTALL ===${RESET}"
+    echo -e "Target: ${BOLD}$target_resolved${RESET}  |  Bootloader: ${BOLD}$effective_mode${RESET}"
+    echo ""
+
+    # Validar precheck (mesmo boot_id, recente, sem erros)
+    validate_precheck_env "$target_resolved"
+
+    # Rodar media-check --full novamente (não confiar apenas no arquivo salvo)
+    echo -e "\n${BLUE}[media-check] Verificando integridade da mídia Live (--full)...${RESET}"
+    echo "  Isso pode levar vários minutos."
+    if ! flavos-live-media-check --full; then
+        echo -e "${RED}ERRO: media-check --full falhou. Instalação abortada.${RESET}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Mídia íntegra confirmada.${RESET}"
+
+    # Confirmações interativas (5 confirmações + token)
+    confirm_destructive "$target_resolved"
+
+    # ── Particionamento ──────────────────────────────────────────────────────
+    echo -e "\n${BLUE}[P1] Criando tabela GPT híbrida em $target_resolved...${RESET}"
+    sgdisk --zap-all "$target_resolved"
+    sgdisk -n 1:0:+2MiB   -t 1:EF02 -c 1:"BIOS Boot" "$target_resolved"
+    sgdisk -n 2:0:+512MiB -t 2:EF00 -c 2:"EFI System" "$target_resolved"
+    sgdisk -n 3:0:0        -t 3:8300 -c 3:"Flavos Root" "$target_resolved"
+
+    # Definir variáveis de partição
+    BIOS_PART="${target_resolved}1"
+    ESP_PART="${target_resolved}2"
+    ROOT_PART="${target_resolved}3"
+    # Para discos nvme (p1/p2/p3)
+    if [[ "$target_resolved" == *nvme* ]]; then
+        BIOS_PART="${target_resolved}p1"
+        ESP_PART="${target_resolved}p2"
+        ROOT_PART="${target_resolved}p3"
+    fi
+
+    echo -e "\n${BLUE}[P2] Atualizando tabela de partições (partprobe + udevadm settle)...${RESET}"
+    partprobe "$target_resolved"
+    udevadm settle
+    sleep 1
+
+    # Validar block devices
+    test -b "$BIOS_PART" || { echo -e "${RED}ERRO: $BIOS_PART não encontrado.${RESET}"; exit 1; }
+    test -b "$ESP_PART"  || { echo -e "${RED}ERRO: $ESP_PART não encontrado.${RESET}";  exit 1; }
+    test -b "$ROOT_PART" || { echo -e "${RED}ERRO: $ROOT_PART não encontrado.${RESET}"; exit 1; }
+    echo -e "${GREEN}✓ Partições confirmadas: $BIOS_PART  $ESP_PART  $ROOT_PART${RESET}"
+
+    # ── Validar EF02 ─────────────────────────────────────────────────────────
+    if ! sgdisk -i 1 "$target_resolved" | grep -qi "EF02\|BIOS boot"; then
+        echo -e "${RED}ERRO: p1 não é EF02 após particionamento.${RESET}"; exit 1
+    fi
+
+    # ── Formatação ────────────────────────────────────────────────────────────
+    echo -e "\n${BLUE}[F1] Formatando ESP (FAT32)...${RESET}"
+    mkfs.vfat -F 32 -n "EFI" "$ESP_PART"
+    echo -e "\n${BLUE}[F2] Formatando Root (ext4)...${RESET}"
+    mkfs.ext4 -L "flavos-root" "$ROOT_PART"
+
+    # ── Montar target ─────────────────────────────────────────────────────────
+    echo -e "\n${BLUE}[M1] Montando filesystems...${RESET}"
+    mkdir -p "$TARGET_ROOT"
+    mount "$ROOT_PART" "$TARGET_ROOT"
+    mkdir -p "${TARGET_ROOT}/boot/efi"
+    mount "$ESP_PART" "${TARGET_ROOT}/boot/efi"
+
+    # Bind mounts para chroot
+    for d in proc sys dev dev/pts run; do
+        mkdir -p "${TARGET_ROOT}/$d"
+        mount --bind "/$d" "${TARGET_ROOT}/$d"
+    done
+
+    # ── rsync payload ─────────────────────────────────────────────────────────
+    echo -e "\n${BLUE}[R1] Sincronizando sistema (rsync)...${RESET}"
+    echo -e "${YELLOW}Não interrompa. Pode demorar vários minutos.${RESET}"
+
+    local SQUASHFS_MOUNT
+    SQUASHFS_MOUNT="$(findmnt -n -t squashfs -o TARGET 2>/dev/null | head -1 || echo '')"
+    [ -z "$SQUASHFS_MOUNT" ] && { echo -e "${RED}ERRO: SquashFS não montado.${RESET}"; exit 1; }
+
+    # Sem -X/--xattrs, sem --ignore-errors
+    rsync -aAH --info=progress2 \
+        --exclude=/proc --exclude=/sys --exclude=/dev \
+        --exclude=/run  --exclude=/tmp --exclude=/mnt \
+        --exclude=/media --exclude=/lost+found \
+        "${SQUASHFS_MOUNT}/" "${TARGET_ROOT}/"
+
+    echo -e "${GREEN}✓ Payload sincronizado.${RESET}"
+
+    # fstab
+    echo -e "\n${BLUE}[FS] Gerando fstab...${RESET}"
+    local root_uuid esp_uuid
+    root_uuid="$(blkid -s UUID -o value "$ROOT_PART")"
+    esp_uuid="$(blkid -s UUID -o value "$ESP_PART")"
+    cat > "${TARGET_ROOT}/etc/fstab" <<EOF
+UUID=${root_uuid}  /         ext4  errors=remount-ro  0 1
+UUID=${esp_uuid}   /boot/efi vfat  umask=0077         0 1
+EOF
+    echo -e "${GREEN}✓ fstab gerado.${RESET}"
+
+    # ── Marcadores de first boot (OOBE) ───────────────────────────────────────
+    echo -e "\n${BLUE}[OB] Configurando marcadores de primeiro boot (OOBE)...${RESET}"
+    mkdir -p "${TARGET_ROOT}/var/lib/flavos"
+    touch    "${TARGET_ROOT}/var/lib/flavos/firstboot-required"
+    rm -f    "${TARGET_ROOT}/var/lib/flavos/firstboot-complete"
+
+    mkdir -p "${TARGET_ROOT}/etc/flavos"
+    echo "installed" > "${TARGET_ROOT}/etc/flavos/system-mode"
+    echo -e "${GREEN}✓ OOBE configurado (firstboot-required criado).${RESET}"
+
+    # Validar estrutura mínima
+    test -d "${TARGET_ROOT}/etc"  || { echo -e "${RED}ERRO: /etc ausente.${RESET}"; exit 1; }
+    test -d "${TARGET_ROOT}/boot" || { echo -e "${RED}ERRO: /boot ausente.${RESET}"; exit 1; }
+    test -f "${TARGET_ROOT}/etc/fstab" || { echo -e "${RED}ERRO: fstab ausente.${RESET}"; exit 1; }
+
+    # ── Bootloaders ───────────────────────────────────────────────────────────
+    local bios_ok=0 uefi_ok=0
+
+    case "$effective_mode" in
+        bios)
+            install_grub_bios_physical && bios_ok=1
+            ;;
+        uefi)
+            install_systemd_boot_physical && uefi_ok=1 || {
+                echo -e "${RED}ERRO FATAL: systemd-boot falhou em modo uefi.${RESET}"; exit 1; }
+            ;;
+        both)
+            install_grub_bios_physical && bios_ok=1
+            install_systemd_boot_physical && uefi_ok=1 || {
+                echo -e "${YELLOW}⚠ systemd-boot falhou (best-effort). GRUB BIOS está OK.${RESET}"; }
+            ;;
+    esac
+
+    # ── Relatório ─────────────────────────────────────────────────────────────
+    mkdir -p "$RUN_DIR"
+    cat > "$INSTALL_REPORT" <<EOF
+Flavos OS — Physical Install Report
+Gerado: $(date '+%Y-%m-%d %H:%M:%S')
+Target: ${target_resolved}
+Bootloader mode: ${effective_mode}
+GRUB BIOS:   $([ "$bios_ok" -eq 1 ] && echo OK || echo SKIPPED/FAILED)
+systemd-boot: $([ "$uefi_ok" -eq 1 ] && echo OK || echo SKIPPED/FAILED)
+Root UUID: ${root_uuid}
+ESP UUID: ${esp_uuid}
+Confirmações: OK (token não registrado)
+EOF
+    echo ""
+    echo "================================================="
+    echo -e "${GREEN}${BOLD}✓ Instalação concluída!${RESET}"
+    echo "  Relatório: $INSTALL_REPORT"
+    echo ""
+    case "$effective_mode" in
+        bios|both) echo "  Boot BIOS: reinicie e selecione $target_resolved no firmware." ;;
+        uefi)      echo "  Boot UEFI: reinicie e selecione Flavos OS no firmware." ;;
+    esac
+    echo "  Remova a mídia Live antes de reiniciar."
+    echo "================================================="
+}
+
+# ── Chamar subcomando ─────────────────────────────────────────────────────────
+case "$SUBCMD" in
+    inspect)  do_inspect ;;
+    precheck) do_precheck ;;
+    plan)     do_plan ;;
+    install)  do_install ;;
+esac

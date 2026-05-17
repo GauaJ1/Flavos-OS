@@ -72,3 +72,8 @@ xfce4-clipman &
 
 # Terminal inicial desativado na Etapa 9E (onboarding limpo)
 # kitty &
+
+# 7. OOBE — First Boot Setup
+# Dispara somente quando system-mode = installed-firstboot.
+# O launcher verifica internamente; em boots normais, não faz nada.
+flavos-firstboot-launcher &
